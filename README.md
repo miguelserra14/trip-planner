@@ -4,7 +4,8 @@ A multi-agent trip planner built with LangChain. Given an origin city, a destina
 finds the cheapest sensible one-way trip: transport to the airport, flight, and transport at the destination.
 Every figure in the result carries its source and a reliability grade (A confirmed, B typical timetable, C not verified).
 
-Everything is in one file, `trip_planner.py`. Its first lines explain who does what and how far each part can be trusted.
+The trip is described in `settings.py` and the program is the `trip_planner/` package, run through `main.py`.
+`trip_planner/__init__.py` explains who does what and how far each part can be trusted.
 
 ## Set up
 
@@ -29,16 +30,16 @@ You need Python 3.12 and two free API keys. Everything about the environment is 
 
 3. Check that everything answers:
    ```
-   env\.venv\Scripts\python trip_planner.py --check
+   env\.venv\Scripts\python main.py --check
    ```
    It makes one small request to every service the program depends on and prints one line for each. Run it again
    whenever a search fails, to see which service is the problem.
 
 ## Run
 
-Edit `SETTINGS` near the top of `trip_planner.py`, then:
+Edit `SETTINGS` in `settings.py`, then:
 ```
-env\.venv\Scripts\python trip_planner.py
+env\.venv\Scripts\python main.py
 ```
 It lists the airports found and asks which ones to drop: type their codes or names, or press Enter to keep them all.
 A search takes two to four minutes. It then prints the result, saves the report and takes follow-up questions
@@ -50,7 +51,9 @@ Set `confirm_airports=False` in `SETTINGS` to search every airport without being
 
 | Path | What it is |
 | :-- | :-- |
-| `trip_planner.py` | The program |
+| `settings.py` | The trip to plan. The only file you need to edit |
+| `main.py` | Runs the program: plans the trip, or checks the setup with `--check` |
+| `trip_planner/` | The program, see below |
 | `env/requirements.txt` | Direct dependencies, pinned |
 | `env/requirements.lock` | Every package of the tested environment, pinned |
 | `env/.env.example` | The keys the program needs, without values |
@@ -59,6 +62,41 @@ Set `confirm_airports=False` in `SETTINGS` to search every airport without being
 | `resources/airports.csv` | Snapshot of the OurAirports database (8 October 2026). Delete it to download the current one |
 | `resources/terminals.json`, `resources/timezones.json` | Caches of terminal coordinates and time zones, filled as trips are planned |
 | `reports/` | One Markdown report per run: result, sources, reasoning and timings |
+
+## How the code is organised
+
+```
+trip_planner/
+├── config.py          TripSettings: every setting of a trip and its default
+├── current.py         the trip being planned, read by every other module
+├── texts.py           every text the traveller reads, in each language
+├── utils.py           times, text, progress lines, timings
+├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance
+├── sources/           where the data comes from, one module per outside service
+│   ├── kiwi.py            flights
+│   ├── timetables.py      published timetables (Transitous) and airport terminals
+│   ├── operators.py       rides and prices from operators' booking systems (FlixBus)
+│   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
+│   └── web.py             web search for the subagents (Tavily), cleaning of what models write
+├── agents/            the models
+│   ├── subagents.py       airport transfer agent, destination transport agent, their prompts and limits
+│   ├── steps.py           the three steps of a trip, as tools of the coordinator
+│   ├── coordinator.py     the coordinator, its prompt and its fallback between models
+│   ├── schemas.py         the structured answers of the subagents
+│   └── state.py           what each agent keeps between steps
+├── itineraries/       code that decides the result
+│   ├── legs.py            ground legs: real connection or checked estimate
+│   └── ranking.py         hard constraints, cost, ranking
+├── report/            the Markdown reports
+│   ├── summary.py         the result shown to the traveller
+│   ├── full.py            the full report saved to reports/
+│   └── formatting.py      tables, grades and sources
+├── planner.py         plans one trip from start to finish, follow-up questions
+└── check.py           the --check of every outside service
+```
+
+A trip goes through them in this order: `main.py` → `planner.py` → the coordinator (`agents/`) runs the three
+steps → each step reads `sources/` → `itineraries/` checks and ranks → `report/` writes the result.
 
 ## What can and cannot be reproduced
 

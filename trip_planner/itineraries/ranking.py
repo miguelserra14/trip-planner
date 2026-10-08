@@ -8,17 +8,60 @@ from trip_planner.sources import airlines
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_minutes, to_time
 
+# When no itinerary respects every requirement, the closest ones are shown instead. These are the requirements that
+# may give way, the most important first. An itinerary that breaks one of them is always behind an itinerary that
+# only breaks the ones after it, however small the first breach and however large the others:
+#   arrival    arriving within the window asked for: someone or something is usually waiting
+#   airport    the minimum time at the airport: below it the flight may be missed (never under MIN_AIRPORT_FLOOR)
+#   stopovers  the number of stopovers: a longer trip and one more thing that can go wrong
+#   leave      the times the traveller leaves at: a matter of comfort
+# Among itineraries that break the same requirement, the smaller breach comes first, then the cheaper itinerary.
+# The dates, the allowed airports and what the real timetables say are never given up.
+REQUIREMENTS = ("arrival", "airport", "stopovers", "leave")
+
+def breaches(itinerary: dict[str, Any]) -> list[dict[str, Any]]:
+    """The requirements an itinerary does not respect, in the order of REQUIREMENTS. Each one says by how much
+    (amount), what the itinerary does (value), what was asked (limit) and the setting that asks it."""
+    settings, flight, found = current.SETTINGS, itinerary["flight"], []
+    arrive, leave = to_minutes(itinerary["arrival_time"]), to_minutes(itinerary["leave_time"])
+    if arrive > settings.latest_arrival_minutes:
+        found.append({"kind": "arrival", "side": "after", "amount": arrive - settings.latest_arrival_minutes,
+                      "value": itinerary["arrival_time"], "limit": settings.latest_arrival, "setting": "latest_arrival"})
+    elif arrive < settings.earliest_arrival_minutes:
+        found.append({"kind": "arrival", "side": "before", "amount": settings.earliest_arrival_minutes - arrive,
+                      "value": itinerary["arrival_time"], "limit": settings.earliest_arrival, "setting": "earliest_arrival"})
+    if itinerary["airport_wait"] < settings.min_airport_minutes:
+        found.append({"kind": "airport", "amount": settings.min_airport_minutes - itinerary["airport_wait"],
+                      "value": itinerary["airport_wait"], "limit": settings.min_airport_minutes, "setting": "min_airport_minutes"})
+    if flight["stops"] > settings.max_stopovers:
+        found.append({"kind": "stopovers", "amount": flight["stops"] - settings.max_stopovers,
+                      "value": flight["stops"], "limit": settings.max_stopovers, "setting": "max_stopovers"})
+    if leave < to_minutes(settings.earliest_leave):
+        found.append({"kind": "leave", "side": "before", "amount": to_minutes(settings.earliest_leave) - leave,
+                      "value": itinerary["leave_time"], "limit": settings.earliest_leave, "setting": "earliest_leave"})
+    elif leave > to_minutes(settings.latest_leave):
+        found.append({"kind": "leave", "side": "after", "amount": leave - to_minutes(settings.latest_leave),
+                      "value": itinerary["leave_time"], "limit": settings.latest_leave, "setting": "latest_leave"})
+    return found
+
+def closeness(itinerary: dict[str, Any]) -> tuple:
+    """How far an itinerary is from what was asked, to sort the closest first: the breach of each requirement in
+    the order of REQUIREMENTS, then the cost, then the duration."""
+    amounts = {breach["kind"]: breach["amount"] for breach in itinerary["breaches"]}
+    return (*(amounts.get(kind, 0) for kind in REQUIREMENTS), itinerary["total_cost"], itinerary["total_minutes"])
+
 def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
-                    route: dict[str, Any] | None) -> dict[str, Any]:
+                    route: dict[str, Any] | None, closest: bool = False) -> dict[str, Any]:
     """Combine a flight with its ground transport and check every hard constraint.
-    Returns the itinerary, or raises ValueError with the reason it is rejected."""
-    if flight["stops"] > current.SETTINGS.max_stopovers:
+    Returns the itinerary, or raises ValueError with the reason it is rejected.
+    closest=True lets the requirements of REQUIREMENTS give way and lists the ones that did under "breaches"."""
+    if flight["stops"] > current.SETTINGS.max_stopovers and not closest:
         raise ValueError(tr("reject_stopovers", stops=flight["stops"], maximum=current.SETTINGS.max_stopovers))
     if flight["arrival_airport"] not in {airport["code"] for airport in current.TRIP.arrival}:
         raise ValueError(tr("reject_arrival_airport", airport=flight["arrival_airport"]))
-    to_leg = to_airport_leg(flight, ground, transfer)
-    from_leg = from_airport_leg(flight, ground, route)
-    return {
+    to_leg = to_airport_leg(flight, ground, transfer, closest)
+    from_leg = from_airport_leg(flight, ground, route, closest)
+    itinerary = {
         "flight": flight,
         "to": to_leg,
         "from": from_leg,
@@ -33,6 +76,8 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
         # Flight times come from Kiwi for the travel date (A). The ground legs decide the grade of the schedule.
         "schedule_grade": max(to_leg["grade"], from_leg["grade"]),
     }
+    itinerary["breaches"] = breaches(itinerary)
+    return itinerary
 
 def price_itinerary(itinerary: dict[str, Any]) -> None:
     """Confirm the flight on the airline's own site when possible, then add up the cost and how much of it is confirmed."""

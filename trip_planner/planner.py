@@ -18,7 +18,7 @@ from trip_planner.agents.coordinator import coordinator
 from trip_planner.agents.steps import STEPS
 from trip_planner.config import TripSettings
 from trip_planner.places import ask_airports, choose_airports, codes, show_airports, TripPlaces
-from trip_planner.report.full import save_report
+from trip_planner.report.full import keep_report, RECENT_REPORTS, save_report
 from trip_planner.sources import web
 from trip_planner.texts import tr
 from trip_planner.utils import message_text, plain, say, show, TIMINGS
@@ -33,6 +33,8 @@ def build_request(settings: TripSettings, places: TripPlaces) -> str:
         f"Airports I can land at: {airports(places.arrival)}.",
         subagents.stopovers_rule(settings),
         f"I leave between {settings.earliest_leave} and {settings.latest_leave} and I must reach my destination {settings.arrival_window}.",
+        "Trains around my origin are free for me." if settings.free_trains_at_origin
+        else "Trains around my origin are paid and count for the cost.",
         "Trains at the destination are free for me." if settings.free_trains_at_destination
         else "Trains at the destination are paid and count for the cost.",
         "Plan the trip and recommend the best option.",
@@ -81,6 +83,8 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     current.TRIP = places
     TIMINGS.clear()
     started = time.time()
+    for advice in settings.advice():
+        say(f"{tr('advice')}: {advice}")
     say(tr("progress_start", origin=settings.origin, destination=settings.destination,
            departure=codes(current.TRIP.departure), arrival=codes(current.TRIP.arrival)))
     # One thread per run: the saved state of a trip is never mixed with another one
@@ -104,7 +108,8 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     TIMINGS["total"] = total
     recommendation = check_recommendation(message_text(response["messages"][-1]), response.get("recommended") or 0)
     show((response.get("report") or "") + "\n\n" + recommendation)
-    say(tr("progress_done", seconds=round(total), path=save_report(response, recommendation).resolve()))
+    PLANNED[-1]["report"] = save_report(response, recommendation).resolve()
+    say(tr("progress_done", seconds=round(total), path=PLANNED[-1]["report"]))
     return response
 
 async def ask(question: str, trip: int = -1) -> None:
@@ -142,6 +147,18 @@ def show_timings() -> None:
         print(f"{seconds:6.0f} s  {step}")
 
 
+
+def ask_to_keep() -> None:
+    """Ask whether the report of the last trip is to be kept. Otherwise it goes when newer ones arrive."""
+    if not PLANNED or PLANNED[-1].get("report") is None:
+        return
+    try:
+        answer = input("\n" + tr("keep_report_prompt", limit=RECENT_REPORTS) + " ")
+    except (EOFError, KeyboardInterrupt):
+        return
+    if plain(answer) in ("y", "yes", "s", "sim"):
+        PLANNED[-1]["report"] = keep_report(PLANNED[-1]["report"], True)
+        say(tr("ui_report_kept", folder=PLANNED[-1]["report"].parent))
 
 async def follow_up() -> None:
     """Take questions about the last trip planned, until an empty line."""

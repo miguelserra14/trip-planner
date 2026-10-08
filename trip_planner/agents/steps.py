@@ -11,9 +11,9 @@ from langgraph.types import Command
 
 from trip_planner import current
 from trip_planner.agents import subagents
-from trip_planner.itineraries.ranking import check_itinerary, price_itinerary, rank_itineraries
+from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itinerary, rank_itineraries
 from trip_planner.places import describe_airport
-from trip_planner.report.summary import render_report
+from trip_planner.report.summary import render_closest, render_report
 from trip_planner.sources import airlines, kiwi, timetables, web
 from trip_planner.texts import tr
 from trip_planner.utils import say, timed
@@ -53,7 +53,20 @@ async def search_flights(runtime: ToolRuntime) -> Command:
         routes = len(current.TRIP.departure) * len(current.TRIP.arrival) * len(current.SETTINGS.dates)
         flights = sorted(kiwi.FLIGHTS.values(), key=lambda flight: flight["price_eur"])
         say(tr("progress_flights", flights=len(flights), searched=len(kiwi.SEARCHED), routes=routes, retries=kiwi.kiwi_retries.retries))
+        # Nothing found: the reason is worked out in code and shown to the traveller as it is. The flights that
+        # break the limits (but land the same day) go on to the next steps, to show the closest alternatives.
+        reason, found = "", len(flights)
+        if not flights:
+            reason, others = await kiwi.why_no_flights()
+            for itinerary in others:
+                kiwi.register_flight(itinerary, closest=True)
+            flights = sorted(kiwi.FLIGHTS.values(), key=lambda flight: flight["price_eur"])
+            if flights:
+                say(tr("progress_closest", count=len(flights)))
     summary = "\n".join(kiwi.describe_flight(flight) for flight in flights[:15]) or "No flights found."
+    if not found:
+        summary = (f"{reason}\n" + (f"These {len(flights)} flights break the traveller's limits. They are kept to show the closest "
+                                    f"alternatives: continue with search_ground_transport.\n{summary}" if flights else ""))
     if len(flights) > 15:
         summary += f"\n... and {len(flights) - 15} more expensive flights."
     if kiwi.FLIGHT_GAPS:
@@ -62,8 +75,8 @@ async def search_flights(runtime: ToolRuntime) -> Command:
         "flights": flights,
         "step": 1 if flights else len(STEPS),   # without flights there is nothing left to look up
         "flight_gaps": list(kiwi.FLIGHT_GAPS),
-        "checked": [], "ground": {}, "transfers": [], "trains": [],
-        "messages": [ToolMessage(f"{len(flights)} flights found, cheapest first:\n{summary}", tool_call_id=runtime.tool_call_id)]}
+        "checked": [], "ground": {}, "transfers": [], "trains": [], "report": reason,
+        "messages": [ToolMessage(f"{found} flights fit the traveller's limits, cheapest first:\n{summary}", tool_call_id=runtime.tool_call_id)]}
         )
 
 async def ask_transfer_agent(flights: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -190,9 +203,42 @@ def build_itineraries(runtime: ToolRuntime) -> Command | str:
             warnings.append(tr("warn_flight_gaps", count=len(state["flight_gaps"])))
 
         if not itineraries:
+            # Nothing respects every requirement. The same flights again, letting give way the requirements that
+            # can (REQUIREMENTS in ranking.py): the closest itineraries are shown, with what each one breaks.
+            no_flight_fits = state.get("report") or ""   # written by search_flights when that was the case
+            near = []
+            for flight in state["flights"]:
+                if flight["id"] in checked:
+                    try:
+                        itinerary = check_itinerary(flight, ground, transfers.get(flight["departure_airport"]),
+                                                    routes.get(flight["arrival_airport"]), closest=True)
+                    except (ValueError, KeyError, TypeError):
+                        continue   # no real connection at all: it is already among the rejected, with the reason
+                    if itinerary["breaches"]:
+                        price_itinerary(itinerary)
+                        near.append(itinerary)
+            reliable = [itinerary for itinerary in near if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
+            if near and not reliable:
+                warnings.append(tr("warn_below_minimum", minimum=current.SETTINGS.min_reliability))
+            shown = sorted(reliable or near, key=closeness)[:current.SETTINGS.options_shown]
+            if shown:
+                for itinerary in shown:
+                    if not itinerary["booking"]["url"]:
+                        itinerary["booking"]["url"] = airlines.airline_site(itinerary["flight"].get("carrier", ""), itinerary["flight"]["airline"])
+                report = "\n\n".join(part for part in (no_flight_fits, render_closest(shown, warnings)) if part)
+                return Command(update={
+                    "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 1,
+                    "messages": [ToolMessage(
+                        f"{report}\n\nNo itinerary respects every requirement. The options above are the closest ones, each "
+                        "breaking at least one requirement. By the order of requirements, option 1 is the closest.",
+                        tool_call_id=runtime.tool_call_id)]}
+                    )
             message = "No itinerary respects the hard constraints. Rejected flights:\n" + "\n".join(rejected[:12])
+            # The reasons are shown to the traveller as the code found them, above whatever the coordinator writes
+            report = "\n".join(([no_flight_fits, ""] if no_flight_fits else [])
+                               + [f"## {tr('no_itinerary')}", "", tr("no_itinerary_reasons"), ""] + [f"- {reason}" for reason in rejected])
             return Command(update={
-                "step": 3, "report": "", "rejected": rejected, "warnings": warnings, "recommended": 0,
+                "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 0,
                 "messages": [ToolMessage(message, tool_call_id=runtime.tool_call_id)]}
                 )
 

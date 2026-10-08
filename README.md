@@ -7,9 +7,33 @@ Every figure in the result carries its source and a reliability grade (A confirm
 The trip is described in `settings.py` and the program is the `trip_planner/` package, run through `main.py`.
 `trip_planner/__init__.py` explains who does what and how far each part can be trusted.
 
-## Set up
+## Run
 
-You need Python 3.12 and two free API keys. Everything about the environment is in `env/`.
+**On Windows, double-click `TripPlanner.bat`.** A window opens:
+
+1. Fill in the trip (origin, destination, dates) and press **Find airports**. The form starts with what is in `settings.py`.
+2. Untick the airports you do not want and press **Search**. It takes two to four minutes, and the progress is shown.
+3. Read the result in the window. Links open in the browser, and **Open the full report** opens the file saved in `reports/`.
+   Only the reports of the last 5 runs stay there: tick **Keep this report** to move this one to `reports/saved/`, where nothing is deleted.
+4. Ask about the trip in the box at the bottom. Questions are answered without searching again.
+
+The first time, `TripPlanner.bat` creates the environment (a few minutes, Python 3.12 must be installed) and opens
+`env/.env` for you to paste the two free API keys, `GOOGLE_API_KEY` and `TAVILY_API_KEY`. The links to get them are in that file.
+
+**Check the services** in the window makes one small request to every service the program depends on and says
+which ones answer. Use it whenever a search fails.
+
+### From the command line
+
+```
+env\.venv\Scripts\python main.py              the window
+env\.venv\Scripts\python main.py --terminal   no window: the trip in settings.py, questions asked in the terminal
+env\.venv\Scripts\python main.py --check      check the services
+```
+
+### Set up by hand
+
+`TripPlanner.bat` does this for you on Windows. Everything about the environment is in `env/`.
 
 1. Create the environment and install the exact versions the project was tested with.
 
@@ -26,33 +50,15 @@ You need Python 3.12 and two free API keys. Everything about the environment is 
    `requirements.lock` lists every package of the tested environment, which was Windows. On another system use
    `requirements.txt`: it pins the direct dependencies and lets pip choose the rest.
 
-2. Copy `env/.env.example` to `env/.env` and fill in `GOOGLE_API_KEY` and `TAVILY_API_KEY`. The links to get them are in the file.
-
-3. Check that everything answers:
-   ```
-   env\.venv\Scripts\python main.py --check
-   ```
-   It makes one small request to every service the program depends on and prints one line for each. Run it again
-   whenever a search fails, to see which service is the problem.
-
-## Run
-
-Edit `SETTINGS` in `settings.py`, then:
-```
-env\.venv\Scripts\python main.py
-```
-It lists the airports found and asks which ones to drop: type their codes or names, or press Enter to keep them all.
-A search takes two to four minutes. It then prints the result, saves the report and takes follow-up questions
-about the trip, answered without searching again. Press Enter on an empty line to finish.
-
-Set `confirm_airports=False` in `SETTINGS` to search every airport without being asked.
+2. Copy `env/.env.example` to `env/.env` and fill in the two keys.
 
 ## What is in this folder
 
 | Path | What it is |
 | :-- | :-- |
-| `settings.py` | The trip to plan. The only file you need to edit |
-| `main.py` | Runs the program: plans the trip, or checks the setup with `--check` |
+| `TripPlanner.bat` | Double-click to open the program. Sets up the environment the first time |
+| `settings.py` | The trip the form starts with, and every setting the form does not show |
+| `main.py` | Runs the program: in a window, in the terminal (`--terminal`), or checks the setup (`--check`) |
 | `trip_planner/` | The program, see below |
 | `env/requirements.txt` | Direct dependencies, pinned |
 | `env/requirements.lock` | Every package of the tested environment, pinned |
@@ -60,8 +66,10 @@ Set `confirm_airports=False` in `SETTINGS` to search every airport without being
 | `env/.python-version` | The Python version the project was tested with |
 | `env/.env`, `env/.venv/` | Your keys and your environment. Created by you, not in the repository |
 | `resources/airports.csv` | Snapshot of the OurAirports database (8 October 2026). Delete it to download the current one |
+| `resources/airfields.json` | Airports left out of the automatic choice because no airline flies from them (Viseu, Cascais...). Worked out once from OurAirports runways and OpenFlights routes. Delete it to work it out again |
 | `resources/terminals.json`, `resources/timezones.json` | Caches of terminal coordinates and time zones, filled as trips are planned |
-| `reports/` | One Markdown report per run: result, sources, reasoning and timings |
+| `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted |
+| `reports/saved/` | The reports you chose to keep, with **Keep this report** in the window. Never deleted |
 
 ## How the code is organised
 
@@ -92,10 +100,11 @@ trip_planner/
 │   ├── full.py            the full report saved to reports/
 │   └── formatting.py      tables, grades and sources
 ├── planner.py         plans one trip from start to finish, follow-up questions
+├── gui.py             the window: form, airport list, progress, result, questions
 └── check.py           the --check of every outside service
 ```
 
-A trip goes through them in this order: `main.py` → `planner.py` → the coordinator (`agents/`) runs the three
+A trip goes through them in this order: `main.py` → `gui.py` (or the terminal) → `planner.py` → the coordinator (`agents/`) runs the three
 steps → each step reads `sources/` → `itineraries/` checks and ranks → `report/` writes the result.
 
 ## What can and cannot be reproduced

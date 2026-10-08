@@ -14,7 +14,7 @@ from mcp.types import CallToolResult, TextContent
 
 from trip_planner import current
 from trip_planner.texts import tr
-from trip_planner.utils import to_minutes
+from trip_planner.utils import to_minutes, to_time
 
 RETRYABLE_MCP_CODES = {-32603}
 
@@ -109,18 +109,36 @@ FLIGHTS: dict[str, dict[str, Any]] = {}
 SEARCHED: set = set()            # (departure airport, arrival airport, yyyy-mm-dd) Kiwi answered for
 FLIGHT_GAPS: list[str] = []      # what may be missing from the flight list, for the report
 KIWI_RESULT_CAP = 15             # Kiwi returns at most this many flights per search
+MAX_SPLIT_SEARCHES = 12          # most searches one departure airport is split into, by arrival airport and date
 
-def register_flight(itinerary: dict[str, Any]) -> dict[str, Any] | None:
-    """Copy one Kiwi result into FLIGHTS. Returns the flight, or None if it breaks one of the traveller's limits."""
-    leg = itinerary["outbound"]
+PROBE_STOPOVERS = 2   # stopovers allowed when asking Kiwi what exists without the traveller's limits
+
+def flight_problems(leg: dict[str, Any]) -> list[str]:
+    """Which of the traveller's limits a Kiwi flight breaks. Empty if the flight can be used."""
+    settings, problems = current.SETTINGS, []
     departure_date, departure_time = leg["departureTime"][:10], leg["departureTime"][11:16]
     arrival_date, arrival_time = leg["arrivalTime"][:10], leg["arrivalTime"][11:16]
-    if leg["stops"] > current.SETTINGS.max_stopovers or departure_date not in current.SETTINGS.iso_dates:
-        return None
+    if leg["stops"] > settings.max_stopovers:
+        problems.append("stopovers")
+    if to_minutes(departure_time) < settings.earliest_flight_minutes:
+        problems.append("too_early")    # cannot be caught: earliest time leaving plus the minimum time at the airport
     if arrival_date != departure_date:
-        return None   # lands the next day, too late to reach the destination the same day
-    if to_minutes(departure_time) < current.SETTINGS.earliest_flight_minutes:
-        return None   # cannot be caught: earliest time leaving plus the minimum time at the airport
+        problems.append("next_day")     # too late to reach the destination the same day
+    elif settings.latest_arrival and to_minutes(arrival_time) > settings.latest_arrival_minutes:
+        problems.append("too_late")     # lands after the time the traveller must already be at the destination
+    return problems
+
+def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[str, Any] | None:
+    """Copy one Kiwi result into FLIGHTS. Returns the flight, or None if it breaks one of the traveller's limits.
+    closest=True also keeps a flight that breaks them, for the closest alternatives, unless it lands the next day."""
+    leg = itinerary["outbound"]
+    departure_date, departure_time = leg["departureTime"][:10], leg["departureTime"][11:16]
+    arrival_time = leg["arrivalTime"][11:16]
+    problems = flight_problems(leg)
+    if departure_date not in current.SETTINGS.iso_dates or "next_day" in problems or (problems and not closest):
+        return None
+    if not current.TRIP.airport(leg["from"]) or not current.TRIP.airport(leg["to"]):
+        return None   # Kiwi reads a code as its city: asked for BRU it also answers with CRL, which is not in the trip
     duration_minutes = leg["durationSeconds"] // 60
     flight_id = f"{leg['from']}-{leg['to']}-{departure_date[8:10]}{departure_date[5:7]}-{departure_time.replace(':', '')}"
     flight = {
@@ -147,20 +165,25 @@ def register_flight(itinerary: dict[str, Any]) -> dict[str, Any] | None:
         FLIGHTS[flight_id] = flight
     return FLIGHTS[flight_id]
 
-async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str) -> list[dict[str, Any]] | None:
-    """One Kiwi search. fly_to may list several airports, the days are yyyy-mm-dd. Returns None if Kiwi did not answer."""
+async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str,
+                       stopovers: int | None = None) -> list[dict[str, Any]] | None:
+    """One Kiwi search. fly_to may list several airports, the days are yyyy-mm-dd. Returns None if Kiwi did not answer.
+    Giving stopovers asks for what exists at any time of the day with at most that many stopovers, instead of
+    what fits the traveller's limits."""
+    limits = stopovers is None
     as_kiwi = lambda day: f"{day[8:10]}/{day[5:7]}/{day[0:4]}"
     query = {
         "flyFrom": fly_from,
         "flyTo": fly_to,
         "departureDate": as_kiwi(first_day),
         "sort": "price",
-        "dtime_from": current.SETTINGS.earliest_flight_minutes // 60,
-        "max_sector_stopovers": current.SETTINGS.max_stopovers,
+        "max_sector_stopovers": current.SETTINGS.max_stopovers if limits else stopovers,
     }
     if last_day != first_day:
         query["departureDateTo"] = as_kiwi(last_day)
-    if current.SETTINGS.latest_arrival:
+    if limits:
+        query["dtime_from"] = current.SETTINGS.earliest_flight_minutes // 60
+    if limits and current.SETTINGS.latest_arrival:
         query["atime_to"] = current.SETTINGS.latest_arrival_minutes // 60   # landing later than this can never be on time
     try:
         result = await kiwi_search.ainvoke(query)
@@ -172,21 +195,30 @@ async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str
 async def search_airport_flights(departure: str, arrivals: list[str], days: list[str]) -> None:
     """Every flight from one departure airport. Starts with one search for all arrival airports and all dates.
     Kiwi returns at most KIWI_RESULT_CAP flights per search, so a full answer is split into smaller searches
-    until nothing can have been cut off."""
+    until nothing can have been cut off.
+    With many arrival airports that is dozens of searches per departure airport, and Kiwi refuses a client that
+    asks that much. Then the split is by date only. A full answer for a date holds the cheapest flights of that
+    date, and only the cheapest few per airport and date are looked at further (see timetables.flights_to_check)."""
     found = await kiwi_flights(departure, ",".join(arrivals), min(days), max(days))
     searches = [(arrivals, days)] if found is not None and len(found) < KIWI_RESULT_CAP else []
-    if not searches:
-        # Failed or possibly cut off: one search per arrival airport and per date
-        for arrival in arrivals:
+    groups = [[arrival] for arrival in arrivals] if len(arrivals) * len(days) <= MAX_SPLIT_SEARCHES else [arrivals]
+    if not searches and found is not None and len(groups) == 1 and len(days) == 1:
+        # Nothing smaller to ask for: the same search again would give the same answer
+        FLIGHT_GAPS.append(tr("gap_capped", route=f"{departure} -> {','.join(arrivals)}", day=days[0], cap=KIWI_RESULT_CAP))
+        searches.append((arrivals, days))
+    elif not searches:
+        # Failed or possibly cut off: one search per arrival airport (or for all of them) and per date
+        for group in groups:
             for day in days:
-                part = await kiwi_flights(departure, arrival, day, day)
+                route = f"{departure} -> {','.join(group)}"
+                part = await kiwi_flights(departure, ",".join(group), day, day)
                 if part is None:
-                    FLIGHT_GAPS.append(tr("gap_no_answer", route=f"{departure} -> {arrival}", day=day))
+                    FLIGHT_GAPS.append(tr("gap_no_answer", route=route, day=day))
                     continue
                 if len(part) >= KIWI_RESULT_CAP:
-                    FLIGHT_GAPS.append(tr("gap_capped", route=f"{departure} -> {arrival}", day=day, cap=KIWI_RESULT_CAP))
+                    FLIGHT_GAPS.append(tr("gap_capped", route=route, day=day, cap=KIWI_RESULT_CAP))
                 found = (found or []) + part
-                searches.append(([arrival], [day]))
+                searches.append((group, [day]))
     for itinerary in found or []:
         register_flight(itinerary)
     for searched_arrivals, searched_days in searches:
@@ -196,6 +228,43 @@ async def search_all_flights() -> None:
     """Search every departure airport against every arrival airport on every date, in code."""
     arrivals = [airport["code"] for airport in current.TRIP.arrival]
     await asyncio.gather(*(search_airport_flights(airport["code"], arrivals, current.SETTINGS.iso_dates) for airport in current.TRIP.departure))
+
+async def why_no_flights() -> tuple:
+    """Called when no flight fits the traveller's limits. Asks Kiwi again without them and says, in Markdown and
+    in the traveller's language, which limits the flights that exist break. A model could only guess this.
+    Returns that text and the flights Kiwi answered with, as it returns them."""
+    settings = current.SETTINGS
+    stops = max(settings.max_stopovers, PROBE_STOPOVERS)
+    arrivals = ",".join(airport["code"] for airport in current.TRIP.arrival)
+    # Kiwi returns the cheapest flights of each search, and those are the ones with stopovers. So each airport is
+    # asked twice: with the stopovers the traveller accepts, to see what the time limits cut, and with a few more.
+    answers = await asyncio.gather(*(
+        kiwi_flights(airport["code"], arrivals, min(settings.iso_dates), max(settings.iso_dates), stopovers=allowed)
+        for airport in current.TRIP.departure for allowed in sorted({settings.max_stopovers, stops})))
+    lines = [f"## {tr('no_flights_title')}", ""]
+    if all(answer is None for answer in answers):
+        return "\n".join(lines + [tr("no_flights_unknown")]), []
+    legs = {(leg["from"], leg["to"], leg["departureTime"], leg["arrivalTime"], leg["stops"]): leg
+            for answer in answers for leg in (itinerary["outbound"] for itinerary in answer or [])
+            if leg["departureTime"][:10] in settings.iso_dates}   # the same flight is sold at several prices
+    broken = [problems for problems in map(flight_problems, legs.values()) if problems]
+    if not broken:
+        return "\n".join(lines + [tr("no_flights_none", stops=stops)]), []
+    lines += [tr("no_flights_intro", stops=stops, count=len(broken)), ""]
+    details = {
+        "stopovers": {"maximum": settings.max_stopovers},
+        "too_early": {"time": to_time(settings.earliest_flight_minutes), "earliest": settings.earliest_leave,
+                      "minutes": settings.min_airport_minutes},
+        "too_late": {"latest": settings.latest_arrival},
+        "next_day": {},
+    }
+    for problem, values in details.items():
+        count = sum(problem in problems for problems in broken)
+        if count:
+            # A flight that breaks only this limit comes back when this limit alone is relaxed
+            alone = sum(problems == [problem] for problems in broken)
+            lines.append(f"- {tr('no_flights_' + problem, count=count, **values)}; {tr('no_flights_alone', alone=alone)}")
+    return "\n".join(lines), [itinerary for answer in answers for itinerary in answer or []]
 
 def describe_flight(flight: dict[str, Any]) -> str:
     """One line with everything a specialist needs to know about a flight."""

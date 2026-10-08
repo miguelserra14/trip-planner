@@ -22,9 +22,16 @@ def plain(text: str) -> str:
     """Lowercase text without accents, to compare names written in different ways."""
     return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower().strip()
 
+# Progress lines and results are printed in the terminal, unless something else asked for them: the window (gui.py)
+# puts its own functions here, under "say" and "show".
+LISTENERS: dict = {}
+
 def say(text: str) -> None:
-    """Print a progress line."""
-    print(text, flush=True)
+    """A progress line, wherever the traveller is looking."""
+    if "say" in LISTENERS:
+        LISTENERS["say"](text)
+    else:
+        print(text, flush=True)
 
 # Where the time goes: seconds spent in each step of the current trip
 TIMINGS: dict[str, float] = {}
@@ -46,5 +53,8 @@ def message_text(message) -> str:
 
 
 def show(markdown: str) -> None:
-    """Show formatted text. It is Markdown, printed as it is."""
-    print("\n" + markdown + "\n", flush=True)
+    """Formatted text, wherever the traveller is looking. It is Markdown: the terminal prints it as it is."""
+    if "show" in LISTENERS:
+        LISTENERS["show"](markdown)
+    else:
+        print("\n" + markdown + "\n", flush=True)

@@ -21,6 +21,7 @@ SETTINGS = TripSettings(
     fallback_saving_eur_per_hour=10.0,  # first extra hour caused by a distant airport
     extra_hour_growth=1.5,              # each further hour costs 1.5 times the previous one
     options_shown=5,
+    free_trains_at_origin=False,
     free_trains_at_destination=True,
 )
 

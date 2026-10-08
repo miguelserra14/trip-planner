@@ -32,10 +32,13 @@ TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ",
 TIMETABLE_CONCURRENCY = 2
 TIMETABLE_SPACING_SECONDS = 0.5  # leave this long between two requests
 PAGE_SIZE = 8                    # connections asked for per request
+NO_COACH_MODES = "RAIL,SUBWAY,TRAM,BUS,FERRY"      # everything but long-distance coaches
+ROAD_MODES = "COACH,BUS,TRAM,SUBWAY,FERRY"         # everything but trains
 CITY_WALK_SECONDS = 2400         # walking allowed between the city centre and a stop. It is not counted: the traveller is somewhere in the city
 AIRPORT_WALK_SECONDS = 1200      # walking allowed between the terminal and a stop. It is counted
 AIRFIELD_WALK_SECONDS = 3600     # terminal not known: the planner walks from the middle of the airfield, allow for it...
 AIRFIELD_WALK_MINUTES = 15       # ... and count this fixed time between the stop and the terminal instead
+MIN_AIRPORT_FLOOR = 45           # the closest alternatives may cut the time at the airport, but never below this
 MAX_FLIGHTS_CHECKED = 16         # flights whose ground transport is looked up: the cheapest ones
 MAX_FLIGHTS_PER_AIRPORT_DAY = 3  # ... with at most this many per departure airport and date
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
@@ -154,9 +157,10 @@ class Timetables:
         return TIMEZONES[key]
 
     async def plan(self, start: tuple, end: tuple, day: str, minutes: int, arrive_by: bool, zones: tuple,
-                   to_airport: bool, terminal_known: bool, coaches: bool = True) -> list[dict[str, Any]]:
+                   to_airport: bool, terminal_known: bool, modes: str = "") -> list[dict[str, Any]]:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
-        on the clock of the end point when arrive_by, otherwise of the start point.
+        on the clock of the end point when arrive_by, otherwise of the start point. modes limits the kinds of
+        vehicle, empty for all of them.
         One end is the city and the other the airport terminal (to_airport says which way). On the city side the
         time returned is that of the vehicle, on the airport side it includes the walk to or from the terminal."""
         airport_walk = AIRPORT_WALK_SECONDS if terminal_known else AIRFIELD_WALK_SECONDS
@@ -167,8 +171,8 @@ class Timetables:
             "arriveBy": "true" if arrive_by else "false", "numItineraries": PAGE_SIZE,
             "maxPreTransitTime": walks[0], "maxPostTransitTime": walks[1],
         }
-        if not coaches:
-            params["transitModes"] = "RAIL,SUBWAY,TRAM,BUS,FERRY"
+        if modes:
+            params["transitModes"] = modes
         found = await self.get("plan", params)
         connections = []
         for itinerary in found.get("itineraries") or []:
@@ -221,8 +225,13 @@ class Timetables:
         at_terminal = to_minutes(flight["departure_time"]) - current.SETTINGS.min_airport_minutes
         # The connections that arrive last before the limit. If none of them leaves late enough, also the ones
         # that leave first after the earliest time the traveller accepts, to be sure nothing suitable exists.
-        found = list(await self.plan(start, airport, service, at_terminal, True, zones, True, known))
-        if not any(c["leave"] >= to_minutes(current.SETTINGS.earliest_leave) and c["arrive"] <= at_terminal for c in found):
+        # Free trains: look for trains first, a paid coach is only worth it when no train fits
+        coaches = not current.SETTINGS.free_trains_at_origin
+        fits = lambda c: c["leave"] >= to_minutes(current.SETTINGS.earliest_leave) and c["arrive"] <= at_terminal
+        found = list(await self.plan(start, airport, service, at_terminal, True, zones, True, known, coaches))
+        if not coaches and not any(map(fits, found)):
+            found += await self.plan(start, airport, service, at_terminal, True, zones, True, known)
+        if not any(map(fits, found)):
             key = (start, airport, service)   # the same question for every flight of that airport and day: asked once
             if key not in self.first_rides:
                 self.first_rides[key] = asyncio.ensure_future(
@@ -230,18 +239,21 @@ class Timetables:
             found += await self.first_rides[key]
         if not found and not await self.is_covered(start, airport, service, zones, True, known):
             return dict(NOT_COVERED)
-        return self.answer([c for c in found if c["arrive"] <= at_terminal], service, flight)
+        # Kept up to the shortest time at the airport ever offered: the ones that arrive after the time asked for
+        # only serve the closest alternatives, when nothing respects every requirement
+        last_call = to_minutes(flight["departure_time"]) - MIN_AIRPORT_FLOOR
+        return self.answer([c for c in found if c["arrive"] <= max(at_terminal, last_call)], service, flight)
 
     async def onward(self, airport: tuple, end: tuple, service: str, ready: int, zones: tuple, known: bool,
-                     coaches: bool) -> list[dict[str, Any]]:
+                     modes: str = "") -> list[dict[str, Any]]:
         """The connections leaving an airport from a time on. One request serves every flight that lands while
         its answer still applies: several flights land at the same airport within a couple of hours."""
-        key = (airport, end, service, coaches)
+        key = (airport, end, service, modes)
         async with self.locks.setdefault(key, asyncio.Lock()):
             for asked_from, good_until, found in self.windows.setdefault(key, []):
                 if asked_from <= ready <= good_until:
                     return [c for c in found if c["leave"] >= ready]
-            found = await self.plan(airport, end, service, ready, False, zones, False, known, coaches)
+            found = await self.plan(airport, end, service, ready, False, zones, False, known, modes)
             leaves = sorted(c["leave"] for c in found)
             # A full answer stops somewhere, and later connections exist beyond it: it is only reused up to its
             # second-to-last connection. A short answer is everything left that day, so it serves any later time.
@@ -254,10 +266,17 @@ class Timetables:
         service = reference_day(flight["date"])
         ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes   # earliest time walking out of the terminal
         # Free trains: look for trains first, a paid coach is only worth it when no train is left that day
-        coaches = not current.SETTINGS.free_trains_at_destination
-        found = await self.onward(airport, end, service, ready, zones, known, coaches)
-        if not found and not coaches:
-            found = await self.onward(airport, end, service, ready, zones, known, True)
+        if current.SETTINGS.free_trains_at_destination:
+            found = await self.onward(airport, end, service, ready, zones, known, NO_COACH_MODES)
+            if not found:
+                found = await self.onward(airport, end, service, ready, zones, known)
+        else:
+            # An answer is the first connections to leave, and trains leave so often that they fill it: the coaches,
+            # a few a day, are asked for on their own. Chains of local buses are left out, a coach is what is looked for.
+            found, by_road = await asyncio.gather(
+                self.onward(airport, end, service, ready, zones, known),
+                self.onward(airport, end, service, ready, zones, known, ROAD_MODES))
+            found = found + [c for c in by_road if any(step["coach"] for step in c["steps"])]
         if not found and not await self.is_covered(airport, end, service, zones, False, known):
             return dict(NOT_COVERED)
         return self.answer(found, service, flight)
@@ -266,9 +285,14 @@ class Timetables:
         await self.http.aclose()
 
 def flights_to_check(flights: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The flights whose ground transport is looked up: the cheapest, a few per departure airport and date."""
+    """The flights whose ground transport is looked up: the cheapest, a few per departure airport and date.
+    When the flights are the ones that break the traveller's limits (see search_flights), the ones that break the
+    most important limits by the least come first: landing late, then stopovers, then the price."""
+    settings = current.SETTINGS
+    breaks = lambda flight: (max(0, to_minutes(flight["arrival_time"]) - settings.latest_arrival_minutes),
+                             max(0, flight["stops"] - settings.max_stopovers))
     chosen, seen = [], {}
-    for flight in sorted(flights, key=lambda flight: flight["price_eur"]):
+    for flight in sorted(flights, key=lambda flight: (*breaks(flight), flight["price_eur"])):
         key = (flight["departure_airport"], flight["date"])
         if len(chosen) < MAX_FLIGHTS_CHECKED and seen.get(key, 0) < MAX_FLIGHTS_PER_AIRPORT_DAY:
             seen[key] = seen.get(key, 0) + 1

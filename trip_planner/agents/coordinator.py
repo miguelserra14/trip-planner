@@ -71,8 +71,14 @@ def coordinator_prompt(request: ModelRequest) -> str:
     2. Call search_ground_transport. It reads the real timetables and asks the two transport specialists.
     3. Call build_itineraries. It checks the hard constraints, grades how reliable each itinerary is, computes the
        totals and ranks the itineraries.
-    If build_itineraries finds no valid itinerary, do not call the tools again: read why the flights were rejected
-    and tell the traveller which single setting to relax to get a result.
+    If search_flights finds no flight that fits, it says which of the traveller's limits the existing flights break,
+    counted by code. When it kept flights that break those limits, go on with the next steps as usual.
+    If build_itineraries finds no itinerary that respects every requirement, it returns the closest ones instead,
+    ordered by how little they break, with what speaks for and against each. Do not call the tools again. Say
+    plainly that nothing respects every requirement, then, in 3 or 4 sentences: which option is the closest and
+    what it breaks, how it compares with the next one, and the setting and value that make it valid. Use only
+    what the report says, never suggest a cause it does not mention, and do not use the heading below.
+    If it returns no option at all, tell the traveller which single setting to relax, from the reasons it lists.
 
     The hard constraints of this trip, enforced by build_itineraries:
     - {subagents.stopovers_rule(s)}

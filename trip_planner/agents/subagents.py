@@ -111,6 +111,11 @@ def shorten_old_results(state: SearchState, runtime) -> dict[str, Any] | None:
 @dynamic_prompt
 def airport_transfer_prompt(request: ModelRequest) -> str:
     s = current.SETTINGS
+    trains_cost = (
+        "Trains around the origin are free for this traveller: prefer a connection by train when one exists, and "
+        "count its train legs as 0 EUR. Only coaches, buses and shuttles cost money." if s.free_trains_at_origin
+        else "Trains are not free for this traveller."
+    )
     return f"""
     You are a ground transport specialist for the region around the traveller's origin city.
     You will be given the origin city and a list of departure airports. For each airport, find how to get by bus
@@ -126,6 +131,7 @@ def airport_transfer_prompt(request: ModelRequest) -> str:
     adult ticket for the cheapest sensible connection.
     The traveller leaves the origin city between {s.earliest_leave} and {s.latest_leave}, so only consider services that
     run in that window on the travel dates.
+    {trains_cost}
     Use public transport only, never a taxi. Look at the national rail operators, the international trains,
     the long-distance coaches (such as FlixBus, BlaBlaCar Bus and Flibco) and the airport shuttle buses.
     The total travel time must cover the whole trip to the terminal: every leg, every change, the waiting time between

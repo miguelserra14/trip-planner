@@ -104,17 +104,36 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         "",
         f"# {tr('final_result')}",
         "",
-        response.get("report") or tr("no_itinerary"),
+        response.get("report") or f"## {tr('no_itinerary')}",
         "",
         recommendation,
         "",
     ]
     return "\n".join(lines)
 
+REPORTS = ROOT / "reports"           # every run saves its report here, and only the newest RECENT_REPORTS stay
+SAVED_REPORTS = REPORTS / "saved"    # the reports the traveller chose to keep. Nothing here is ever deleted
+RECENT_REPORTS = 5
+
 def save_report(response: dict[str, Any], recommendation: str) -> Path:
-    """Save the full reasoning and the final result, one file per run."""
+    """Save the full reasoning and the final result, one file per run, and make room: the oldest reports go."""
     slug = lambda text: re.sub(r"[^a-z0-9]+", "-", plain(text)).strip("-")
-    path = ROOT / "reports" / f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}.md"
+    path = REPORTS / f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}.md"
     path.parent.mkdir(exist_ok=True)
     path.write_text(render_full_report(response, recommendation), encoding="utf-8")
+    remove_old_reports()
     return path
+
+def remove_old_reports() -> None:
+    """Delete the reports beyond the newest RECENT_REPORTS. The ones in saved/ are not counted and not touched."""
+    reports = sorted(REPORTS.glob("trip_*.md"), key=lambda report: report.stat().st_mtime)
+    for old in reports[:-RECENT_REPORTS]:
+        old.unlink(missing_ok=True)
+
+def keep_report(path: Path, keep: bool) -> Path:
+    """Move a report to saved/ to keep it, or back among the recent ones. Returns where the report is now."""
+    target = (SAVED_REPORTS if keep else REPORTS) / path.name
+    if target != path and path.exists():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        path.replace(target)
+    return target

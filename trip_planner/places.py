@@ -1,6 +1,8 @@
 """Places and airports. Code only, no model. The cities are located with OpenStreetMap, so they can be written in
 any language, and the airports come from the OurAirports database, chosen by distance."""
 import csv
+import io
+import json
 import math
 import re
 from dataclasses import dataclass, field
@@ -15,7 +17,12 @@ from trip_planner.utils import plain, say
 AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"   # OurAirports, public domain
 AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused
 AIRPORT_TYPES = {"large_airport", "medium_airport"}     # with scheduled service only, see load_airports
+MIN_TRIP_KM = 80                                        # cities closer than this are not a trip by plane
 CITY_AIRPORT_RADIUS_KM = 45                             # "Londres" means every airport this close to London
+RUNWAYS_URL = "https://davidmegginson.github.io/ourairports-data/runways.csv"
+ROUTES_URL = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat"   # OpenFlights: airline routes up to 2014
+AIRFIELDS_FILE = ROOT / "resources" / "airfields.json"  # worked out once from the two files above, then reused
+AIRLINER_RUNWAY_FT = 5900                               # about 1800 m: below this, no ordinary airliner
 
 @dataclass
 class Place:
@@ -76,6 +83,7 @@ def load_airports() -> dict[str, dict[str, Any]]:
                 if row["iata_code"] and row["type"] in AIRPORT_TYPES and row["scheduled_service"] == "yes":
                     AIRPORTS[row["iata_code"]] = {
                         "code": row["iata_code"],
+                        "ident": row["ident"],
                         "name": row["name"],
                         "city": row["municipality"],
                         "country": row["iso_country"],
@@ -85,6 +93,33 @@ def load_airports() -> dict[str, dict[str, Any]]:
                         "search_text": plain(f"{row['name']} {row['municipality']} {row['keywords']}"),
                     }
     return AIRPORTS
+
+AIRFIELDS: set | None = None
+
+def airfields() -> set:
+    """Airports the database lists with scheduled flights but that no airline sells seats from, such as Viseu,
+    Bragança or Cascais: airfields with an air taxi. An airport is one of them when it is not a large airport, no
+    airline route ever used it and its runway is too short for an airliner. One sign is not enough: London City has
+    a short runway, and an airport opened after the route data was collected has no routes."""
+    global AIRFIELDS
+    if AIRFIELDS is None and AIRFIELDS_FILE.exists():
+        AIRFIELDS = set(json.loads(AIRFIELDS_FILE.read_text(encoding="utf-8")))
+    if AIRFIELDS is None:
+        try:
+            fetch = lambda url: httpx.get(url, headers={"User-Agent": USER_AGENT}, timeout=120, follow_redirects=True).raise_for_status().text
+            longest: dict[str, float] = {}
+            for row in csv.DictReader(io.StringIO(fetch(RUNWAYS_URL))):
+                if row["length_ft"]:
+                    longest[row["airport_ident"]] = max(longest.get(row["airport_ident"], 0), float(row["length_ft"]))
+            flown = {code for row in csv.reader(io.StringIO(fetch(ROUTES_URL))) if len(row) > 4 for code in (row[2], row[4])}
+            AIRFIELDS = {code for code, airport in load_airports().items()
+                         if not airport["large"] and code not in flown and airport["ident"] in longest
+                         and longest[airport["ident"]] < AIRLINER_RUNWAY_FT}
+            AIRFIELDS_FILE.write_text(json.dumps(sorted(AIRFIELDS)), encoding="utf-8")
+        except Exception as e:
+            say(f"[airports] {type(e).__name__}: could not tell the airfields from the airports, all of them are listed")
+            return set()   # not kept: asked again on the next trip
+    return AIRFIELDS
 
 def distance_km(latitude_1: float, longitude_1: float, latitude_2: float, longitude_2: float) -> float:
     """Straight-line distance between two points."""
@@ -99,9 +134,10 @@ def airport_from(place: Place, code: str) -> dict[str, Any]:
     kept = ("code", "name", "city", "country", "large", "latitude", "longitude")
     return {**{key: airport[key] for key in kept}, "km": round(km)}
 
-def airports_near(place: Place, radius_km: float) -> list[dict[str, Any]]:
-    """The airports within a radius of a city, closest first."""
-    near = [airport_from(place, code) for code in load_airports()]
+def airports_near(place: Place, radius_km: float, airlines_only: bool = False) -> list[dict[str, Any]]:
+    """The airports within a radius of a city, closest first. airlines_only leaves out the airfields."""
+    skipped = airfields() if airlines_only else set()
+    near = [airport_from(place, code) for code in load_airports() if code not in skipped]
     return sorted((airport for airport in near if airport["km"] <= radius_km), key=lambda airport: airport["km"])
 
 def find_airports(entry: str, place: Place) -> list[str]:
@@ -171,9 +207,17 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
             found_codes += found
         return sorted((airport_from(place, code) for code in dict.fromkeys(found_codes)), key=lambda airport: airport["km"])
 
-    primary = resolve(settings.primary_airports, origin) if settings.primary_airports else airports_near(origin, settings.primary_radius_km)
-    fallback = resolve(settings.fallback_airports, origin) if settings.fallback_airports else airports_near(origin, settings.fallback_radius_km)
-    arrival = resolve(settings.arrival_airports, destination) if settings.arrival_airports else airports_near(destination, settings.arrival_radius_km)
+    apart = round(distance_km(origin.latitude, origin.longitude, destination.latitude, destination.longitude))
+    if apart < MIN_TRIP_KM:
+        raise ValueError(tr("places_too_close", origin=origin.label, destination=destination.label, km=apart))
+
+    # Each side on the scale chosen for it: how far to look and how many airports to keep
+    departure_km, departure_limit, departure_setting = settings.scale(settings.departure_scale)
+    arrival_km, arrival_limit, arrival_setting = settings.scale(settings.arrival_scale)
+    # The automatic choice leaves the airfields out. An airfield the traveller names in the settings is still used.
+    primary = resolve(settings.primary_airports, origin) if settings.primary_airports else airports_near(origin, min(settings.primary_radius_km, departure_km), True)
+    fallback = resolve(settings.fallback_airports, origin) if settings.fallback_airports else airports_near(origin, departure_km, True)
+    arrival = resolve(settings.arrival_airports, destination) if settings.arrival_airports else airports_near(destination, arrival_km, True)
 
     # Airports to add go to the side they are closer to, and are never cut by the limits
     wanted: set = set()
@@ -204,15 +248,15 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
         ranked = sorted(unique.values(), key=lambda a: (a["code"] not in wanted, not a["large"], a["km"]))
         return sorted(ranked[:max(limit, 0)], key=lambda a: a["km"])
 
-    primary = tidy(primary, set(), settings.max_departure_airports)
-    fallback = tidy(fallback, {a["code"] for a in primary}, settings.max_departure_airports - len(primary))
-    arrival = tidy(arrival, {a["code"] for a in primary + fallback}, settings.max_arrival_airports)
+    primary = tidy(primary, set(), departure_limit)
+    fallback = tidy(fallback, {a["code"] for a in primary}, departure_limit - len(primary))
+    arrival = tidy(arrival, {a["code"] for a in primary + fallback}, arrival_limit)
     if not primary and fallback:
         primary, fallback = fallback[:1], fallback[1:]   # the closest airport is the reference for the others
     if not primary:
-        raise ValueError(tr("no_departure_airports", km=settings.fallback_radius_km, city=settings.origin))
+        raise ValueError(tr("no_airports_near", km=departure_km, city=settings.origin, setting=departure_setting))
     if not arrival:
-        raise ValueError(tr("no_arrival_airports", km=settings.arrival_radius_km, city=settings.destination))
+        raise ValueError(tr("no_airports_near", km=arrival_km, city=settings.destination, setting=arrival_setting))
     return TripPlaces(origin, destination, primary, fallback, arrival, dropped=sorted(excluded), unknown=unknown)
 
 def remove_airports(places: TripPlaces, removed: list[str]) -> TripPlaces:

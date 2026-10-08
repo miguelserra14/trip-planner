@@ -4,7 +4,7 @@ import csv
 import math
 import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any
 
 import httpx
 
@@ -33,7 +33,7 @@ class Place:
         names = list(dict.fromkeys(name for name in (self.local_name, self.english_name) if name))
         return f"{' / '.join(names)}, {self.country}"
 
-PLACES: Dict[str, Place] = {}
+PLACES: dict[str, Place] = {}
 
 def geocode(name: str) -> Place:
     """Locate a city written in any language, with OpenStreetMap's Nominatim."""
@@ -61,9 +61,9 @@ def geocode(name: str) -> Place:
         )
     return PLACES[key]
 
-AIRPORTS: Dict[str, Dict[str, Any]] = {}
+AIRPORTS: dict[str, dict[str, Any]] = {}
 
-def load_airports() -> Dict[str, Dict[str, Any]]:
+def load_airports() -> dict[str, dict[str, Any]]:
     """Every airport with scheduled passenger flights, by IATA code."""
     if not AIRPORTS:
         if not AIRPORTS_FILE.exists():
@@ -92,19 +92,19 @@ def distance_km(latitude_1: float, longitude_1: float, latitude_2: float, longit
     h = math.sin((b - a) / 2) ** 2 + math.cos(a) * math.cos(b) * math.sin(math.radians(longitude_2 - longitude_1) / 2) ** 2
     return 6371 * 2 * math.asin(math.sqrt(h))
 
-def airport_from(place: Place, code: str) -> Dict[str, Any]:
+def airport_from(place: Place, code: str) -> dict[str, Any]:
     """An airport with its distance from a city."""
     airport = load_airports()[code]
     km = distance_km(place.latitude, place.longitude, airport["latitude"], airport["longitude"])
     kept = ("code", "name", "city", "country", "large", "latitude", "longitude")
     return {**{key: airport[key] for key in kept}, "km": round(km)}
 
-def airports_near(place: Place, radius_km: float) -> List[Dict[str, Any]]:
+def airports_near(place: Place, radius_km: float) -> list[dict[str, Any]]:
     """The airports within a radius of a city, closest first."""
     near = [airport_from(place, code) for code in load_airports()]
     return sorted((airport for airport in near if airport["km"] <= radius_km), key=lambda airport: airport["km"])
 
-def find_airports(entry: str, place: Place) -> List[str]:
+def find_airports(entry: str, place: Place) -> list[str]:
     """Turn what the traveller wrote into airport codes. entry is a code ("BRU"), an airport name ("Charleroi")
     or a city ("Paris"). Names are only looked for within 1500 km of place, so that "Paris" is not Paris, Texas."""
     airports = load_airports()
@@ -133,17 +133,17 @@ class TripPlaces:
     """Where the trip happens: the two cities and the airports that will be searched."""
     origin: Place
     destination: Place
-    primary: List[Dict[str, Any]]      # departure airports close to the origin
-    fallback: List[Dict[str, Any]]     # departure airports further away
-    arrival: List[Dict[str, Any]]      # arrival airports
-    dropped: List[str] = field(default_factory=list)    # airports removed by the settings or by the traveller, for the report
-    unknown: List[str] = field(default_factory=list)    # entries of the settings that matched no airport
+    primary: list[dict[str, Any]]      # departure airports close to the origin
+    fallback: list[dict[str, Any]]     # departure airports further away
+    arrival: list[dict[str, Any]]      # arrival airports
+    dropped: list[str] = field(default_factory=list)    # airports removed by the settings or by the traveller, for the report
+    unknown: list[str] = field(default_factory=list)    # entries of the settings that matched no airport
 
     @property
-    def departure(self) -> List[Dict[str, Any]]:
+    def departure(self) -> list[dict[str, Any]]:
         return self.primary + self.fallback
 
-    def airport(self, code: str) -> Dict[str, Any] | None:
+    def airport(self, code: str) -> dict[str, Any] | None:
         return next((airport for airport in self.departure + self.arrival if airport["code"] == code), None)
 
     def km(self, code: str) -> int | None:
@@ -151,19 +151,19 @@ class TripPlaces:
         airport = self.airport(code)
         return airport["km"] if airport else None
 
-def describe_airport(airport: Dict[str, Any]) -> str:
+def describe_airport(airport: dict[str, Any]) -> str:
     return f"{airport['code']} ({airport['name']}, {airport['city']}, {airport['country']}, {airport['km']} km)"
 
-def codes(airports: List[Dict[str, Any]]) -> str:
+def codes(airports: list[dict[str, Any]]) -> str:
     return ",".join(airport["code"] for airport in airports)
 
 def choose_airports(settings: TripSettings) -> TripPlaces:
     """Locate the two cities and choose the airports: by distance, then adjusted by the settings."""
     origin, destination = geocode(settings.origin), geocode(settings.destination)
-    unknown: List[str] = []
+    unknown: list[str] = []
 
-    def resolve(entries: List[str], place: Place) -> List[Dict[str, Any]]:
-        found_codes: List[str] = []
+    def resolve(entries: list[str], place: Place) -> list[dict[str, Any]]:
+        found_codes: list[str] = []
         for entry in entries:
             found = find_airports(entry, place)
             if not found:
@@ -197,7 +197,7 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
             unknown.append(entry)
         excluded.update(found)
 
-    def tidy(airports: List[Dict[str, Any]], taken: set, limit: int) -> List[Dict[str, Any]]:
+    def tidy(airports: list[dict[str, Any]], taken: set, limit: int) -> list[dict[str, Any]]:
         """Drop duplicates and excluded airports, keep the most useful ones up to the limit, closest first."""
         unique = {a["code"]: a for a in airports if a["code"] not in taken and a["code"] not in excluded}
         # Airports the traveller asked for come first, then the large ones (small ones rarely have the flight), then the closest
@@ -215,7 +215,7 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
         raise ValueError(tr("no_arrival_airports", km=settings.arrival_radius_km, city=settings.destination))
     return TripPlaces(origin, destination, primary, fallback, arrival, dropped=sorted(excluded), unknown=unknown)
 
-def remove_airports(places: TripPlaces, removed: List[str]) -> TripPlaces:
+def remove_airports(places: TripPlaces, removed: list[str]) -> TripPlaces:
     """Drop airports from the trip. Raises ValueError if no departure or no arrival airport is left."""
     dropped = set(places.dropped) | set(removed)
     keep = lambda airports: [airport for airport in airports if airport["code"] not in dropped]
@@ -227,7 +227,7 @@ def remove_airports(places: TripPlaces, removed: List[str]) -> TripPlaces:
     places.primary, places.fallback, places.arrival, places.dropped = primary, fallback, arrival, sorted(dropped)
     return places
 
-def airport_groups(places: TripPlaces) -> List[tuple]:
+def airport_groups(places: TripPlaces) -> list[tuple]:
     """The three groups of airports with their title in the traveller's language."""
     return [(tr("group_primary"), places.primary), (tr("group_fallback"), places.fallback), (tr("group_arrival"), places.arrival)]
 

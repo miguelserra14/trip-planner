@@ -1,15 +1,15 @@
 """Combine a flight with its ground legs into a door-to-door itinerary, check every hard constraint, add up the
 cost and rank the itineraries by the traveller's preferences."""
-from typing import Any, Dict, List
+from typing import Any
 
 from trip_planner import current
 from trip_planner.itineraries.legs import from_airport_leg, to_airport_leg
-from trip_planner.sources.airlines import verify_with_airline
+from trip_planner.sources import airlines
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_minutes, to_time
 
-def check_itinerary(flight: Dict[str, Any], ground: Dict[str, Any], transfer: Dict[str, Any] | None,
-                    route: Dict[str, Any] | None) -> Dict[str, Any]:
+def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
+                    route: dict[str, Any] | None) -> dict[str, Any]:
     """Combine a flight with its ground transport and check every hard constraint.
     Returns the itinerary, or raises ValueError with the reason it is rejected."""
     if flight["stops"] > current.SETTINGS.max_stopovers:
@@ -34,10 +34,10 @@ def check_itinerary(flight: Dict[str, Any], ground: Dict[str, Any], transfer: Di
         "schedule_grade": max(to_leg["grade"], from_leg["grade"]),
     }
 
-def price_itinerary(itinerary: Dict[str, Any]) -> None:
+def price_itinerary(itinerary: dict[str, Any]) -> None:
     """Confirm the flight on the airline's own site when possible, then add up the cost and how much of it is confirmed."""
     flight = itinerary["flight"]
-    booking = verify_with_airline(flight)   # the traveller books on the airline's site: that price counts when it is known
+    booking = airlines.verify_with_airline(flight)   # the traveller books on the airline's site: that price counts when it is known
     itinerary["booking"] = booking
     itinerary["flight_price"] = booking["price_eur"]
     itinerary["total_cost"] = booking["price_eur"] + itinerary["to"]["price_eur"] + itinerary["from"]["price_eur"]
@@ -46,7 +46,7 @@ def price_itinerary(itinerary: Dict[str, Any]) -> None:
         + (itinerary["to"]["price_eur"] if itinerary["to"]["price_kind"] == "operator" else 0.0)
     )
 
-def rank_itineraries(itineraries: List[Dict[str, Any]]) -> tuple:
+def rank_itineraries(itineraries: list[dict[str, Any]]) -> tuple:
     """Apply the traveller's two preferences, both expressed as EUR per extra hour.
     Returns (itineraries worth showing sorted by cost, the recommended one, reasons for the ones not worth it)."""
     primary = {airport["code"] for airport in current.TRIP.primary}

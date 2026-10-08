@@ -8,7 +8,7 @@ Two middlewares guard their web searches:
 - shorten_old_results (managing messages): a search result the model has already read is replaced by a short
   version."""
 import json
-from typing import Any, Dict
+from typing import Any
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import before_model, dynamic_prompt, ModelRequest, wrap_model_call
@@ -19,8 +19,7 @@ from trip_planner import current
 from trip_planner.agents.schemas import FlightShortlist, TrainPlan, TransferPlan
 from trip_planner.agents.state import SearchState
 from trip_planner.config import LANGUAGES, TripSettings
-from trip_planner.sources.kiwi import search_route
-from trip_planner.sources.web import web_search
+from trip_planner.sources import kiwi, web
 from trip_planner.utils import to_time
 
 SUBAGENT_MODEL = "google_genai:gemini-3.1-flash-lite"
@@ -68,7 +67,7 @@ def flight_prompt(request: ModelRequest) -> str:
 
 flight_agent = create_agent(
     model=SUBAGENT_MODEL,
-    tools=[search_route],
+    tools=[kiwi.search_route],
     response_format=ToolStrategy(FlightShortlist),
     middleware=[flight_prompt],
 )
@@ -84,7 +83,7 @@ async def enforce_search_limit(request: ModelRequest, handler):
     return await handler(request)
 
 @before_model
-def shorten_old_results(state: SearchState, runtime) -> Dict[str, Any] | None:
+def shorten_old_results(state: SearchState, runtime) -> dict[str, Any] | None:
     """Managing messages: a search result the model has already read is replaced by a short version.
     Each model call would otherwise read every page found so far again: slower, and more untrusted web text
     in front of the model. The results of the latest searches, not read yet, stay complete.
@@ -149,7 +148,7 @@ def airport_transfer_prompt(request: ModelRequest) -> str:
 
 airport_transfer_agent = create_agent(
     model=SUBAGENT_MODEL,
-    tools=[web_search],
+    tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TransferPlan),
     middleware=[airport_transfer_prompt, enforce_search_limit, shorten_old_results],
@@ -200,7 +199,7 @@ def destination_transport_prompt(request: ModelRequest) -> str:
 
 destination_transport_agent = create_agent(
     model=SUBAGENT_MODEL,
-    tools=[web_search],
+    tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TrainPlan),
     middleware=[destination_transport_prompt, enforce_search_limit, shorten_old_results],

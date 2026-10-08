@@ -8,18 +8,18 @@ import re
 import time
 import traceback
 import uuid
-from typing import Any, Dict, List
+from typing import Any
 
 from langchain.messages import HumanMessage
 
 from trip_planner import current
+from trip_planner.agents import subagents
 from trip_planner.agents.coordinator import coordinator
 from trip_planner.agents.steps import STEPS
-from trip_planner.agents.subagents import stopovers_rule
 from trip_planner.config import TripSettings
 from trip_planner.places import ask_airports, choose_airports, codes, show_airports, TripPlaces
 from trip_planner.report.full import save_report
-from trip_planner.sources.web import clean_text
+from trip_planner.sources import web
 from trip_planner.texts import tr
 from trip_planner.utils import message_text, plain, say, show, TIMINGS
 
@@ -31,7 +31,7 @@ def build_request(settings: TripSettings, places: TripPlaces) -> str:
         f"Primary departure airports: {airports(places.primary)}.",
         f"More distant departure airports, only if they are worth it: {airports(places.fallback)}.",
         f"Airports I can land at: {airports(places.arrival)}.",
-        stopovers_rule(settings),
+        subagents.stopovers_rule(settings),
         f"I leave between {settings.earliest_leave} and {settings.latest_leave} and I must reach my destination {settings.arrival_window}.",
         "Trains at the destination are free for me." if settings.free_trains_at_destination
         else "Trains at the destination are paid and count for the cost.",
@@ -52,7 +52,7 @@ def check_recommendation(text: str, recommended: int) -> str:
 RESUME_ATTEMPTS = 2        # times a failed run is continued from its last finished step
 RESUME_WAIT_SECONDS = 20   # pause before continuing: what fails is usually a service that is briefly unavailable
 
-async def run_coordinator(request: Dict[str, Any] | None, config: Dict[str, Any]) -> Dict[str, Any]:
+async def run_coordinator(request: dict[str, Any] | None, config: dict[str, Any]) -> dict[str, Any]:
     """Run the coordinator on the thread in config. If it fails, the finished steps are not lost: the
     checkpointer saved the state after each one, and the run continues from there."""
     for attempt in range(RESUME_ATTEMPTS + 1):
@@ -68,7 +68,7 @@ async def run_coordinator(request: Dict[str, Any] | None, config: Dict[str, Any]
             if saved.next:
                 request = None   # no new input: continue the thread from what was saved
 
-async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) -> Dict[str, Any]:
+async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) -> dict[str, Any]:
     """Plan one trip, show the result and save the report. places are the airports already chosen for it;
     without them the airports are chosen here and, if the settings ask for it, confirmed as text."""
     current.SETTINGS = settings   # the tools, the checks and the texts read the trip from here
@@ -117,13 +117,13 @@ async def ask(question: str, trip: int = -1) -> None:
     current.SETTINGS, current.TRIP = planned["settings"], planned["places"]
     response = await coordinator.ainvoke({"messages": [HumanMessage(content=question)]}, config=planned["config"])
     # The answer is written by a model: it is shown as such, and the report stays the reference
-    markdown = (f"**{clean_text(question)}**\n\n{message_text(response['messages'][-1])}\n\n> {tr('followup_note')}")
+    markdown = (f"**{web.clean_text(question)}**\n\n{message_text(response['messages'][-1])}\n\n> {tr('followup_note')}")
     show(markdown)
 
-responses: List[Dict[str, Any]] = []
-PLANNED: List[Dict[str, Any]] = []   # every trip run in this session, with the thread its state is saved under
+responses: list[dict[str, Any]] = []
+PLANNED: list[dict[str, Any]] = []   # every trip run in this session, with the thread its state is saved under
 
-async def plan_all(trips: List[TripSettings]) -> None:
+async def plan_all(trips: list[TripSettings]) -> None:
     """Plan every trip, one after the other."""
     try:
         for settings in trips:

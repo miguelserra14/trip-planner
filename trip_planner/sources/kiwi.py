@@ -5,7 +5,7 @@ import json
 import logging
 import random
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 from langchain.tools import tool
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -105,12 +105,12 @@ async def connect_kiwi() -> None:
         raise RuntimeError("Kiwi MCP server unavailable. Wait a minute and run the program again.")
 
 # Every flight returned by Kiwi, by flight id. Flight data is always copied from Kiwi by code and never retyped by a model.
-FLIGHTS: Dict[str, Dict[str, Any]] = {}
+FLIGHTS: dict[str, dict[str, Any]] = {}
 SEARCHED: set = set()            # (departure airport, arrival airport, yyyy-mm-dd) Kiwi answered for
-FLIGHT_GAPS: List[str] = []      # what may be missing from the flight list, for the report
+FLIGHT_GAPS: list[str] = []      # what may be missing from the flight list, for the report
 KIWI_RESULT_CAP = 15             # Kiwi returns at most this many flights per search
 
-def register_flight(itinerary: Dict[str, Any]) -> Dict[str, Any] | None:
+def register_flight(itinerary: dict[str, Any]) -> dict[str, Any] | None:
     """Copy one Kiwi result into FLIGHTS. Returns the flight, or None if it breaks one of the traveller's limits."""
     leg = itinerary["outbound"]
     departure_date, departure_time = leg["departureTime"][:10], leg["departureTime"][11:16]
@@ -147,7 +147,7 @@ def register_flight(itinerary: Dict[str, Any]) -> Dict[str, Any] | None:
         FLIGHTS[flight_id] = flight
     return FLIGHTS[flight_id]
 
-async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str) -> List[Dict[str, Any]] | None:
+async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str) -> list[dict[str, Any]] | None:
     """One Kiwi search. fly_to may list several airports, the days are yyyy-mm-dd. Returns None if Kiwi did not answer."""
     as_kiwi = lambda day: f"{day[8:10]}/{day[5:7]}/{day[0:4]}"
     query = {
@@ -169,7 +169,7 @@ async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str
     except Exception:
         return None
 
-async def search_airport_flights(departure: str, arrivals: List[str], days: List[str]) -> None:
+async def search_airport_flights(departure: str, arrivals: list[str], days: list[str]) -> None:
     """Every flight from one departure airport. Starts with one search for all arrival airports and all dates.
     Kiwi returns at most KIWI_RESULT_CAP flights per search, so a full answer is split into smaller searches
     until nothing can have been cut off."""
@@ -197,7 +197,7 @@ async def search_all_flights() -> None:
     arrivals = [airport["code"] for airport in current.TRIP.arrival]
     await asyncio.gather(*(search_airport_flights(airport["code"], arrivals, current.SETTINGS.iso_dates) for airport in current.TRIP.departure))
 
-def describe_flight(flight: Dict[str, Any]) -> str:
+def describe_flight(flight: dict[str, Any]) -> str:
     """One line with everything a specialist needs to know about a flight."""
     return (
         f"{flight['id']} | {flight['date']} | {flight['departure_airport']} {flight['departure_time']} -> "

@@ -1,10 +1,10 @@
 """Small pieces shared by the reports: tables, grades and sources in the traveller's language."""
 from datetime import date
-from typing import Any, Dict, List
+from typing import Any
 
 from trip_planner.texts import tr
 
-def table(header: List[str], rows: List[List[Any]]) -> List[str]:
+def table(header: list[str], rows: list[list[Any]]) -> list[str]:
     """A Markdown table. Pipes inside a cell would break it, so they are replaced."""
     clean = lambda cell: str(cell).replace("|", "/").replace("\n", " ")
     return [
@@ -24,7 +24,7 @@ def grade_text(grade: str, service_day: str | None = None) -> str:
         return "B: " + tr("grade_b", day=day_text(service_day) if service_day else "?")
     return "C: " + tr("grade_c")
 
-def leg_source(leg: Dict[str, Any]) -> str:
+def leg_source(leg: dict[str, Any]) -> str:
     """Where the times of a ground leg come from."""
     if leg["kind"] == "operator":
         return tr("source_operator", operator=leg["source"])
@@ -41,7 +41,7 @@ def price_source(kind: str) -> tuple:
         "estimate": (tr("price_estimate"), "C"),
     }[kind]
 
-def steps_text(leg: Dict[str, Any]) -> str:
+def steps_text(leg: dict[str, Any]) -> str:
     """The vehicles of a ground leg, in order."""
     if not leg["steps"]:
         return leg.get("text", "")

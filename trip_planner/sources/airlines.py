@@ -1,18 +1,18 @@
 """The airlines' own sites: where to book, and the confirmed price where it can be read by code."""
 import re
-from typing import Any, Dict
+from typing import Any
 from urllib.parse import quote_plus, urlparse
 
 import httpx
 
 from trip_planner.config import USER_AGENT
-from trip_planner.sources.web import tavily_client
+from trip_planner.sources import web
 from trip_planner.utils import plain
 
 # Kiwi is a reseller. The traveller books on the airline's own site, so the report links there.
 # The site of an airline is looked up the first time it is needed, for any airline in the world.
 # Add an entry here (IATA airline code -> URL) only to correct a wrong lookup.
-AIRLINE_SITES: Dict[str, str] = {}
+AIRLINE_SITES: dict[str, str] = {}
 GENERIC_AIRLINE_WORDS = {"air", "airline", "airlines", "airways", "lines", "linhas", "aereas", "international"}
 # Subdomains of an airline's site where no flight is sold: the main site is used instead
 NOT_THE_BOOKING_SITE = {"press", "news", "newsroom", "media", "blog", "corporate", "careers", "jobs", "investors", "ir", "about"}
@@ -42,7 +42,7 @@ def searched_site(airline: str) -> str:
     names.append("".join(word[0] for word in words))                   # initials, such as "ana"
     best, best_score = "", 0
     for query in (f"{airline} official site", f"{airline} airline official website book flights"):
-        for result in tavily_client.search(query, max_results=5)["results"]:
+        for result in web.tavily_client.search(query, max_results=5)["results"]:
             domain = urlparse(result["url"]).netloc.lower()
             if domain.split(".")[0] in NOT_THE_BOOKING_SITE:
                 domain = domain.split(".", 1)[1]   # press.brusselsairlines.com -> brusselsairlines.com
@@ -71,7 +71,7 @@ def airline_site(carrier: str, airline: str) -> str:
         AIRLINE_SITES[carrier] = site or f"https://www.google.com/search?q={quote_plus(airline + ' official site')}"
     return AIRLINE_SITES[carrier]
 
-def ryanair_fare(flight: Dict[str, Any]) -> Dict[str, Any] | None:
+def ryanair_fare(flight: dict[str, Any]) -> dict[str, Any] | None:
     """The price of a flight on Ryanair's own site, or None if the flight is not found there."""
     response = httpx.get(
         "https://www.ryanair.com/api/farfnd/v4/oneWayFares",
@@ -108,7 +108,7 @@ PRICE_CHECKERS = {
     "FR": ryanair_fare,
 }
 
-def verify_with_airline(flight: Dict[str, Any]) -> Dict[str, Any]:
+def verify_with_airline(flight: dict[str, Any]) -> dict[str, Any]:
     """Check a flight on the airline's own site.
     Returns {"verified", "price_eur", "url"}. url is empty unless the airline confirmed the flight. Never raises."""
     booking = {"verified": False, "price_eur": flight["price_eur"], "url": ""}

@@ -1,9 +1,9 @@
 """The ground legs of an itinerary, to the departure airport and from the arrival airport: a real connection when
 one is published, otherwise a model's estimate, checked against the distance."""
-from typing import Any, Dict, List
+from typing import Any
 
 from trip_planner import current
-from trip_planner.sources.timetables import NOT_COVERED
+from trip_planner.sources import timetables
 from trip_planner.texts import tr
 from trip_planner.utils import to_minutes, to_time
 
@@ -35,12 +35,12 @@ def model_price(price_eur: float, known: bool, km: float | None) -> tuple:
         raise ValueError(tr("reject_price_unknown"))
     return price, "estimate"
 
-def real_options_text(options: List[Dict[str, Any]]) -> str:
+def real_options_text(options: list[dict[str, Any]]) -> str:
     """A few real connections, for the reason an itinerary is rejected."""
     shown = sorted({(option["leave"], option["arrive"]) for option in options})[:5]
     return ", ".join(f"{to_time(leave)} -> {to_time(arrive)}" for leave, arrive in shown) or tr("none")
 
-def to_airport_leg(flight: Dict[str, Any], ground: Dict[str, Any], transfer: Dict[str, Any] | None) -> Dict[str, Any]:
+def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None) -> dict[str, Any]:
     """How the traveller gets to the departure airport: a real connection when one is published, otherwise the
     model's estimate. Raises ValueError with the reason when the flight cannot be caught."""
     airport, day = flight["departure_airport"], flight["date"]
@@ -48,7 +48,7 @@ def to_airport_leg(flight: Dict[str, Any], ground: Dict[str, Any], transfer: Dic
     at_terminal = to_minutes(flight["departure_time"]) - current.SETTINGS.min_airport_minutes
     earliest, latest = to_minutes(current.SETTINGS.earliest_leave), to_minutes(current.SETTINGS.latest_leave)
     rides = ((ground.get("operators") or {}).get(airport) or {}).get(day)        # None: no operator could be checked
-    timetable = (ground.get(flight["id"]) or {}).get("to_airport") or NOT_COVERED
+    timetable = (ground.get(flight["id"]) or {}).get("to_airport") or timetables.NOT_COVERED
 
     real = [{**ride, "kind": "operator", "price_kind": "operator"} for ride in rides or []]
     if timetable["options"]:
@@ -89,18 +89,18 @@ def to_airport_leg(flight: Dict[str, Any], ground: Dict[str, Any], transfer: Dic
         "urls": [transfer["operator_url"]] if transfer.get("operator_url") else [], "notes": notes,
     }
 
-def step_price(step: Dict[str, Any]) -> float:
+def step_price(step: dict[str, Any]) -> float:
     """The price of one vehicle of a timetable connection at the destination, where timetables give no prices."""
     if step["rail"] and current.SETTINGS.free_trains_at_destination:
         return 0.0
     return estimated_price(step["km"])
 
-def from_airport_leg(flight: Dict[str, Any], ground: Dict[str, Any], route: Dict[str, Any] | None) -> Dict[str, Any]:
+def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict[str, Any] | None) -> dict[str, Any]:
     """How the traveller gets from the arrival airport to the destination. Same rules as to_airport_leg."""
     airport = flight["arrival_airport"]
     landing = to_minutes(flight["arrival_time"])
     in_window = lambda minutes: current.SETTINGS.earliest_arrival_minutes <= minutes <= current.SETTINGS.latest_arrival_minutes
-    timetable = (ground.get(flight["id"]) or {}).get("from_airport") or NOT_COVERED
+    timetable = (ground.get(flight["id"]) or {}).get("from_airport") or timetables.NOT_COVERED
 
     if timetable["covered"]:
         options = [{**o, "kind": "timetable", "price_eur": sum(step_price(step) for step in o["steps"])} for o in timetable["options"]]

@@ -10,12 +10,12 @@ from settings import EXTRA_TRIPS, SETTINGS
 from trip_planner import current
 from trip_planner.check import check_setup
 from trip_planner.planner import follow_up, plan_all, responses, show_timings
-from trip_planner.sources.kiwi import connect_kiwi
+from trip_planner.sources import kiwi
 
 async def main() -> int:
     # The trip in SETTINGS first, then the ones in EXTRA_TRIPS
     trips = [SETTINGS, *EXTRA_TRIPS]
-    await connect_kiwi()
+    await kiwi.connect_kiwi()
     await plan_all(trips)
     show_timings()
     if len(responses) < len(trips):

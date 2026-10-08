@@ -2,7 +2,6 @@
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
 
 from dotenv import load_dotenv
 
@@ -20,7 +19,7 @@ class TripSettings:
     """Everything that defines a trip. The agents, the checks and the report all read it."""
     origin: str                           # city where the trip starts, in any language
     destination: str                      # city where the trip ends, in any language
-    dates: List[str]                      # acceptable travel dates, dd/mm/yyyy
+    dates: list[str]                      # acceptable travel dates, dd/mm/yyyy
     language: str = "en"                  # language of the airport list and the final report: "en" or "pt-PT"
 
     # Airports are found automatically by distance from the two cities.
@@ -31,12 +30,12 @@ class TripSettings:
     max_arrival_airports: int = 3         # large airports first, then the closest
     # Adjust the automatic choice. Each entry is an airport code ("BRU"), an airport name ("Charleroi")
     # or a city ("Paris" means every airport of Paris).
-    include_airports: List[str] = field(default_factory=list)    # airports to add
-    exclude_airports: List[str] = field(default_factory=list)    # airports never to use
+    include_airports: list[str] = field(default_factory=list)    # airports to add
+    exclude_airports: list[str] = field(default_factory=list)    # airports never to use
     # Or replace the automatic choice of a whole group, with the same kind of entries.
-    primary_airports: List[str] = field(default_factory=list)
-    fallback_airports: List[str] = field(default_factory=list)
-    arrival_airports: List[str] = field(default_factory=list)
+    primary_airports: list[str] = field(default_factory=list)
+    fallback_airports: list[str] = field(default_factory=list)
+    arrival_airports: list[str] = field(default_factory=list)
     confirm_airports: bool = True         # list the airports with checkboxes to drop some, before searching
 
     # Hard constraints, enforced in code by build_itineraries
@@ -115,7 +114,7 @@ class TripSettings:
         return to_minutes(self.latest_arrival) if self.latest_arrival else 24 * 60 - 1
 
     @property
-    def iso_dates(self) -> List[str]:
+    def iso_dates(self) -> list[str]:
         """The travel dates as yyyy-mm-dd."""
         return [f"{day[6:10]}-{day[3:5]}-{day[0:2]}" for day in self.dates]
 

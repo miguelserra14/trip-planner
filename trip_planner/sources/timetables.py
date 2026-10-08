@@ -13,7 +13,7 @@ import json
 import random
 import time
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -21,12 +21,11 @@ import httpx
 from trip_planner import current
 from trip_planner.config import ROOT, USER_AGENT
 from trip_planner.places import distance_km
-from trip_planner.sources.operators import OPERATOR_CHECKERS
-from trip_planner.sources.web import clean_text
+from trip_planner.sources import operators, web
 from trip_planner.utils import plain, say, to_minutes, to_time
 
 TRANSITOUS_API = "https://api.transitous.org/api/v1"
-TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ", ".join(OPERATOR_CHECKERS)
+TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ", ".join(operators.OPERATOR_CHECKERS)
 # Transitous is a free community service. It answers about one request every 1.4 seconds per user, however fast
 # it is asked, so the time this step takes is the number of requests. Requests are shared wherever one answer
 # serves several flights (see Timetables.onward).
@@ -40,7 +39,7 @@ AIRFIELD_WALK_MINUTES = 15       # ... and count this fixed time between the sto
 MAX_FLIGHTS_CHECKED = 16         # flights whose ground transport is looked up: the cheapest ones
 MAX_FLIGHTS_PER_AIRPORT_DAY = 3  # ... with at most this many per departure airport and date
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
-TIMEZONES: Dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}
+TIMEZONES: dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}
 
 def is_rail(mode: str) -> bool:
     return "RAIL" in mode or mode in ("SUBURBAN", "METRO")
@@ -62,10 +61,10 @@ def utc_to_local(moment: str, zone: str) -> tuple:
 
 TERMINALS_FILE = ROOT / "resources" / "terminals.json"   # found once per airport, then reused
 OVERPASS_SERVERS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
-TERMINALS: Dict[str, List[float]] = json.loads(TERMINALS_FILE.read_text(encoding="utf-8")) if TERMINALS_FILE.exists() else {}
+TERMINALS: dict[str, list[float]] = json.loads(TERMINALS_FILE.read_text(encoding="utf-8")) if TERMINALS_FILE.exists() else {}
 NOT_A_PASSENGER_TERMINAL = ("general aviation", "executive", "gat", "cargo", "private", "vip", "pier", "connector", "freight")
 
-def find_terminals(airports: List[Dict[str, Any]]) -> Dict[str, Any]:
+def find_terminals(airports: list[dict[str, Any]]) -> dict[str, Any]:
     """Where the passenger terminal of each airport is, from OpenStreetMap, or None when it is not known.
     The airport database only gives the middle of the airfield, which can be kilometres from the stops.
     One request for all the airports."""
@@ -86,7 +85,7 @@ def find_terminals(airports: List[Dict[str, Any]]) -> Dict[str, Any]:
         if elements is None:
             say("[timetables] OpenStreetMap did not answer: using the middle of each airfield instead of the terminal")
             return {airport["code"]: TERMINALS.get(airport["code"]) for airport in airports}
-        best: Dict[str, tuple] = {}
+        best: dict[str, tuple] = {}
         for element in elements:
             point = element.get("center") or element
             name = plain((element.get("tags") or {}).get("name", ""))
@@ -117,14 +116,14 @@ class Timetables:
     def __init__(self):
         self.http = httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, timeout=40)
         self.semaphore = asyncio.Semaphore(TIMETABLE_CONCURRENCY)
-        self.probes: Dict[tuple, Any] = {}       # routes already asked about in the middle of the day
-        self.first_rides: Dict[tuple, Any] = {}  # first connections of the day to an airport
-        self.windows: Dict[tuple, List[tuple]] = {}   # connections onward from an airport, by the time they were asked from
-        self.locks: Dict[tuple, Any] = {}
+        self.probes: dict[tuple, Any] = {}       # routes already asked about in the middle of the day
+        self.first_rides: dict[tuple, Any] = {}  # first connections of the day to an airport
+        self.windows: dict[tuple, list[tuple]] = {}   # connections onward from an airport, by the time they were asked from
+        self.locks: dict[tuple, Any] = {}
         self.requests = 0
         self.next_slot = 0.0
 
-    async def get(self, path: str, params: Dict[str, Any]) -> Any:
+    async def get(self, path: str, params: dict[str, Any]) -> Any:
         """One request, in its turn, tried again when the service says it is receiving too many."""
         for attempt in range(6):
             async with self.semaphore:
@@ -155,7 +154,7 @@ class Timetables:
         return TIMEZONES[key]
 
     async def plan(self, start: tuple, end: tuple, day: str, minutes: int, arrive_by: bool, zones: tuple,
-                   to_airport: bool, terminal_known: bool, coaches: bool = True) -> List[Dict[str, Any]]:
+                   to_airport: bool, terminal_known: bool, coaches: bool = True) -> list[dict[str, Any]]:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
         on the clock of the end point when arrive_by, otherwise of the start point.
         One end is the city and the other the airport terminal (to_airport says which way). On the city side the
@@ -191,9 +190,9 @@ class Timetables:
                 "steps": [{
                     "time": to_time(utc_to_local(leg["startTime"], leg["from"].get("tz") or zones[0])[1]),
                     "arrive": to_time(utc_to_local(leg["endTime"], leg["to"].get("tz") or zones[1])[1]),
-                    "line": clean_text(leg.get("displayName") or leg.get("routeShortName") or leg["mode"].replace("_", " ").title(), 40),
-                    "agency": clean_text(leg.get("agencyName") or "", 60),
-                    "from": clean_text(leg["from"]["name"], 60), "to": clean_text(leg["to"]["name"], 60),
+                    "line": web.clean_text(leg.get("displayName") or leg.get("routeShortName") or leg["mode"].replace("_", " ").title(), 40),
+                    "agency": web.clean_text(leg.get("agencyName") or "", 60),
+                    "from": web.clean_text(leg["from"]["name"], 60), "to": web.clean_text(leg["to"]["name"], 60),
                     "rail": is_rail(leg["mode"]), "coach": leg["mode"] == "COACH",
                     "km": round(distance_km(leg["from"]["lat"], leg["from"]["lon"], leg["to"]["lat"], leg["to"]["lon"])),
                 } for leg in legs],
@@ -209,14 +208,14 @@ class Timetables:
             self.probes[key] = asyncio.ensure_future(self.plan(start, end, day, 11 * 60, False, zones, to_airport, terminal_known))
         return bool(await self.probes[key])
 
-    def answer(self, options: List[Dict[str, Any]], service: str, flight: Dict[str, Any]) -> Dict[str, Any]:
+    def answer(self, options: list[dict[str, Any]], service: str, flight: dict[str, Any]) -> dict[str, Any]:
         grade = "A" if service == flight["date"] else "B"
         unique = {(option["leave"], option["arrive"], len(option["steps"])): option for option in options}
         options = [{**option, "grade": grade, "source": "timetable", "service_day": service, "price_eur": None}
                    for option in unique.values()]
         return {"covered": True, "service_day": service, "grade": grade, "options": options}
 
-    async def to_airport(self, start: tuple, airport: tuple, flight: Dict[str, Any], zones: tuple, known: bool) -> Dict[str, Any]:
+    async def to_airport(self, start: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool) -> dict[str, Any]:
         """Connections from the origin city that reach the terminal in time for a flight."""
         service = reference_day(flight["date"])
         at_terminal = to_minutes(flight["departure_time"]) - current.SETTINGS.min_airport_minutes
@@ -234,7 +233,7 @@ class Timetables:
         return self.answer([c for c in found if c["arrive"] <= at_terminal], service, flight)
 
     async def onward(self, airport: tuple, end: tuple, service: str, ready: int, zones: tuple, known: bool,
-                     coaches: bool) -> List[Dict[str, Any]]:
+                     coaches: bool) -> list[dict[str, Any]]:
         """The connections leaving an airport from a time on. One request serves every flight that lands while
         its answer still applies: several flights land at the same airport within a couple of hours."""
         key = (airport, end, service, coaches)
@@ -250,7 +249,7 @@ class Timetables:
             self.windows[key].append((ready, good_until, found))
             return [c for c in found if c["leave"] >= ready]
 
-    async def from_airport(self, airport: tuple, end: tuple, flight: Dict[str, Any], zones: tuple, known: bool) -> Dict[str, Any]:
+    async def from_airport(self, airport: tuple, end: tuple, flight: dict[str, Any], zones: tuple, known: bool) -> dict[str, Any]:
         """Connections from the arrival airport to the destination that the traveller can catch after landing."""
         service = reference_day(flight["date"])
         ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes   # earliest time walking out of the terminal
@@ -266,7 +265,7 @@ class Timetables:
     async def close(self) -> None:
         await self.http.aclose()
 
-def flights_to_check(flights: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def flights_to_check(flights: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The flights whose ground transport is looked up: the cheapest, a few per departure airport and date."""
     chosen, seen = [], {}
     for flight in sorted(flights, key=lambda flight: flight["price_eur"]):
@@ -276,7 +275,7 @@ def flights_to_check(flights: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             chosen.append(flight)
     return chosen
 
-async def ground_transport_for(flights: List[Dict[str, Any]]) -> Dict[str, Any]:
+async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
     """Real ground transport for every flight: to its departure airport and from its arrival airport.
     Returns {flight id: {"to_airport": ..., "from_airport": ...}}, the operator rides under "operators"
     and the number of timetable requests under "requests"."""
@@ -295,7 +294,7 @@ async def ground_transport_for(flights: List[Dict[str, Any]]) -> Dict[str, Any]:
         )
         zones = dict(zip(["origin", "destination", *airports], [zone if isinstance(zone, str) else "" for zone in zone_list]))
 
-        async def leg(lookup, missing_zone: bool) -> Dict[str, Any]:
+        async def leg(lookup, missing_zone: bool) -> dict[str, Any]:
             if missing_zone:
                 return dict(NOT_COVERED)
             try:
@@ -304,7 +303,7 @@ async def ground_transport_for(flights: List[Dict[str, Any]]) -> Dict[str, Any]:
                 say(f"[timetables] {type(e).__name__}: one leg is treated as not covered")
                 return dict(NOT_COVERED)
 
-        async def one(flight: Dict[str, Any]) -> tuple:
+        async def one(flight: dict[str, Any]) -> tuple:
             departure, arrival = flight["departure_airport"], flight["arrival_airport"]
             to_airport, from_airport = await asyncio.gather(
                 leg(lambda: timetables.to_airport(origin, spots[departure], flight, (zones["origin"], zones[departure]), known[departure]),
@@ -315,7 +314,7 @@ async def ground_transport_for(flights: List[Dict[str, Any]]) -> Dict[str, Any]:
             return flight["id"], {"to_airport": to_airport, "from_airport": from_airport}
 
         in_landing_order = sorted(flights, key=lambda flight: (flight["arrival_airport"], flight["date"], flight["arrival_time"]))
-        ground: Dict[str, Any] = dict(await asyncio.gather(*(one(flight) for flight in in_landing_order)))
+        ground: dict[str, Any] = dict(await asyncio.gather(*(one(flight) for flight in in_landing_order)))
 
         # Operators with their own booking system: real rides and prices for the travel date
         async def rides(name: str, checker, code: str, day: str) -> tuple:
@@ -325,12 +324,12 @@ async def ground_transport_for(flights: List[Dict[str, Any]]) -> Dict[str, Any]:
                 say(f"[timetables] {name} {code} {day}: {type(e).__name__}")
                 return code, day, None
         wanted = sorted({(flight["departure_airport"], flight["date"]) for flight in flights})
-        found = await asyncio.gather(*(rides(name, checker, code, day) for name, checker in OPERATOR_CHECKERS.items() for code, day in wanted))
-        operators: Dict[str, Any] = {}
+        found = await asyncio.gather(*(rides(name, checker, code, day) for name, checker in operators.OPERATOR_CHECKERS.items() for code, day in wanted))
+        operator_rides: dict[str, Any] = {}
         for code, day, rides_found in found:
             if rides_found is not None:
-                operators.setdefault(code, {}).setdefault(day, []).extend(rides_found)
-        ground["operators"] = operators
+                operator_rides.setdefault(code, {}).setdefault(day, []).extend(rides_found)
+        ground["operators"] = operator_rides
         ground["requests"] = timetables.requests
         return ground
     finally:

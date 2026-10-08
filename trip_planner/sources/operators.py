@@ -1,5 +1,5 @@
 """Operators whose own booking system can be read by code: real rides and real prices for the travel date (grade A)."""
-from typing import Any, Dict, List
+from typing import Any
 
 import httpx
 
@@ -7,7 +7,7 @@ from trip_planner.places import distance_km, Place
 from trip_planner.utils import plain, to_minutes
 
 FLIXBUS_API = "https://global.api.flixbus.com/search"
-FLIXBUS_PLACES: Dict[str, str | None] = {}
+FLIXBUS_PLACES: dict[str, str | None] = {}
 
 def flixbus_city(query: str, latitude: float, longitude: float, max_km: float) -> str | None:
     """The id FlixBus gives to a city or an airport, found by name and checked by position."""
@@ -28,7 +28,7 @@ def flixbus_city(query: str, latitude: float, longitude: float, max_km: float) -
         FLIXBUS_PLACES[key] = min(near)[1] if near else None
     return FLIXBUS_PLACES[key]
 
-def flixbus_rides(origin: Place, airport: Dict[str, Any], day: str) -> List[Dict[str, Any]] | None:
+def flixbus_rides(origin: Place, airport: dict[str, Any], day: str) -> list[dict[str, Any]] | None:
     """Every FlixBus ride from the origin city to an airport on one day (yyyy-mm-dd), with its real price.
     Returns None when FlixBus has no stop at that airport, so there is nothing to check."""
     from_id = flixbus_city(origin.english_name, origin.latitude, origin.longitude, 25)

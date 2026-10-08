@@ -3,17 +3,17 @@ where it came from, what was discarded and why, how long each step took, and the
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 from trip_planner import current
 from trip_planner.config import ROOT
 from trip_planner.places import airport_groups
 from trip_planner.report.formatting import grade_text, table
-from trip_planner.sources.timetables import TIMETABLE_SOURCES
+from trip_planner.sources import timetables
 from trip_planner.texts import tr
 from trip_planner.utils import plain, TIMINGS, to_time
 
-def render_full_report(response: Dict[str, Any], recommendation: str) -> str:
+def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     """Everything behind the recommendation: the settings, what each step found and where it came from,
     what was discarded and why, how long each step took, and the final result."""
     yes_no = lambda value: tr("yes") if value else tr("no")
@@ -67,7 +67,7 @@ def render_full_report(response: Dict[str, Any], recommendation: str) -> str:
         "",
         f"### 3. {tr('step_ground')}",
         "",
-        tr("ground_explained", sources=TIMETABLE_SOURCES, requests=ground.get("requests", 0)),
+        tr("ground_explained", sources=timetables.TIMETABLE_SOURCES, requests=ground.get("requests", 0)),
         "",
         *table([tr("col_flight"), tr("col_to_airport"), tr("col_from_airport")],
                [[f["id"], leg_cell(ground[f["id"]]["to_airport"]), leg_cell(ground[f["id"]]["from_airport"])]
@@ -111,7 +111,7 @@ def render_full_report(response: Dict[str, Any], recommendation: str) -> str:
     ]
     return "\n".join(lines)
 
-def save_report(response: Dict[str, Any], recommendation: str) -> Path:
+def save_report(response: dict[str, Any], recommendation: str) -> Path:
     """Save the full reasoning and the final result, one file per run."""
     slug = lambda text: re.sub(r"[^a-z0-9]+", "-", plain(text)).strip("-")
     path = ROOT / "reports" / f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}.md"

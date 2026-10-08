@@ -1,13 +1,13 @@
 """The result shown to the traveller: the comparison, each option step by step, and what to check before booking."""
 from datetime import date
-from typing import Any, Dict, List
+from typing import Any
 
 from trip_planner import current
 from trip_planner.report.formatting import day_text, grade_text, leg_source, price_source, steps_text, table
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_time
 
-def render_report(itineraries: List[Dict[str, Any]], recommended: Dict[str, Any], warnings: List[str]) -> str:
+def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any], warnings: list[str]) -> str:
     """The Markdown report shown to the traveller, in the traveller's language."""
     origin, destination = current.SETTINGS.origin, current.SETTINGS.destination
     lines = []

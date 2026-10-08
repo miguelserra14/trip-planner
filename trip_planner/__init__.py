@@ -38,4 +38,4 @@ Every figure in the report carries its source and one of three grades. Nothing a
 
 Every run saves the full reasoning, the sources and the time each step took to reports/.
 """
-from trip_planner import config   # noqa: F401. Loads the API keys from env/.env, before any module creates a client
+from trip_planner import config

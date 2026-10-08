@@ -1,10 +1,8 @@
 """The structured answers of the subagents, so that the coordinator's tools can check them in code."""
-from typing import List
-
 from pydantic import BaseModel, Field
 
 class FlightShortlist(BaseModel):
-    flight_ids: List[str] = Field(description="Flight ids exactly as returned by search_route, best first")
+    flight_ids: list[str] = Field(description="Flight ids exactly as returned by search_route, best first")
     notes: str = Field(description="Short notes about the search, such as routes without flights")
 
 class AirportTransfer(BaseModel):
@@ -19,7 +17,7 @@ class AirportTransfer(BaseModel):
     notes: str = Field(description="What is an estimate, or why the airport is not reachable")
 
 class TransferPlan(BaseModel):
-    transfers: List[AirportTransfer] = Field(description="Exactly one transfer per departure airport")
+    transfers: list[AirportTransfer] = Field(description="Exactly one transfer per departure airport")
 
 class TrainDeparture(BaseModel):
     departure_time: str = Field(description="Departure time from the station, HH:MM")
@@ -34,10 +32,10 @@ class TrainRoute(BaseModel):
     link_description: str = Field(description="How to get from the airport to that station, in one short sentence")
     link_minutes: int = Field(description="Travel time from the airport to the station, in minutes")
     link_price_eur: float = Field(description="Price of the airport to station link in EUR. 0 if you did not find it")
-    departures: List[TrainDeparture] = Field(description="Every train to the final destination from the time given until the last one of the day. Empty if no train is needed")
+    departures: list[TrainDeparture] = Field(description="Every train to the final destination from the time given until the last one of the day. Empty if no train is needed")
     operator_url: str = Field(description="URL of the rail or coach operator's own website, copied from a search result. Empty if you did not see one")
     found_in_source: bool = Field(description="True only if the times were found in a timetable for that weekday, false if they are your estimate")
     notes: str = Field(description="What is an estimate")
 
 class TrainPlan(BaseModel):
-    routes: List[TrainRoute] = Field(description="Exactly one route per arrival airport")
+    routes: list[TrainRoute] = Field(description="Exactly one route per arrival airport")

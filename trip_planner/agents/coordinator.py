@@ -10,9 +10,9 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import InMemorySaver
 
 from trip_planner import current
+from trip_planner.agents import subagents
 from trip_planner.agents.state import TripState
 from trip_planner.agents.steps import build_itineraries, search_flights, search_ground_transport, STEPS
-from trip_planner.agents.subagents import stopovers_rule
 from trip_planner.config import LANGUAGES
 from trip_planner.texts import tr
 
@@ -75,7 +75,7 @@ def coordinator_prompt(request: ModelRequest) -> str:
     and tell the traveller which single setting to relax to get a result.
 
     The hard constraints of this trip, enforced by build_itineraries:
-    - {stopovers_rule(s)}
+    - {subagents.stopovers_rule(s)}
     - The traveller leaves {s.origin} between {s.earliest_leave} and {s.latest_leave}.
     - The traveller is at the airport at least {s.min_airport_minutes} minutes before the flight departs.
     - The traveller needs {s.min_landing_minutes} minutes to leave the arrival airport after landing.

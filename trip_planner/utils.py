@@ -3,7 +3,6 @@ import re
 import time
 import unicodedata
 from contextlib import contextmanager
-from typing import Dict
 
 def to_minutes(hhmm: str) -> int:
     """'HH:MM' -> minutes since midnight. Raises ValueError if the text is not a time."""
@@ -28,7 +27,7 @@ def say(text: str) -> None:
     print(text, flush=True)
 
 # Where the time goes: seconds spent in each step of the current trip
-TIMINGS: Dict[str, float] = {}
+TIMINGS: dict[str, float] = {}
 
 @contextmanager
 def timed(step: str):

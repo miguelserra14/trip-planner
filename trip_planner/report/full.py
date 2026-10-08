@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from trip_planner import current
-from trip_planner.config import ROOT
+from trip_planner.config import LIGHTS, ROOT
 from trip_planner.places import airport_groups
 from trip_planner.report.formatting import grade_text, table
 from trip_planner.sources import timetables
@@ -36,11 +36,11 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         "",
         tr("grades_explained"),
         "",
-        f"- **A**: {tr('grade_a_long')}",
-        f"- **B**: {tr('grade_b_long')}",
-        f"- **C**: {tr('grade_c_long')}",
+        f"- {LIGHTS['A']} {tr('grade_a_long')}",
+        f"- {LIGHTS['B']} {tr('grade_b_long')}",
+        f"- {LIGHTS['C']} {tr('grade_c_long')}",
         "",
-        tr("min_reliability_explained", minimum=current.SETTINGS.min_reliability),
+        tr("min_reliability_explained", minimum=LIGHTS[current.SETTINGS.min_reliability]),
         "",
         f"## {tr('reasoning')}",
         "",

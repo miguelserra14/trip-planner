@@ -13,7 +13,7 @@ from trip_planner import current
 from trip_planner.agents import subagents
 from trip_planner.agents.state import TripState
 from trip_planner.agents.steps import build_itineraries, search_flights, search_ground_transport, STEPS
-from trip_planner.config import LANGUAGES
+from trip_planner.config import LANGUAGES, LIGHTS
 from trip_planner.texts import tr
 
 # The Google client leaves this warning behind when a model answers with an error. The error itself is handled
@@ -103,9 +103,10 @@ def coordinator_prompt(request: ModelRequest) -> str:
     Your final answer is in {LANGUAGES[s.language]}, formatted as Markdown, with only:
     - a level 2 heading "{tr('recommendation')}"
     - which option you recommend and why, in 2 to 4 short sentences, referring to the options by their number
-    - how reliable that option is: say which of its parts are grade B or C and must be confirmed before booking
+    - how reliable that option is: say which of its parts are {LIGHTS['B']} or {LIGHTS['C']} and must be confirmed before booking.
+      The traveller sees reliability as a traffic light, {LIGHTS['A']} {LIGHTS['B']} {LIGHTS['C']}: use those symbols and never the letters A, B or C
     - the main trade-off against the other options, in 1 or 2 sentences
-    Do not use emojis.
+    Do not use any other emojis.
 
     After that answer the traveller may ask follow-up questions about the trip. No tool is available then:
     answer in a few sentences, only from the report and the tool results above, without the heading. Never state

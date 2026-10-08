@@ -3,6 +3,7 @@ from datetime import date
 from typing import Any
 
 from trip_planner import current
+from trip_planner.config import LIGHTS
 from trip_planner.itineraries.ranking import REQUIREMENTS
 from trip_planner.report.formatting import day_text, grade_text, leg_source, price_source, steps_text, table
 from trip_planner.sources.timetables import MIN_AIRPORT_FLOOR
@@ -31,7 +32,7 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
                 [tr("part_flight_times"), f"{flight['departure_time']} → {flight['arrival_time']}", tr("source_kiwi"), grade_text("A")],
                 [tr("part_flight_price"), f"{itinerary['flight_price']:.0f} EUR",
                  tr("source_airline", airline=flight["airline"]) if booking["verified"] else tr("source_kiwi_price"),
-                 grade_text("A") if booking["verified"] else "B: " + tr("grade_reseller")],
+                 grade_text("A") if booking["verified"] else f"{LIGHTS['B']} " + tr("grade_reseller")],
                 [tr("part_to_times"), f"{itinerary['leave_time']} → {itinerary['at_airport_time']}", leg_source(to_leg),
                  grade_text(to_leg["grade"], to_leg.get("service_day"))],
                 [tr("part_to_price"), f"{to_leg['price_eur']:.0f} EUR", to_price[0], grade_text(to_price[1])],
@@ -103,7 +104,7 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
               as_duration(itinerary["total_minutes"]),
               as_duration(itinerary["extra_minutes"]) if itinerary["extra_minutes"] else tr("fastest"),
               f"{itinerary['time_cost']:.0f} EUR",
-              f"{itinerary['schedule_grade']}: " + tr("short_" + itinerary["schedule_grade"].lower()),
+              LIGHTS[itinerary["schedule_grade"]],
               f"{itinerary['confirmed_eur']:.0f} / {itinerary['total_cost']:.0f} EUR"]
              for number, itinerary in enumerate(itineraries, start=1)],
         ),
@@ -149,7 +150,7 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
               f"{itinerary['total_cost']:.0f} EUR", itinerary["leave_time"], itinerary["arrival_time"],
               as_duration(itinerary["total_minutes"]),
               "; ".join(tr("breach_" + breach["kind"], value=breach["value"], limit=breach["limit"]) for breach in itinerary["breaches"]),
-              f"{itinerary['schedule_grade']}: " + tr("short_" + itinerary["schedule_grade"].lower()),
+              LIGHTS[itinerary["schedule_grade"]],
               f"{itinerary['confirmed_eur']:.0f} / {itinerary['total_cost']:.0f} EUR"]
              for number, itinerary in enumerate(itineraries, start=1)],
         ),

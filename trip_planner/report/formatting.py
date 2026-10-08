@@ -2,6 +2,7 @@
 from datetime import date
 from typing import Any
 
+from trip_planner.config import LIGHTS
 from trip_planner.texts import tr
 
 def table(header: list[str], rows: list[list[Any]]) -> list[str]:
@@ -17,12 +18,12 @@ def day_text(day: str) -> str:
     return date.fromisoformat(day).strftime("%d/%m/%Y")
 
 def grade_text(grade: str, service_day: str | None = None) -> str:
-    """A reliability grade in words, in the traveller's language."""
+    """A reliability grade as the traveller sees it: its light, and what it means in the traveller's language."""
     if grade == "A":
-        return "A: " + tr("grade_a")
+        return f"{LIGHTS['A']} " + tr("grade_a")
     if grade == "B":
-        return "B: " + tr("grade_b", day=day_text(service_day) if service_day else "?")
-    return "C: " + tr("grade_c")
+        return f"{LIGHTS['B']} " + tr("grade_b", day=day_text(service_day) if service_day else "?")
+    return f"{LIGHTS['C']} " + tr("grade_c")
 
 def leg_source(leg: dict[str, Any]) -> str:
     """Where the times of a ground leg come from."""

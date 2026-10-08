@@ -17,7 +17,7 @@ from tkinter import ttk
 
 from trip_planner import current, planner, utils
 from trip_planner.check import check_setup
-from trip_planner.config import GRADES, LANGUAGES, SCALES, TripSettings
+from trip_planner.config import GRADES, LANGUAGES, LIGHTS, SCALES, TripSettings
 from trip_planner.places import airport_groups, choose_airports, remove_airports, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS
 from trip_planner.sources import kiwi
@@ -25,6 +25,11 @@ from trip_planner.texts import tr
 
 FONT = "Segoe UI"
 TABLE_FONT = "Consolas"
+# The reliability lights. The text of the window cannot draw the coloured symbols of the reports, so each one is
+# written as a mark that takes one character and then painted as a dot of its colour.
+LIGHT_COLOURS = dict(zip(GRADES, ("#2e9e4f", "#e0a800", "#c0392b")))
+LIGHT_MARKS = {LIGHTS[grade]: chr(0xE000 + number) for number, grade in enumerate(GRADES)}
+LIGHT_DOT = "●"
 
 class LineWriter:
     """Stands in for the terminal: whatever is printed becomes a line in the window."""
@@ -120,6 +125,8 @@ class TripWindow:
         self.output.tag_configure("table", font=(TABLE_FONT, 9), wrap="none")
         self.output.tag_configure("table_head", font=(TABLE_FONT, 9, "bold"), wrap="none")
         self.output.tag_configure("link", foreground="#0b5cad", underline=True)
+        for grade, colour in LIGHT_COLOURS.items():   # last, so that the colour wins over the tag of the line
+            self.output.tag_configure(f"light_{grade}", foreground=colour)
         self.busy(False)
         self.asking(False)
 
@@ -153,8 +160,12 @@ class TripWindow:
         field(1, 2, tr("ui_latest_leave"), ttk.Entry(form, textvariable=self.latest_leave, width=8))
         field(1, 4, tr("ui_latest_arrival"), ttk.Entry(form, textvariable=self.latest_arrival, width=8))
         field(2, 0, tr("ui_stopovers"), ttk.Spinbox(form, textvariable=self.max_stopovers, from_=0, to=3, width=6))
-        field(2, 2, tr("ui_reliability"),
-              ttk.Combobox(form, textvariable=self.min_reliability, values=list(GRADES), state="readonly", width=6))
+        lights = ttk.Frame(form)   # the minimum is chosen by its colour
+        for grade in GRADES:
+            tk.Radiobutton(lights, text=LIGHT_DOT, variable=self.min_reliability, value=grade, indicatoron=False,
+                           foreground=LIGHT_COLOURS[grade], activeforeground=LIGHT_COLOURS[grade], selectcolor="#d6d6d6",
+                           font=(FONT, 15), width=2, borderwidth=1, offrelief="flat", cursor="hand2").pack(side="left", padx=(0, 4))
+        field(2, 2, tr("ui_reliability"), lights)
         field(2, 4, tr("ui_language"),
               ttk.Combobox(form, textvariable=self.language, values=list(LANGUAGES), state="readonly", width=8))
         field(3, 0, tr("ui_departure_scale"),
@@ -386,9 +397,26 @@ class TripWindow:
         self.output.delete("1.0", "end")
         self.output.configure(state="disabled")
 
+    def mark_lights(self, text: str) -> str:
+        for light, mark in LIGHT_MARKS.items():
+            text = text.replace(light, mark)
+        return text
+
+    def paint_lights(self, start: str) -> None:
+        """Turn the marks written since start into dots of their colour."""
+        for grade, mark in zip(GRADES, LIGHT_MARKS.values()):
+            index = self.output.search(mark, start, "end")
+            while index:
+                tags = self.output.tag_names(index)
+                self.output.delete(index)
+                self.output.insert(index, LIGHT_DOT, (*tags, f"light_{grade}"))
+                index = self.output.search(mark, index, "end")
+
     def write(self, text: str, *tags: str) -> None:
         self.output.configure(state="normal")
-        self.output.insert("end", text, tags)
+        start = self.output.index("end-1c")
+        self.output.insert("end", self.mark_lights(text), tags)
+        self.paint_lights(start)
         self.output.configure(state="disabled")
         self.output.see("end")
 
@@ -414,7 +442,7 @@ class TripWindow:
         self.output.configure(state="normal")
         self.output.insert("end", "\n")
         start = self.output.index("end-1c")
-        lines = markdown.strip("\n").split("\n")
+        lines = self.mark_lights(markdown).strip("\n").split("\n")
         index = 0
         while index < len(lines):
             line = lines[index]
@@ -441,6 +469,7 @@ class TripWindow:
                 self.write_inline(line)
             self.output.insert("end", "\n")
             index += 1
+        self.paint_lights(start)
         self.output.configure(state="disabled")
         self.output.see("end")
         self.output.see(start)   # a result is read from its first line

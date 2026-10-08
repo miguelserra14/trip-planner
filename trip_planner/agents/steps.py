@@ -11,6 +11,7 @@ from langgraph.types import Command
 
 from trip_planner import current
 from trip_planner.agents import subagents
+from trip_planner.config import LIGHTS
 from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itinerary, rank_itineraries
 from trip_planner.places import describe_airport
 from trip_planner.report.summary import render_closest, render_report
@@ -191,11 +192,11 @@ def build_itineraries(runtime: ToolRuntime) -> Command | str:
         reliable = [itinerary for itinerary in itineraries if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
         if reliable:
             rejected += [f"{itinerary['flight']['id']} ({itinerary['total_cost']:.0f} EUR): "
-                         + tr("reject_below_minimum", grade=itinerary["schedule_grade"], minimum=current.SETTINGS.min_reliability)
+                         + tr("reject_below_minimum", grade=LIGHTS[itinerary["schedule_grade"]], minimum=LIGHTS[current.SETTINGS.min_reliability])
                          for itinerary in itineraries if itinerary not in reliable]
             itineraries = reliable
         elif itineraries:
-            warnings.append(tr("warn_below_minimum", minimum=current.SETTINGS.min_reliability))
+            warnings.append(tr("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
         skipped = len(state["flights"]) - len(checked)
         if skipped:
             warnings.append(tr("warn_flights_not_checked", skipped=skipped, checked=len(checked)))
@@ -219,7 +220,7 @@ def build_itineraries(runtime: ToolRuntime) -> Command | str:
                         near.append(itinerary)
             reliable = [itinerary for itinerary in near if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
             if near and not reliable:
-                warnings.append(tr("warn_below_minimum", minimum=current.SETTINGS.min_reliability))
+                warnings.append(tr("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
             shown = sorted(reliable or near, key=closeness)[:current.SETTINGS.options_shown]
             if shown:
                 for itinerary in shown:

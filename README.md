@@ -2,7 +2,7 @@
 
 A multi-agent trip planner built with LangChain. Given an origin city, a destination city and travel dates, it
 finds the cheapest sensible one-way trip: transport to the airport, flight, and transport at the destination.
-Every figure in the result carries its source and a reliability grade (A confirmed, B typical timetable, C not verified).
+Every figure in the result carries its source and a reliability light (🟢 confirmed, 🟡 typical timetable, 🔴 not verified; A, B and C in the settings and the code).
 
 The trip is described in `settings.py` and the program is the `trip_planner/` package, run through `main.py`.
 `trip_planner/__init__.py` explains who does what and how far each part can be trusted.

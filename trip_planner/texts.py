@@ -68,8 +68,8 @@ TEXTS = {
     "advice_narrow_leave": ("the window to leave in, {earliest} to {latest}, is short: a connection to the airport may not exist in it.",
                             "a janela de saída, das {earliest} às {latest}, é curta: pode não haver nela nenhuma ligação até ao aeroporto."),
     "advice_grade_a": (
-        "reliability A needs timetables published for the travel date itself, and those are only read up to {days} days ahead. For these dates nothing will reach A, and the best found will be shown with a warning.",
-        "a fiabilidade A exige horários publicados para o próprio dia da viagem, que só se leem até {days} dias antes. Para estas datas nada chegará a A, e será mostrado o melhor encontrado com um aviso."),
+        "reliability 🟢 needs timetables published for the travel date itself, and those are only read up to {days} days ahead. For these dates nothing will reach 🟢, and the best found will be shown with a warning.",
+        "a fiabilidade 🟢 exige horários publicados para o próprio dia da viagem, que só se leem até {days} dias antes. Para estas datas nada chegará a 🟢, e será mostrado o melhor encontrado com um aviso."),
     "advice_far_date": ("the trip is {days} days away: few airlines sell flights that far ahead, so the list may be short.",
                         "a viagem é daqui a {days} dias: poucas companhias vendem voos com tanta antecedência, por isso a lista pode ser curta."),
     # ---- window
@@ -160,16 +160,16 @@ TEXTS = {
     "reject_not_worth_it": (
         "{total} EUR in total, from a distant airport and not worth it: saves {saving} EUR and takes {extra} longer than the option from {reference} (minimum saving required: {required} EUR)",
         "{total} EUR no total, parte de um aeroporto distante e não compensa: poupa {saving} EUR e demora mais {extra} do que a opção de {reference} (poupança mínima exigida: {required} EUR)"),
-    "reject_below_minimum": ("its schedules are grade {grade}, below the minimum {minimum} asked for",
-                             "os horários são de grau {grade}, abaixo do mínimo {minimum} pedido"),
+    "reject_below_minimum": ("its schedules are {grade}, below the minimum {minimum} asked for",
+                             "os horários são {grade}, abaixo do mínimo {minimum} pedido"),
     "note_impossible_duration": (
         "Travel time to {airport}: the model said {minutes} min for {km} km, which is impossible; {used} min were used, estimated from the distance.",
         "Duração até {airport}: o modelo indicou {minutes} min para {km} km, o que é impossível; foram usados {used} min, estimados pela distância."),
     # ---- warnings
     "warnings": ("Warnings", "Avisos"),
     "warn_below_minimum": (
-        "No itinerary reaches reliability grade {minimum}. The options below are NOT VERIFIED: confirm every connection before buying anything.",
-        "Nenhum itinerário atinge o grau de fiabilidade {minimum}. As opções abaixo NÃO ESTÃO VERIFICADAS: confirma todas as ligações antes de comprar o que quer que seja."),
+        "No itinerary reaches reliability {minimum}. The options below are NOT VERIFIED: confirm every connection before buying anything.",
+        "Nenhum itinerário atinge a fiabilidade {minimum}. As opções abaixo NÃO ESTÃO VERIFICADAS: confirma todas as ligações antes de comprar o que quer que seja."),
     "warn_flights_not_checked": (
         "Ground transport was looked up for the {checked} cheapest flights only; {skipped} more expensive flights were not evaluated.",
         "O transporte terrestre só foi consultado para os {checked} voos mais baratos; {skipped} voos mais caros não foram avaliados."),
@@ -183,9 +183,6 @@ TEXTS = {
     "grade_b": ("typical timetable (same weekday, {day})", "horário típico (mesmo dia da semana, {day})"),
     "grade_c": ("NOT VERIFIED", "NÃO VERIFICADO"),
     "grade_reseller": ("reseller's price, the airline may differ", "preço do revendedor, a companhia pode ter outro"),
-    "short_a": ("confirmed", "confirmado"),
-    "short_b": ("typical timetable", "horário típico"),
-    "short_c": ("NOT VERIFIED", "NÃO VERIFICADO"),
     "source_kiwi": ("Kiwi, for the travel date", "Kiwi, para o dia da viagem"),
     "source_kiwi_price": ("Kiwi (reseller)", "Kiwi (revendedor)"),
     "source_airline": ("{airline}'s own site", "site da {airline}"),
@@ -218,8 +215,8 @@ TEXTS = {
         "\"Extra time\" is the difference to the fastest option, and its value follows your preferences ({table}). The recommended option has the lowest sum of total cost and value of the extra time.",
         "\"Tempo a mais\" é a diferença para a opção mais rápida, e o valor desse tempo segue as tuas preferências ({table}). É recomendada a opção com a menor soma de custo total e valor do tempo a mais."),
     "legend_grades": (
-        "\"Schedules\" is the worst grade among the ground connections of the option: A = confirmed for the travel date, B = typical timetable of the same weekday, C = not verified. \"Confirmed price\" is how much of the total was read from an operator's own system.",
-        "\"Horários\" é o pior grau entre as ligações terrestres da opção: A = confirmado para o dia da viagem, B = horário típico do mesmo dia da semana, C = não verificado. \"Preço confirmado\" é a parte do total lida do sistema do próprio operador."),
+        "\"Schedules\" is the worst light among the ground connections of the option: 🟢 confirmed for the travel date, 🟡 typical timetable of the same weekday, 🔴 not verified. \"Confirmed price\" is how much of the total was read from an operator's own system.",
+        "\"Horários\" é a pior cor entre as ligações terrestres da opção: 🟢 confirmado para o dia da viagem, 🟡 horário típico do mesmo dia da semana, 🔴 não verificado. \"Preço confirmado\" é a parte do total lida do sistema do próprio operador."),
     "not_cheapest": ("The recommended option is not the cheapest: it costs {extra} EUR more but saves {saved}, which is worth {worth} EUR to you.",
                      "A opção recomendada não é a mais barata: custa mais {extra} EUR, mas poupa {saved}, que para ti valem {worth} EUR."),
     # ---- one option
@@ -284,9 +281,9 @@ TEXTS = {
     "generated": ("Generated on {when} by trip-planner.", "Gerado em {when} pelo trip-planner."),
     "settings": ("Settings", "Definições"),
     "col_setting": ("Setting", "Definição"),
-    "how_to_read": ("How to read the reliability grades", "Como ler os graus de fiabilidade"),
-    "grades_explained": ("Every figure in this report carries its source and one of three grades. Nothing a model wrote is shown as confirmed.",
-                         "Cada valor deste relatório indica a fonte e um de três graus. Nada do que um modelo escreveu é apresentado como confirmado."),
+    "how_to_read": ("How to read the reliability lights", "Como ler as cores de fiabilidade"),
+    "grades_explained": ("Every figure in this report carries its source and one of three lights. Nothing a model wrote is shown as confirmed.",
+                         "Cada valor deste relatório indica a fonte e uma de três cores. Nada do que um modelo escreveu é apresentado como confirmado."),
     "grade_a_long": ("confirmed for the travel date: read by code from the operator's own system, from a timetable published for that date, or from Kiwi for flight times.",
                      "confirmado para o dia da viagem: lido pelo código no sistema do próprio operador, num horário publicado para esse dia, ou na Kiwi para o horário do voo."),
     "grade_b_long": ("typical timetable: read by code from a published timetable, but for the same weekday of a nearer week, because the travel date is not published yet.",
@@ -294,8 +291,8 @@ TEXTS = {
     "grade_c_long": ("not verified: found by a model in web search, or estimated by code from the distance.",
                      "não verificado: encontrado por um modelo em pesquisa web, ou estimado pelo código a partir da distância."),
     "min_reliability_explained": (
-        "Only itineraries whose schedules reach grade {minimum} are kept. When a real timetable shows that a connection is impossible, the itinerary is discarded even if a model said it works.",
-        "Só são mantidos os itinerários cujos horários atingem o grau {minimum}. Quando um horário real mostra que uma ligação é impossível, o itinerário é excluído mesmo que um modelo diga que funciona."),
+        "Only itineraries whose schedules reach {minimum} are kept. When a real timetable shows that a connection is impossible, the itinerary is discarded even if a model said it works.",
+        "Só são mantidos os itinerários cujos horários atingem {minimum}. Quando um horário real mostra que uma ligação é impossível, o itinerário é excluído mesmo que um modelo diga que funciona."),
     "reasoning": ("Reasoning", "Raciocínio"),
     "step_places": ("Places and airports", "Locais e aeroportos"),
     "airports_dropped": ("Airports removed by you", "Aeroportos retirados por ti"),
@@ -322,10 +319,10 @@ TEXTS = {
         "Horários reais lidos pelo código em: {sources} ({requests} pedidos). Cada célula indica a fiabilidade das ligações encontradas para esse voo."),
     "col_to_airport": ("To the departure airport", "Até ao aeroporto de partida"),
     "col_from_airport": ("From the arrival airport", "A partir do aeroporto de chegada"),
-    "not_covered": ("no timetable covers it: a model's estimate is used (C)", "nenhum horário cobre: é usada a estimativa de um modelo (C)"),
+    "not_covered": ("no timetable covers it: a model's estimate is used (🔴)", "nenhum horário cobre: é usada a estimativa de um modelo (🔴)"),
     "connections": ("connections", "ligações"),
-    "operator_rides_title": ("Rides and prices read from operators' booking systems, for the travel date (grade A):",
-                             "Viagens e preços lidos nos sistemas de reservas dos operadores, para o dia da viagem (grau A):"),
+    "operator_rides_title": ("Rides and prices read from operators' booking systems, for the travel date (🟢):",
+                             "Viagens e preços lidos nos sistemas de reservas dos operadores, para o dia da viagem (🟢):"),
     "col_rides": ("Rides", "Viagens"),
     "model_transfers_title": ("What the airport transfer agent (a model) found in web search. NOT VERIFIED, used for prices and where no timetable exists:",
                               "O que o agente de transporte até ao aeroporto (um modelo) encontrou em pesquisa web. NÃO VERIFICADO, usado para preços e onde não há horário:"),
@@ -394,7 +391,7 @@ TEXTS = {
     "con_leave_after": ("Leaves at {value}, {amount} after your limit of {limit}.", "Sai às {value}, {amount} depois do teu limite das {limit}."),
     "con_dearer": ("Costs {extra} EUR more than the cheapest of these alternatives.", "Custa mais {extra} EUR do que a mais barata destas alternativas."),
     "con_slower": ("Takes {extra} longer than the fastest of these alternatives.", "Demora mais {extra} do que a mais rápida destas alternativas."),
-    "con_unverified": ("Its schedules are not verified (grade C).", "Os horários não estão verificados (grau C)."),
+    "con_unverified": ("Its schedules are not verified (🔴).", "Os horários não estão verificados (🔴)."),
     # ---- why no flight was found
     "no_flights_title": ("No flight fits your limits", "Nenhum voo cabe nos teus limites"),
     "no_flights_none": (

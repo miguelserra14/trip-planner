@@ -4,53 +4,54 @@ A multi-agent trip planner built with LangChain. Given an origin city, a destina
 finds the cheapest sensible one-way trip: transport to the airport, flight, and transport at the destination.
 Every figure in the result carries its source and a reliability grade (A confirmed, B typical timetable, C not verified).
 
-Everything is in one notebook, `trip_planner.ipynb`. Its first cells explain who does what and how far each part can be trusted.
+Everything is in one file, `trip_planner.py`. Its first lines explain who does what and how far each part can be trusted.
 
 ## Set up
 
-You need Python 3.12 and two free API keys.
+You need Python 3.12 and two free API keys. Everything about the environment is in `env/`.
 
 1. Create the environment and install the exact versions the project was tested with.
 
    Windows:
    ```
-   python -m venv .venv
-   .venv\Scripts\python -m pip install --no-deps -r requirements.lock
+   python -m venv env\.venv
+   env\.venv\Scripts\python -m pip install --no-deps -r env\requirements.lock
    ```
    macOS or Linux:
    ```
-   python3.12 -m venv .venv
-   .venv/bin/python -m pip install -r requirements.txt
+   python3.12 -m venv env/.venv
+   env/.venv/bin/python -m pip install -r env/requirements.txt
    ```
    `requirements.lock` lists every package of the tested environment, which was Windows. On another system use
    `requirements.txt`: it pins the direct dependencies and lets pip choose the rest.
 
-2. Copy `.env.example` to `.env` and fill in `GOOGLE_API_KEY` and `TAVILY_API_KEY`. The links to get them are in the file.
+2. Copy `env/.env.example` to `env/.env` and fill in `GOOGLE_API_KEY` and `TAVILY_API_KEY`. The links to get them are in the file.
 
 ## Run
 
-**In the notebook.** Open `trip_planner.ipynb`, choose the interpreter in `.venv` as the kernel, edit the `SETTINGS`
-cell and run all cells. The last step lists the airports: tick the ones you do not want and press the button.
-A search takes about two minutes.
+Edit `SETTINGS` near the top of `trip_planner.py`, then:
+```
+env\.venv\Scripts\python trip_planner.py
+```
+It lists the airports found and asks which ones to drop: type their codes or names, or press Enter to keep them all.
+A search takes two to four minutes. It then prints the result, saves the report and takes follow-up questions
+about the trip, answered without searching again. Press Enter on an empty line to finish.
 
-**From the command line**, to check that the setup works:
-```
-.venv\Scripts\python scripts\run_headless.py
-```
-It plans the trip in the `SETTINGS` cell without the airport checklist, prints the result and saves the report.
+Set `confirm_airports=False` in `SETTINGS` to search every airport without being asked.
 
 ## What is in this folder
 
 | Path | What it is |
 | :-- | :-- |
-| `trip_planner.ipynb` | The program |
-| `requirements.txt` | Direct dependencies, pinned |
-| `requirements.lock` | Every package of the tested environment, pinned |
-| `.env.example` | The keys the program needs, without values |
-| `resources/airports.csv` | Snapshot of the OurAirports database (6 October 2026). Delete it to download the current one |
+| `trip_planner.py` | The program |
+| `env/requirements.txt` | Direct dependencies, pinned |
+| `env/requirements.lock` | Every package of the tested environment, pinned |
+| `env/.env.example` | The keys the program needs, without values |
+| `env/.python-version` | The Python version the project was tested with |
+| `env/.env`, `env/.venv/` | Your keys and your environment. Created by you, not in the repository |
+| `resources/airports.csv` | Snapshot of the OurAirports database (8 October 2026). Delete it to download the current one |
 | `resources/terminals.json`, `resources/timezones.json` | Caches of terminal coordinates and time zones, filled as trips are planned |
 | `reports/` | One Markdown report per run: result, sources, reasoning and timings |
-| `scripts/run_headless.py` | Runs the notebook from the command line |
 
 ## What can and cannot be reproduced
 

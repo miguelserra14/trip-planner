@@ -1,5 +1,6 @@
 """Flights, from the Kiwi MCP server. Every departure airport is searched against every arrival airport on every
-date, and flight data is always copied from Kiwi by code, never retyped by a model."""
+date, and flight data is always copied from Kiwi by code, never retyped by a model.
+When Kiwi does not answer, the same search is made on Google Flights (google_flights.py)."""
 import asyncio
 import json
 import logging
@@ -13,8 +14,9 @@ from mcp.shared.exceptions import McpError
 from mcp.types import CallToolResult, TextContent
 
 from trip_planner import current
+from trip_planner.sources import google_flights
 from trip_planner.texts import tr
-from trip_planner.utils import to_minutes, to_time
+from trip_planner.utils import say, to_minutes, to_time
 
 RETRYABLE_MCP_CODES = {-32603}
 
@@ -85,10 +87,17 @@ client = MultiServerMCPClient(
     tool_interceptors=[kiwi_retries],
 )
 
-kiwi_search = None   # Kiwi's flight search tool, loaded by connect_kiwi before the first trip
+NAME = "Kiwi"
+kiwi_search = None   # Kiwi's flight search tool, loaded by connect_kiwi before the first trip. None: Kiwi is not available
+
+def refused(error: BaseException) -> bool:
+    """Whether Kiwi answered 403: it refuses this client, and asking again changes nothing."""
+    if isinstance(error, BaseExceptionGroup):
+        return any(refused(inner) for inner in error.exceptions)
+    return "403" in str(error)
 
 async def connect_kiwi() -> None:
-    """Load the flight search tool from the Kiwi MCP server."""
+    """Load the flight search tool from the Kiwi MCP server. Without it the flights come from Google Flights."""
     global kiwi_search
     # The Kiwi MCP server sometimes answers 503, so retry before giving up.
     tools = []
@@ -98,11 +107,13 @@ async def connect_kiwi() -> None:
             break
         except Exception as exc:
             print(f"[MCP] could not load tools (attempt {attempt+1}/5): {type(exc).__name__}")
+            if refused(exc):
+                break
             await asyncio.sleep(2 ** attempt)
 
     kiwi_search = next((t for t in tools if t.name == "search-flight"), None)
     if kiwi_search is None:
-        raise RuntimeError("Kiwi MCP server unavailable. Wait a minute and run the program again.")
+        say(tr("kiwi_unavailable", backup=google_flights.NAME))
 
 # Every flight returned by Kiwi, by flight id. Flight data is always copied from Kiwi by code and never retyped by a model.
 FLIGHTS: dict[str, dict[str, Any]] = {}
@@ -160,6 +171,7 @@ def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[st
         "price_eur": float(itinerary["price"]),
         "cabin_bag_included": bool((itinerary.get("baggage") or {}).get("cabinBag")),
         "booking_url": itinerary["bookingUrl"],
+        "source": itinerary.get("source", NAME),
     }
     if flight_id not in FLIGHTS or FLIGHTS[flight_id]["price_eur"] > flight["price_eur"]:
         FLIGHTS[flight_id] = flight
@@ -167,9 +179,20 @@ def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[st
 
 async def kiwi_flights(fly_from: str, fly_to: str, first_day: str, last_day: str,
                        stopovers: int | None = None) -> list[dict[str, Any]] | None:
-    """One Kiwi search. fly_to may list several airports, the days are yyyy-mm-dd. Returns None if Kiwi did not answer.
+    """One flight search. fly_to may list several airports, the days are yyyy-mm-dd. Returns None if nobody answered.
     Giving stopovers asks for what exists at any time of the day with at most that many stopovers, instead of
-    what fits the traveller's limits."""
+    what fits the traveller's limits.
+    Kiwi is asked first. If it is not available or does not answer, the same is asked of Google Flights."""
+    found = await ask_kiwi(fly_from, fly_to, first_day, last_day, stopovers) if kiwi_search is not None else None
+    if found is None:
+        days = [day for day in current.SETTINGS.iso_dates if first_day <= day <= last_day] or [first_day]
+        found = await google_flights.flights(fly_from, fly_to.split(","), days,
+                                             current.SETTINGS.max_stopovers if stopovers is None else stopovers)
+    return found
+
+async def ask_kiwi(fly_from: str, fly_to: str, first_day: str, last_day: str,
+                   stopovers: int | None = None) -> list[dict[str, Any]] | None:
+    """One Kiwi search, see kiwi_flights. Returns None if Kiwi did not answer."""
     limits = stopovers is None
     as_kiwi = lambda day: f"{day[8:10]}/{day[5:7]}/{day[0:4]}"
     query = {
@@ -199,8 +222,13 @@ async def search_airport_flights(departure: str, arrivals: list[str], days: list
     With many arrival airports that is dozens of searches per departure airport, and Kiwi refuses a client that
     asks that much. Then the split is by date only. A full answer for a date holds the cheapest flights of that
     date, and only the cheapest few per airport and date are looked at further (see timetables.flights_to_check)."""
+    # An answer from Google Flights was asked route by route: nothing was cut, and some routes may be missing
+    backup = lambda found: isinstance(found, google_flights.FullAnswer)
+    missed: set = set()
     found = await kiwi_flights(departure, ",".join(arrivals), min(days), max(days))
-    searches = [(arrivals, days)] if found is not None and len(found) < KIWI_RESULT_CAP else []
+    searches = [(arrivals, days)] if found is not None and (backup(found) or len(found) < KIWI_RESULT_CAP) else []
+    if backup(found):
+        missed.update(found.missing)
     groups = [[arrival] for arrival in arrivals] if len(arrivals) * len(days) <= MAX_SPLIT_SEARCHES else [arrivals]
     if not searches and found is not None and len(groups) == 1 and len(days) == 1:
         # Nothing smaller to ask for: the same search again would give the same answer
@@ -215,14 +243,18 @@ async def search_airport_flights(departure: str, arrivals: list[str], days: list
                 if part is None:
                     FLIGHT_GAPS.append(tr("gap_no_answer", route=route, day=day))
                     continue
-                if len(part) >= KIWI_RESULT_CAP:
+                if backup(part):
+                    missed.update(part.missing)
+                elif len(part) >= KIWI_RESULT_CAP:
                     FLIGHT_GAPS.append(tr("gap_capped", route=route, day=day, cap=KIWI_RESULT_CAP))
-                found = (found or []) + part
+                found = list(found or []) + part
                 searches.append((group, [day]))
     for itinerary in found or []:
         register_flight(itinerary)
+    FLIGHT_GAPS.extend(tr("gap_no_answer", route=f"{departure} -> {arrival}", day=day) for arrival, day in sorted(missed))
     for searched_arrivals, searched_days in searches:
-        SEARCHED.update((departure, arrival, day) for arrival in searched_arrivals for day in searched_days)
+        SEARCHED.update((departure, arrival, day) for arrival in searched_arrivals for day in searched_days
+                        if (arrival, day) not in missed)
 
 async def search_all_flights() -> None:
     """Search every departure airport against every arrival airport on every date, in code."""

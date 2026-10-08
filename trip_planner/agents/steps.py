@@ -15,7 +15,7 @@ from trip_planner.config import LIGHTS
 from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itinerary, rank_itineraries
 from trip_planner.places import describe_airport
 from trip_planner.report.summary import render_closest, render_report
-from trip_planner.sources import airlines, kiwi, timetables, web
+from trip_planner.sources import airlines, google_flights, kiwi, timetables, web
 from trip_planner.texts import tr
 from trip_planner.utils import say, timed
 
@@ -40,6 +40,7 @@ async def search_flights(runtime: ToolRuntime) -> Command:
         kiwi.SEARCHED.clear()
         kiwi.FLIGHT_GAPS.clear()
         kiwi.kiwi_retries.retries = 0
+        google_flights.requests = 0
         if current.SETTINGS.use_flight_agent:
             # Optional: a model searches too. Whatever it finds lands in the same list, and the code still searches every route.
             state = runtime.state
@@ -54,6 +55,8 @@ async def search_flights(runtime: ToolRuntime) -> Command:
         routes = len(current.TRIP.departure) * len(current.TRIP.arrival) * len(current.SETTINGS.dates)
         flights = sorted(kiwi.FLIGHTS.values(), key=lambda flight: flight["price_eur"])
         say(tr("progress_flights", flights=len(flights), searched=len(kiwi.SEARCHED), routes=routes, retries=kiwi.kiwi_retries.retries))
+        if google_flights.requests:
+            say(tr("progress_backup", backup=google_flights.NAME, requests=google_flights.requests))
         # Nothing found: the reason is worked out in code and shown to the traveller as it is. The flights that
         # break the limits (but land the same day) go on to the next steps, to show the closest alternatives.
         reason, found = "", len(flights)

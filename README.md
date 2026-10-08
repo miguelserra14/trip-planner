@@ -100,6 +100,7 @@ trip_planner/
 ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance
 ├── sources/           where the data comes from, one module per outside service
 │   ├── kiwi.py            flights
+│   ├── google_flights.py  flights when Kiwi does not answer (plan B)
 │   ├── timetables.py      published timetables (Transitous) and airport terminals
 │   ├── operators.py       rides and prices from operators' booking systems (FlixBus)
 │   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
@@ -150,6 +151,7 @@ The program depends on these services. None of them is under the project's contr
 | Google Gemini | Coordinator and the two subagents | `GOOGLE_API_KEY` |
 | Tavily | Web search of the subagents | `TAVILY_API_KEY` |
 | Kiwi (MCP server) | Flights | none |
+| Google Flights, through the `fast-flights` library | Flights when Kiwi does not answer. Not an official service: it reads the page a browser gets, so it can stop working or be refused without notice | none |
 | Transitous | Published timetables of trains, coaches and local transport | none |
 | FlixBus, Ryanair | Prices confirmed for the travel date (unofficial endpoints, they can change without notice) | none |
 | OpenStreetMap (Nominatim, Overpass), OurAirports, Wikidata | Cities, terminals, airports, airline sites | none |

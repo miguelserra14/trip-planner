@@ -29,9 +29,9 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
         *table(
             [tr("col_part"), tr("col_value"), tr("col_source"), tr("col_grade")],
             [
-                [tr("part_flight_times"), f"{flight['departure_time']} → {flight['arrival_time']}", tr("source_kiwi"), grade_text("A")],
+                [tr("part_flight_times"), f"{flight['departure_time']} → {flight['arrival_time']}", tr("source_kiwi", source=flight["source"]), grade_text("A")],
                 [tr("part_flight_price"), f"{itinerary['flight_price']:.0f} EUR",
-                 tr("source_airline", airline=flight["airline"]) if booking["verified"] else tr("source_kiwi_price"),
+                 tr("source_airline", airline=flight["airline"]) if booking["verified"] else tr("source_kiwi_price", source=flight["source"]),
                  grade_text("A") if booking["verified"] else f"{LIGHTS['B']} " + tr("grade_reseller")],
                 [tr("part_to_times"), f"{itinerary['leave_time']} → {itinerary['at_airport_time']}", leg_source(to_leg),
                  grade_text(to_leg["grade"], to_leg.get("service_day"))],
@@ -63,7 +63,7 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
         f"**{tr('where_to_book')}**",
         "",
         f"- {tr('book_flight', airline=flight['airline'])}: {booking['url']} ("
-        + (tr("book_confirmed", kiwi=f"{flight['price_eur']:.0f}") if booking["verified"] else tr("book_lookup"))
+        + (tr("book_confirmed", source=flight["source"], kiwi=f"{flight['price_eur']:.0f}") if booking["verified"] else tr("book_lookup"))
         + ("" if flight["cabin_bag_included"] else "; " + tr("no_cabin_bag")) + ")",
         f"- {tr('book_to', airport=flight['departure_airport'])}: " + (", ".join(to_leg["urls"]) or tr("no_site")),
         f"- {tr('book_from', airport=flight['arrival_airport'], destination=destination)}: " + (", ".join(from_leg["urls"]) or tr("no_site")),
@@ -82,7 +82,7 @@ def booking_checks(itineraries: list[dict[str, Any]]) -> list[str]:
             elif leg["grade"] == "C":
                 checks[tr("check_unverified", number=number, side=side)] = None
         if not itinerary["booking"]["verified"]:
-            checks[tr("check_flight_price", flights=itinerary["flight"]["flights"])] = None
+            checks[tr("check_flight_price", flights=itinerary["flight"]["flights"], source=itinerary["flight"]["source"])] = None
     lines += [f"- {check}" for check in checks]
     lines += [f"- {tr('check_general_prices')}", f"- {tr('check_general_bags')}", f"- {tr('check_general_links')}"]
     return lines

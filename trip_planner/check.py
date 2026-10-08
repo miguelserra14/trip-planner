@@ -12,7 +12,7 @@ from trip_planner.agents import subagents
 from trip_planner.agents.coordinator import COORDINATOR_MODELS
 from trip_planner.config import ROOT, USER_AGENT
 from trip_planner.places import geocode, load_airports, Place
-from trip_planner.sources import airlines, kiwi, operators, timetables, web
+from trip_planner.sources import airlines, google_flights, kiwi, operators, timetables, web
 from trip_planner.utils import message_text
 
 async def check_setup() -> int:
@@ -44,12 +44,27 @@ async def check_setup() -> int:
                 errors.append(f"{urlparse(server).netloc}: {type(e).__name__}")
         raise RuntimeError("; ".join(errors))
 
+    answered: list[str] = []   # the flight sources that work: one is enough
+
     async def flights() -> str:
         await kiwi.connect_kiwi()
-        found = await kiwi.kiwi_flights("LIS", "OPO", day, day)
+        if kiwi.kiwi_search is None:
+            raise RuntimeError("the MCP server did not let the search tool be loaded")
+        found = await kiwi.ask_kiwi("LIS", "OPO", day, day)
         if found is None:
             raise RuntimeError("the search tool loaded, but a flight search got no answer")
+        answered.append(kiwi.NAME)
         return f"{len(found)} flights Lisbon -> Porto on {day}"
+
+    def plan_b_flights() -> str:
+        found = google_flights.read_route("LIS", "OPO", day, 0)
+        answered.append(google_flights.NAME)
+        return f"{len(found)} flights Lisbon -> Porto on {day}"
+
+    def any_flights() -> str:
+        if not answered:
+            raise RuntimeError(f"neither {kiwi.NAME} nor {google_flights.NAME} answered")
+        return f"from {answered[0]}"
 
     async def transitous() -> str:
         transit = timetables.Timetables()
@@ -91,7 +106,9 @@ async def check_setup() -> int:
         ("API keys", "Gemini and Tavily", keys, True),
         ("Nominatim", "locating the cities", nominatim, True),
         ("OurAirports", "airport database", ourairports, True),
-        ("Kiwi", "flights", flights, True),
+        (kiwi.NAME, "flights", flights, False),
+        (google_flights.NAME, "flights, when Kiwi does not answer", plan_b_flights, False),
+        ("Flight search", "one of the two above", any_flights, True),
         ("Transitous", "published timetables", transitous, True),
         ("FlixBus", "coach rides and prices", flixbus, False),
         ("Ryanair", "confirmed flight prices", ryanair, False),

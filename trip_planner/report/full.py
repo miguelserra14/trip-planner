@@ -54,7 +54,7 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
                [[title, a["code"], a["name"], a["city"], a["country"], f"{a['km']} km"]
                 for title, airports in airport_groups(current.TRIP) for a in airports]),
         "",
-        f"### 2. {tr('step_flights')}",
+        f"### 2. {tr('step_flights', source=' + '.join(sorted({flight['source'] for flight in flights})) or 'Kiwi')}",
         "",
         tr("flights_found", count=len(flights), checked=len(checked)),
         "",

@@ -4,6 +4,7 @@ follow-up questions all happen in the same window. Nothing is asked in the termi
 The planner itself does not change. It runs on its own thread (an asyncio loop), and what it says and shows
 (`say` and `show` in utils.py) is handed to the window through a queue, because only the main thread may touch it."""
 import asyncio
+import calendar
 import dataclasses
 import os
 import queue
@@ -13,11 +14,13 @@ import threading
 import tkinter as tk
 import traceback
 import webbrowser
+from datetime import date, timedelta
 from tkinter import ttk
 
 from trip_planner import current, planner, utils
 from trip_planner.check import check_setup
-from trip_planner.config import GRADES, LANGUAGES, LIGHTS, SCALES, TripSettings
+from trip_planner.config import GRADES, LANGUAGES, LIGHTS, MAX_DATES, MAX_DAYS_AHEAD, SCALES, TripSettings
+from trip_planner.dates import read_dates
 from trip_planner.places import airport_groups, choose_airports, remove_airports, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS
 from trip_planner.sources import kiwi
@@ -155,7 +158,15 @@ class TripWindow:
 
         field(0, 0, tr("origin"), ttk.Entry(form, textvariable=self.origin, width=26))
         field(0, 2, tr("destination"), ttk.Entry(form, textvariable=self.destination, width=26))
-        field(0, 4, tr("ui_dates"), ttk.Entry(form, textvariable=self.dates, width=30))
+        # The dates are written freely or clicked in a calendar: both fill the same field
+        dates = ttk.Frame(form)
+        dates_entry = ttk.Entry(dates, textvariable=self.dates, width=24)
+        dates_entry.grid(row=0, column=0, sticky="we")
+        dates_entry.bind("<Return>", lambda event: self.find_airports())
+        ttk.Button(dates, text=tr("ui_calendar"), command=lambda: DatePicker(self)).grid(row=0, column=1, padx=(6, 0))
+        ttk.Label(dates, text=tr("ui_dates_hint"), foreground="#666666", font=(FONT, 8)).grid(row=1, column=0, columnspan=2, sticky="w")
+        dates.columnconfigure(0, weight=1)
+        field(0, 4, tr("ui_dates"), dates)
         field(1, 0, tr("ui_earliest_leave"), ttk.Entry(form, textvariable=self.earliest_leave, width=8))
         field(1, 2, tr("ui_latest_leave"), ttk.Entry(form, textvariable=self.latest_leave, width=8))
         field(1, 4, tr("ui_latest_arrival"), ttk.Entry(form, textvariable=self.latest_arrival, width=8))
@@ -230,7 +241,7 @@ class TripWindow:
         return dataclasses.replace(
             self.defaults,
             origin=self.origin.get(), destination=self.destination.get(),
-            dates=[day for day in re.split(r"[,;\s]+", self.dates.get()) if day],
+            dates=self.dates.get(),
             earliest_leave=self.earliest_leave.get().strip(), latest_leave=self.latest_leave.get().strip(),
             latest_arrival=self.latest_arrival.get().strip(), max_stopovers=self.max_stopovers.get(),
             min_reliability=self.min_reliability.get(), language=self.language.get(),
@@ -248,6 +259,7 @@ class TripWindow:
             self.say_status(str(error), error=True)
             return
         current.SETTINGS = self.settings   # from here on the texts are in the language of this trip
+        self.dates.set(", ".join(self.settings.dates))   # how the dates were read, for the traveller to see
         self.advice = " ".join(f"{tr('advice')}: {advice}" for advice in self.settings.advice())
 
         async def work() -> None:
@@ -473,6 +485,82 @@ class TripWindow:
         self.output.configure(state="disabled")
         self.output.see("end")
         self.output.see(start)   # a result is read from its first line
+
+class DatePicker:
+    """A calendar to click the travel dates in. It starts with the dates of the form and writes back to it."""
+    CHOSEN, FREE, OFF = "#0b5cad", "#ffffff", "#f0f0f0"
+
+    def __init__(self, window: TripWindow):
+        self.window, self.today = window, date.today()
+        try:
+            self.chosen = set(read_dates(window.dates.get(), self.today))
+        except ValueError:
+            self.chosen = set()   # what is written is not a date yet: start empty
+        self.chosen = {day for day in self.chosen if day >= self.today}
+        self.month = min(self.chosen, default=self.today).replace(day=1)
+
+        self.top = tk.Toplevel(window.root)
+        self.top.title(tr("ui_dates"))
+        self.top.transient(window.root)
+        self.top.resizable(False, False)
+        self.top.geometry(f"+{window.root.winfo_rootx() + 420}+{window.root.winfo_rooty() + 60}")
+        header = ttk.Frame(self.top, padding=(12, 10, 12, 4))
+        header.pack(fill="x")
+        self.back = ttk.Button(header, text="<", width=3, command=lambda: self.move(-1))
+        self.back.pack(side="left")
+        ttk.Button(header, text=">", width=3, command=lambda: self.move(1)).pack(side="right")
+        self.title = ttk.Label(header, anchor="center", font=(FONT, 11, "bold"))
+        self.title.pack(fill="x")
+        self.days = ttk.Frame(self.top, padding=(12, 0))
+        self.days.pack()
+        ttk.Label(self.top, text=tr("ui_calendar_hint", maximum=MAX_DATES), foreground="#666666", padding=(12, 6)).pack(anchor="w")
+        buttons = ttk.Frame(self.top, padding=(12, 0, 12, 12))
+        buttons.pack(fill="x")
+        ttk.Button(buttons, text=tr("ui_calendar_use"), command=self.use).pack(side="right")
+        ttk.Button(buttons, text=tr("ui_calendar_clear"), command=self.clear).pack(side="right", padx=8)
+        self.draw()
+        self.top.grab_set()
+
+    def draw(self) -> None:
+        """The month being shown: one button per day, the chosen ones coloured, the ones that cannot be searched off."""
+        for child in self.days.winfo_children():
+            child.destroy()
+        self.title.configure(text=f"{tr('cal_months').split(',')[self.month.month - 1]} {self.month.year}")
+        self.back.configure(state="normal" if self.month > self.today.replace(day=1) else "disabled")
+        for column, name in enumerate(tr("cal_weekdays").split(",")):
+            ttk.Label(self.days, text=name, width=5, anchor="center", foreground="#666666").grid(row=0, column=column, pady=(4, 2))
+        last = self.today + timedelta(days=MAX_DAYS_AHEAD)
+        for row, week in enumerate(calendar.Calendar(firstweekday=0).monthdatescalendar(self.month.year, self.month.month), start=1):
+            for column, day in enumerate(week):
+                if day.month != self.month.month:
+                    continue
+                possible, chosen = self.today <= day <= last, day in self.chosen
+                tk.Button(
+                    self.days, text=str(day.day), width=4, relief="flat", borderwidth=0, font=(FONT, 10, "bold" if chosen else "normal"),
+                    bg=self.CHOSEN if chosen else self.FREE if possible else self.OFF, fg="#ffffff" if chosen else "#222222",
+                    activebackground=self.CHOSEN, state="normal" if possible else "disabled", cursor="hand2" if possible else "",
+                    command=lambda day=day: self.toggle(day),
+                ).grid(row=row, column=column, padx=1, pady=1, ipady=3)
+
+    def toggle(self, day: date) -> None:
+        if day in self.chosen:
+            self.chosen.remove(day)
+        elif len(self.chosen) < MAX_DATES:
+            self.chosen.add(day)
+        self.draw()
+
+    def move(self, months: int) -> None:
+        month = self.month.month - 1 + months
+        self.month = date(self.month.year + month // 12, month % 12 + 1, 1)
+        self.draw()
+
+    def clear(self) -> None:
+        self.chosen.clear()
+        self.draw()
+
+    def use(self) -> None:
+        self.window.dates.set(", ".join(f"{day:%d/%m/%Y}" for day in sorted(self.chosen)))
+        self.top.destroy()
 
 def run(settings: TripSettings) -> int:
     """Open the window on the trip in settings.py and stay until it is closed."""

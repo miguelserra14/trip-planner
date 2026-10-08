@@ -23,6 +23,24 @@ The first time, `TripPlanner.bat` creates the environment (a few minutes, Python
 **Check the services** in the window makes one small request to every service the program depends on and says
 which ones answer. Use it whenever a search fails.
 
+### When nothing fits
+
+Every setting is checked before anything is searched: a date that does not exist or has passed, a time that is not
+a time, limits that contradict each other. The reason is shown in the window, and settings that are allowed but will
+probably disappoint (such as leaving at 06:30 and arriving by 09:00) are pointed out before the search starts.
+
+If no trip respects every requirement, the program shows the closest ones instead, each with what it breaks, what
+speaks for and against it, and the setting that would make it valid. They are ordered by how little they break,
+by this order of importance:
+
+1. Arriving within the window asked for
+2. The minimum time at the airport (never under 45 minutes)
+3. The number of stopovers
+4. The times you accept to leave at
+
+An option that breaks a requirement higher in the list always comes after one that only breaks lower ones. The
+dates, the airports you allowed and what the real timetables say are never given up.
+
 ### From the command line
 
 ```

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from trip_planner.dates import read_dates, UnreadableDate
 from trip_planner.utils import plain, to_minutes, to_time
 
 ROOT = Path(__file__).resolve().parent.parent   # the project folder: resources/, reports/ and env/ are in it
@@ -49,7 +50,7 @@ class TripSettings:
     """Everything that defines a trip. The agents, the checks and the report all read it."""
     origin: str                           # city where the trip starts, in any language
     destination: str                      # city where the trip ends, in any language
-    dates: list[str]                      # acceptable travel dates, dd/mm/yyyy, from today on
+    dates: list[str]                      # acceptable travel dates, from today on: "17/12/2026", "17-19/12", "sexta"... see dates.py
     language: str = "en"                  # language of the airport list and the final report: "en" or "pt-PT"
 
     # Airports are found automatically by distance from the two cities.
@@ -147,13 +148,11 @@ class TripSettings:
         if not self.dates:
             raise fail("dates_required")
         today, days = date.today(), set()
-        for written in self.dates:
-            parts = re.fullmatch(r"([0-9]{1,2})[/.-]([0-9]{1,2})[/.-]([0-9]{4})", written)
-            iso = re.fullmatch(r"([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})", written)
-            try:
-                day = date(int(parts[3]), int(parts[2]), int(parts[1])) if parts else date(int(iso[1]), int(iso[2]), int(iso[3]))
-            except (TypeError, ValueError):
-                raise fail("bad_date", value=written)
+        try:
+            written = read_dates(self.dates, today)   # "17/12", "17-19 dez", "sexta": see dates.py
+        except UnreadableDate as error:
+            raise fail(error.key, **error.values)
+        for day in written:
             if day < today:
                 raise fail("date_past", value=f"{day:%d/%m/%Y}", today=f"{today:%d/%m/%Y}")
             if (day - today).days > MAX_DAYS_AHEAD:

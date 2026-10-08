@@ -27,6 +27,13 @@ You need Python 3.12 and two free API keys. Everything about the environment is 
 
 2. Copy `env/.env.example` to `env/.env` and fill in `GOOGLE_API_KEY` and `TAVILY_API_KEY`. The links to get them are in the file.
 
+3. Check that everything answers:
+   ```
+   env\.venv\Scripts\python trip_planner.py --check
+   ```
+   It makes one small request to every service the program depends on and prints one line for each. Run it again
+   whenever a search fails, to see which service is the problem.
+
 ## Run
 
 Edit `SETTINGS` near the top of `trip_planner.py`, then:

@@ -1,0 +1,2 @@
+# To run the tests in tests/: pip install -r env/requirements-dev.txt, then pytest
+pytest==9.1.1

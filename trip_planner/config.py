@@ -7,13 +7,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from trip_planner.dates import read_dates, UnreadableDate
+from trip_planner.texts import LANGUAGES, REFERENCE, text_in
 from trip_planner.utils import plain, to_minutes, to_time
 
 ROOT = Path(__file__).resolve().parent.parent   # the project folder: resources/, reports/ and env/ are in it
 load_dotenv(ROOT / "env" / ".env")       # the API keys, before any client is created
 
-# Languages the traveller can read the airport list and the final report in
-LANGUAGES = {"en": "English", "pt-PT": "European Portuguese"}
 SCALES = ("near", "wide")   # how far around a city its airports are looked for, see TripSettings
 GRADES = "ABC"   # reliability grades, best first. See "Data integrity" in trip_planner/__init__.py.
 LIGHTS = dict(zip(GRADES, "🟢🟡🔴"))   # how the traveller sees each grade: a traffic light, never the letter
@@ -42,7 +41,6 @@ class SettingError(ValueError):
         self.language, self.key, self.values = language, key, values
 
     def __str__(self) -> str:
-        from trip_planner.texts import text_in   # texts.py imports this module
         return text_in(self.language, self.key, **self.values)
 
 @dataclass
@@ -107,7 +105,7 @@ class TripSettings:
         # The language first: the reasons below are written in it
         languages = {code.lower(): code for code in LANGUAGES} | {code.split("-")[0].lower(): code for code in LANGUAGES}
         if not isinstance(self.language, str) or self.language.strip().lower() not in languages:
-            raise SettingError("en", "bad_choice", setting="language", value=self.language, choices=", ".join(LANGUAGES))
+            raise SettingError(REFERENCE, "bad_choice", setting="language", value=self.language, choices=", ".join(LANGUAGES))
         self.language = languages[self.language.strip().lower()]
         fail = lambda key, **values: SettingError(self.language, key, **values)
 
@@ -213,7 +211,6 @@ class TripSettings:
     def advice(self) -> list[str]:
         """Settings that are allowed but will probably disappoint, each with the reason, in the traveller's language.
         They are said before the search starts, not refused: the traveller may know better."""
-        from trip_planner.texts import text_in   # texts.py imports this module
         found, today = [], date.today()
         furthest = max((date.fromisoformat(day) - today).days for day in self.iso_dates)
         if self.latest_arrival:

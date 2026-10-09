@@ -1,6 +1,9 @@
 """Open the trip planner in a window:              python main.py     (or double-click TripPlanner.bat)
 Plan the trip in settings.py in the terminal:     python main.py --terminal
 Check every service the program depends on:       python main.py --check
+The languages there are:                          python main.py --languages
+Add a language, translated by a model:            python main.py --add-language it
+Remove a language:                                python main.py --remove-language it
 
 In the window the trip is typed in a form that starts with what is in settings.py. In the terminal each trip lists
 its airports and asks which ones to drop, and after the result it takes follow-up questions, until an empty line."""
@@ -30,6 +33,18 @@ def in_terminal(check: bool) -> int:
     current.SETTINGS = SETTINGS   # the texts are in the language of the first trip until a trip starts
     return asyncio.run(check_setup() if check else plan())
 
+def languages(arguments: list[str]) -> int:
+    """List, add or remove a language of the program: see trip_planner/translate.py."""
+    from trip_planner import translate
+    for flag, action in (("--add-language", translate.add_language), ("--remove-language", translate.remove_language)):
+        if flag in arguments:
+            code = arguments[arguments.index(flag) + 1:][:1]
+            if not code:
+                print(f"Which language? For example: python main.py {flag} it")
+                return 1
+            return action(code[0])
+    return translate.show_languages()
+
 def in_window() -> int:
     try:
         from settings import SETTINGS
@@ -49,4 +64,6 @@ if __name__ == "__main__":
         if stream is not None:   # there is none when started without a terminal
             stream.reconfigure(encoding="utf-8", errors="replace")   # the Windows console is not UTF-8 by default
     arguments = sys.argv[1:]
+    if {"--languages", "--add-language", "--remove-language"} & set(arguments):
+        sys.exit(languages(arguments))
     sys.exit(in_terminal("--check" in arguments) if {"--check", "--terminal"} & set(arguments) else in_window())

@@ -126,6 +126,27 @@ def find_terminals(airports: list[dict[str, Any]]) -> dict[str, Any]:
         TERMINALS_FILE.write_text(json.dumps(TERMINALS), encoding="utf-8")
     return {airport["code"]: TERMINALS.get(airport["code"]) for airport in airports}
 
+def choose_airport_stops(stops: list[dict[str, Any]], airport: dict[str, Any], terminal: list[float] | None) -> list[tuple]:
+    """The stops travellers use at an airport, among the stops around it, as (stop id, minutes on foot from the
+    terminal): the nearest with trains, then with buses, then with coaches. Empty when none is the airport's."""
+    centre = terminal or (airport["latitude"], airport["longitude"])
+    ground = [stop for stop in stops if set(stop.get("modes") or []) - {"AIRPLANE"}]
+    km = lambda stop: distance_km(centre[0], centre[1], stop["lat"], stop["lon"])
+    named = lambda stop: any(word in plain(stop.get("name") or "") for word in AIRPORT_WORDS)
+    chosen = [stop for stop in ground if km(stop) <= TERMINAL_STOP_KM] if terminal else []
+    by_name = not chosen   # no terminal, or none of the stops is next to it: the ones named after the airport
+    if by_name:
+        chosen = [stop for stop in ground if km(stop) <= AIRPORT_STOP_KM and named(stop)]
+    kinds = (lambda modes: any(is_rail(mode) for mode in modes), lambda modes: bool(modes & {"BUS", "TRAM", "SUBWAY"}),
+             lambda modes: "COACH" in modes)
+    best: list[dict[str, Any]] = []
+    for kind in kinds:
+        of_kind = [stop for stop in chosen if kind(set(stop["modes"])) and stop not in best]
+        if of_kind:
+            best.append(min(of_kind, key=km))
+    walk = lambda stop: AIRFIELD_WALK_MINUTES if by_name else max(MIN_STOP_WALK_MINUTES, round(km(stop) * 1.3 / WALK_KMH * 60))
+    return [(stop["stopId"], walk(stop)) for stop in best[:MAX_AIRPORT_STOPS]]
+
 NOT_COVERED = {"covered": False, "service_day": None, "grade": "C", "options": []}
 
 class Timetables:
@@ -178,29 +199,16 @@ class Timetables:
             TIMEZONES_FILE.write_text(json.dumps(TIMEZONES), encoding="utf-8")
         return TIMEZONES[key]
 
-    async def airport_stops(self, airport: dict[str, Any], terminal: list[float] | None) -> list[tuple]:
-        """The stops travellers use at an airport, as (stop id, minutes on foot from the terminal): the nearest
-        with trains, then with buses, then with coaches. Empty when the timetables know none."""
+    async def stops_around(self, airport: dict[str, Any], terminal: list[float] | None) -> list[dict[str, Any]]:
+        """Every stop the timetables know within AIRPORT_STOP_KM of an airport's terminal, or of its airfield."""
         centre = terminal or (airport["latitude"], airport["longitude"])
         reach = AIRPORT_STOP_KM / 111   # in degrees of latitude. A degree of longitude is shorter away from the equator
         wide = reach / max(0.2, math.cos(math.radians(centre[0])))
-        stops = await self.get("map/stops", {"min": f"{centre[0] - reach},{centre[1] - wide}", "max": f"{centre[0] + reach},{centre[1] + wide}"})
-        ground = [stop for stop in stops if set(stop.get("modes") or []) - {"AIRPLANE"}]
-        km = lambda stop: distance_km(centre[0], centre[1], stop["lat"], stop["lon"])
-        named = lambda stop: any(word in plain(stop.get("name") or "") for word in AIRPORT_WORDS)
-        chosen = [stop for stop in ground if km(stop) <= TERMINAL_STOP_KM] if terminal else []
-        by_name = not chosen   # no terminal, or none of the stops is next to it: the ones named after the airport
-        if by_name:
-            chosen = [stop for stop in ground if km(stop) <= AIRPORT_STOP_KM and named(stop)]
-        kinds = (lambda modes: any(is_rail(mode) for mode in modes), lambda modes: bool(modes & {"BUS", "TRAM", "SUBWAY"}),
-                 lambda modes: "COACH" in modes)
-        best: list[dict[str, Any]] = []
-        for kind in kinds:
-            of_kind = [stop for stop in chosen if kind(set(stop["modes"])) and stop not in best]
-            if of_kind:
-                best.append(min(of_kind, key=km))
-        walk = lambda stop: AIRFIELD_WALK_MINUTES if by_name else max(MIN_STOP_WALK_MINUTES, round(km(stop) * 1.3 / WALK_KMH * 60))
-        return [(stop["stopId"], walk(stop)) for stop in best[:MAX_AIRPORT_STOPS]]
+        return await self.get("map/stops", {"min": f"{centre[0] - reach},{centre[1] - wide}", "max": f"{centre[0] + reach},{centre[1] + wide}"})
+
+    async def airport_stops(self, airport: dict[str, Any], terminal: list[float] | None) -> list[tuple]:
+        """The stops travellers use at an airport, see choose_airport_stops."""
+        return choose_airport_stops(await self.stops_around(airport, terminal), airport, terminal)
 
     async def plan(self, start: tuple | str, end: tuple, day: str, minutes: int, arrive_by: bool, zones: tuple,
                    to_airport: bool, terminal_known: bool, modes: str = "", stop_walk: int = 0,

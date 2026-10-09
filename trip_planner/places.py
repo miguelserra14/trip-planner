@@ -53,30 +53,37 @@ def settlement(results: list[dict[str, Any]]) -> dict[str, Any]:
     return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS
                  and result.get("importance", 0) >= first.get("importance", 0) - SAME_NAME_IMPORTANCE), first)
 
+def search_places(name: str) -> list[dict[str, Any]]:
+    """What OpenStreetMap's Nominatim finds for a name, most important first."""
+    response = httpx.get(
+        "https://nominatim.openstreetmap.org/search",
+        params={"q": name, "format": "jsonv2", "limit": 5, "namedetails": 1, "addressdetails": 1, "accept-language": "en"},
+        headers={"User-Agent": USER_AGENT},
+        timeout=30,
+    )
+    response.raise_for_status()
+    return response.json()
+
+def as_place(name: str, results: list[dict[str, Any]]) -> Place:
+    """The place meant by a name, among what Nominatim found for it. Raises ValueError if it found nothing."""
+    if not results:
+        raise ValueError(tr("place_not_found", name=name))
+    found = settlement(results)
+    names = found.get("namedetails") or {}
+    return Place(
+        written=name,
+        local_name=names.get("name") or found["name"],
+        english_name=names.get("name:en") or found["name"],
+        country=(found.get("address") or {}).get("country", ""),
+        latitude=float(found["lat"]),
+        longitude=float(found["lon"]),
+    )
+
 def geocode(name: str) -> Place:
     """Locate a city written in any language, with OpenStreetMap's Nominatim."""
     key = plain(name)
     if key not in PLACES:
-        response = httpx.get(
-            "https://nominatim.openstreetmap.org/search",
-            params={"q": name, "format": "jsonv2", "limit": 5, "namedetails": 1, "addressdetails": 1, "accept-language": "en"},
-            headers={"User-Agent": USER_AGENT},
-            timeout=30,
-        )
-        response.raise_for_status()
-        results = response.json()
-        if not results:
-            raise ValueError(tr("place_not_found", name=name))
-        found = settlement(results)
-        names = found.get("namedetails") or {}
-        PLACES[key] = Place(
-            written=name,
-            local_name=names.get("name") or found["name"],
-            english_name=names.get("name:en") or found["name"],
-            country=(found.get("address") or {}).get("country", ""),
-            latitude=float(found["lat"]),
-            longitude=float(found["lon"]),
-        )
+        PLACES[key] = as_place(name, search_places(name))
     return PLACES[key]
 
 AIRPORTS: dict[str, dict[str, Any]] = {}

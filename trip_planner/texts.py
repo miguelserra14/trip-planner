@@ -1,439 +1,52 @@
 """Everything the traveller reads (the airport list, the progress lines and the final report) is written through
-`tr`, in the language chosen in the settings. To add a language, add it to LANGUAGES (config.py) and give each
-text below a translation."""
-from trip_planner import current
-from trip_planner.config import LANGUAGES
+`tr`, in the language chosen in the settings.
 
-# Each text once per language, in the order of LANGUAGES: (English, European Portuguese)
-TEXTS = {
-    # ---- places and airports
-    "origin": ("Origin", "Origem"),
-    "destination": ("Destination", "Destino"),
-    "none": ("none", "nenhum"),
-    "yes": ("yes", "sim"),
-    "no": ("no", "não"),
-    "group_primary": ("Departure, primary", "Partida, principais"),
-    "group_fallback": ("Departure, more distant", "Partida, mais distantes"),
-    "group_arrival": ("Arrival", "Chegada"),
-    "place_not_found": ("I could not find the place '{name}'. Check the name or add the country.",
-                        "Não encontrei o local '{name}'. Verifica o nome ou acrescenta o país."),
-    "no_airports_near": ("There are no airports within {km} km of {city}. Increase {setting}.",
-                         "Não há aeroportos a menos de {km} km de {city}. Aumenta {setting}."),
-    "all_airports_removed": ("Every departure airport or every arrival airport was removed.",
-                             "Ficaram excluídos todos os aeroportos de partida ou de chegada."),
-    "unknown_airports": ("No airport was found for: {entries}", "Não encontrei nenhum aeroporto para: {entries}"),
-    "ask_airports_prompt": ("Airports to drop, by code or name, separated by commas (Enter to keep them all):",
-                            "Aeroportos a excluir, por código ou nome, separados por vírgulas (Enter para manter todos):"),
-    "ask_airports_unavailable": ("Could not ask, every airport is kept.", "Não foi possível perguntar, ficam todos os aeroportos."),
-    "ask_airports_no_match": ("'{entry}' matches no airport in the list, ignored.",
-                              "'{entry}' não corresponde a nenhum aeroporto da lista, ignorado."),
-    # ---- settings that cannot be used
-    "bad_choice": ("`{setting}` is '{value}', and must be one of: {choices}.", "`{setting}` é '{value}', e tem de ser um de: {choices}."),
-    "bad_yes_no": ("`{setting}` is '{value}', and must be True or False.", "`{setting}` é '{value}', e tem de ser True ou False."),
-    "bad_number": ("`{setting}` is '{value}', and must be a number.", "`{setting}` é '{value}', e tem de ser um número."),
-    "bad_text": ("`{setting}` is '{value}', and must be a text between quotes.", "`{setting}` é '{value}', e tem de ser um texto entre aspas."),
-    "bad_list": ("`{setting}` is '{value}', and must be a list of texts, such as [\"BRU\", \"Paris\"].",
-                 "`{setting}` é '{value}', e tem de ser uma lista de textos, como [\"BRU\", \"Paris\"]."),
-    "out_of_range": ("`{setting}` is {value}, and must be between {lowest} and {highest}.",
-                     "`{setting}` é {value}, e tem de estar entre {lowest} e {highest}."),
-    "place_required": ("Both the origin and the destination are needed.", "São precisos a origem e o destino."),
-    "same_place": ("The origin and the destination are both '{place}'.", "A origem e o destino são ambos '{place}'."),
-    "places_too_close": ("{origin} and {destination} are {km} km apart: too close for a flight to make sense.",
-                         "{origin} e {destination} ficam a {km} km: demasiado perto para fazer sentido um voo."),
-    "dates_required": ("At least one travel date is needed, such as 17/12/2026.", "É precisa pelo menos uma data de viagem, como 17/12/2026."),
-    "bad_date": ("'{value}' is not a date. Write it like 17/12, 17 Dec, 17-19/12, Friday or tomorrow, or use the calendar.",
-                 "'{value}' não é uma data. Escreve como 17/12, 17 dez, 17-19/12, sexta ou amanhã, ou usa o calendário."),
-    "bad_range": ("'{value}' goes from {start} to {end}: a range must end after it starts and cover at most {maximum} days.",
-                  "'{value}' vai de {start} a {end}: um intervalo tem de acabar depois de começar e cobrir no máximo {maximum} dias."),
-    "date_past": ("{value} has already passed (today is {today}).", "{value} já passou (hoje é {today})."),
-    "date_too_far": ("{value} is more than {days} days away: airlines do not sell flights that far ahead yet.",
-                     "{value} fica a mais de {days} dias: as companhias ainda não vendem voos com tanta antecedência."),
-    "too_many_dates": ("{count} travel dates were given, and at most {maximum} can be searched at once.",
-                       "Foram dadas {count} datas de viagem, e só podem ser pesquisadas {maximum} de cada vez."),
-    "bad_time": ("`{setting}` is '{value}', which is not a time. Write the hours and the minutes, such as 06:30.",
-                 "`{setting}` é '{value}', que não é uma hora. Escreve as horas e os minutos, como 06:30."),
-    "window_reversed": ("`{first}` ({start}) is after `{last}` ({end}).", "`{first}` ({start}) é depois de `{last}` ({end})."),
-    "window_empty": ("`{first}` and `{last}` are both {time}, which leaves no time in between. Leave them empty to accept any time.",
-                     "`{first}` e `{last}` são ambos {time}, o que não deixa tempo nenhum entre os dois. Deixa-os vazios para aceitar qualquer hora."),
-    "no_flight_catchable": (
-        "Leaving from {earliest} with {minutes} min at the airport, no flight of that day can be caught. Set `earliest_leave` earlier.",
-        "Saindo a partir das {earliest} com {minutes} min no aeroporto, não se apanha nenhum voo desse dia. Põe `earliest_leave` mais cedo."),
-    "radius_order": ("`primary_radius_km` ({primary}) is above `fallback_radius_km` ({fallback}).",
-                     "`primary_radius_km` ({primary}) é maior do que `fallback_radius_km` ({fallback})."),
-    "include_and_exclude": ("'{entry}' is both in `include_airports` and in `exclude_airports`.",
-                            "'{entry}' está em `include_airports` e em `exclude_airports` ao mesmo tempo."),
-    # ---- settings that are allowed but will probably disappoint
-    "advice": ("Note", "Atenção"),
-    "advice_tight_day": (
-        "leaving from {earliest} and arriving by {latest}, with {fixed} min spent at the two airports, leaves {left} min for all the travel (unless the clock at the destination is behind). Few or no trips will fit.",
-        "saindo a partir das {earliest} e chegando até às {latest}, com {fixed} min passados nos dois aeroportos, sobram {left} min para toda a viagem (a não ser que o relógio no destino esteja atrasado). Poucas ou nenhumas viagens vão caber."),
-    "advice_narrow_leave": ("the window to leave in, {earliest} to {latest}, is short: a connection to the airport may not exist in it.",
-                            "a janela de saída, das {earliest} às {latest}, é curta: pode não haver nela nenhuma ligação até ao aeroporto."),
-    "advice_grade_a": (
-        "reliability 🟢 needs timetables published for the travel date itself, and those are only read up to {days} days ahead. For these dates nothing will reach 🟢, and the best found will be shown with a warning.",
-        "a fiabilidade 🟢 exige horários publicados para o próprio dia da viagem, que só se leem até {days} dias antes. Para estas datas nada chegará a 🟢, e será mostrado o melhor encontrado com um aviso."),
-    "advice_far_date": ("the trip is {days} days away: few airlines sell flights that far ahead, so the list may be short.",
-                        "a viagem é daqui a {days} dias: poucas companhias vendem voos com tanta antecedência, por isso a lista pode ser curta."),
-    # ---- window
-    "ui_title": ("Trip Planner", "Planeador de viagens"),
-    "ui_dates": ("Dates", "Datas"),
-    "ui_dates_hint": ("17/12, 17-19 Dec, Friday, tomorrow...", "17/12, 17-19 dez, sexta, amanhã..."),
-    "ui_calendar": ("Calendar", "Calendário"),
-    "ui_calendar_hint": ("Click the days you accept, {maximum} at most.", "Clica nos dias que aceitas, no máximo {maximum}."),
-    "ui_calendar_use": ("Use these dates", "Usar estas datas"),
-    "ui_calendar_clear": ("Clear", "Limpar"),
-    "cal_months": ("January,February,March,April,May,June,July,August,September,October,November,December",
-                   "janeiro,fevereiro,março,abril,maio,junho,julho,agosto,setembro,outubro,novembro,dezembro"),
-    "cal_weekdays": ("Mon,Tue,Wed,Thu,Fri,Sat,Sun", "seg,ter,qua,qui,sex,sáb,dom"),
-    "ui_earliest_leave": ("Leave from", "Sair a partir das"),
-    "ui_latest_leave": ("Leave by", "Sair até às"),
-    "ui_latest_arrival": ("Arrive by (optional)", "Chegar até às (opcional)"),
-    "ui_stopovers": ("Stopovers, at most", "Escalas, no máximo"),
-    "ui_reliability": ("Minimum reliability", "Fiabilidade mínima"),
-    "ui_language": ("Language", "Língua"),
-    "ui_free_trains_origin": ("Trains at the origin are free for me", "Os comboios na origem são gratuitos para mim"),
-    "ui_free_trains": ("Trains at the destination are free for me", "Os comboios no destino são gratuitos para mim"),
-    "ui_departure_scale": ("Departure airports", "Aeroportos de partida"),
-    "ui_arrival_scale": ("Arrival airports", "Aeroportos de chegada"),
-    "ui_scale_near": ("Near: up to {km} km, {count} at most", "Perto: até {km} km, no máximo {count}"),
-    "ui_scale_wide": ("Wide: up to {km} km, {count} at most", "Alargado: até {km} km, no máximo {count}"),
-    "ui_more_settings": ("Every other setting is in settings.py.", "As restantes definições estão em settings.py."),
-    "ui_find_airports": ("Find airports", "Procurar aeroportos"),
-    "ui_check": ("Check the services", "Verificar os serviços"),
-    "ui_finding": ("Locating the cities and choosing the airports...", "A localizar as cidades e a escolher os aeroportos..."),
-    "ui_airports_instruction": ("Untick the airports you do not want, then search.",
-                                "Desmarca os aeroportos que não queres e carrega em Pesquisar."),
-    "ui_search": ("Search", "Pesquisar"),
-    "ui_back": ("Back", "Voltar"),
-    "ui_searching": ("Searching. It takes two to four minutes, the progress appears below.",
-                     "A pesquisar. Demora dois a quatro minutos, o progresso aparece em baixo."),
-    "ui_done": ("Done. Ask about this trip below, or change the trip above and search again.",
-                "Concluído. Faz perguntas sobre esta viagem em baixo, ou altera a viagem em cima e pesquisa de novo."),
-    "ui_question": ("Question about this trip:", "Pergunta sobre esta viagem:"),
-    "ui_ask": ("Ask", "Perguntar"),
-    "ui_asking": ("Thinking...", "A pensar..."),
-    "ui_keep_report": ("Keep this report", "Guardar este relatório"),
-    "ui_report_kept": ("Report kept in {folder}. It will not be deleted.", "Relatório guardado em {folder}. Não será apagado."),
-    "ui_report_not_kept": ("Report back among the recent ones: only the {limit} newest stay.",
-                           "Relatório de volta aos recentes: só ficam os {limit} mais novos."),
-    "keep_report_prompt": ("Keep this report? Otherwise it is deleted once there are {limit} newer ones (y/N):",
-                           "Guardar este relatório? Caso contrário é apagado quando houver {limit} mais recentes (s/N):"),
-    "ui_open_report": ("Open the full report", "Abrir o relatório completo"),
-    "ui_checking": ("Checking every service the program depends on...", "A verificar todos os serviços de que o programa depende..."),
-    "ui_failed": ("It did not work: {error}", "Não funcionou: {error}"),
-    # ---- progress
-    "progress_start": ("{origin} → {destination}. Departure: {departure}. Arrival: {arrival}.",
-                       "{origin} → {destination}. Partida: {departure}. Chegada: {arrival}."),
-    "progress_flights": ("Flights: {flights} found, {searched} of {routes} routes searched ({retries} calls refused by Kiwi and tried again).",
-                         "Voos: {flights} encontrados, {searched} de {routes} rotas pesquisadas ({retries} pedidos recusados pela Kiwi e repetidos)."),
-    "progress_ground": ("Ground transport of the {flights} cheapest flights: real timetables cover {covered} of {legs} legs ({requests} timetable requests).",
-                        "Transporte terrestre dos {flights} voos mais baratos: os horários reais cobrem {covered} de {legs} troços ({requests} pedidos de horários)."),
-    "progress_resume": ("Interrupted by an error ({error}) after {done} of {steps} steps. The finished steps are kept: continuing in {seconds} s.",
-                        "Interrompido por um erro ({error}) após {done} de {steps} passos. Os passos concluídos ficam guardados: a continuar dentro de {seconds} s."),
-    "followup_prompt": ("Question about this trip (Enter to finish):", "Pergunta sobre esta viagem (Enter para terminar):"),
-    "followup_no_trip": ("No trip has been planned yet in this session.", "Ainda não foi planeada nenhuma viagem nesta sessão."),
-    "followup_note": ("Answer written by a model from the report above, without a new search. If it disagrees with the report, the report is right.",
-                      "Resposta escrita por um modelo a partir do relatório acima, sem nova pesquisa. Se divergir do relatório, vale o relatório."),
-    "progress_done": ("Done in {seconds} s. Full report saved to {path}", "Concluído em {seconds} s. Relatório completo guardado em {path}"),
-    # ---- flight list
-    "kiwi_unavailable": ("Kiwi does not answer: the flights will come from {backup} (plan B).",
-                         "A Kiwi não responde: os voos vão ser pesquisados no {backup} (plano B)."),
-    "progress_backup": ("Kiwi did not answer: {requests} searches were made on {backup} instead.",
-                        "A Kiwi não respondeu: foram feitas {requests} pesquisas no {backup} em vez dela."),
-    "gap_no_answer": ("{route}, {day}: neither Kiwi nor Google Flights answered, flights of this route may be missing",
-                      "{route}, {day}: nem a Kiwi nem o Google Flights responderam, podem faltar voos desta rota"),
-    "gap_capped": ("{route}, {day}: Kiwi returned its maximum of {cap} flights, the most expensive ones may be missing",
-                   "{route}, {day}: a Kiwi devolveu o máximo de {cap} voos, podem faltar os mais caros"),
-    # ---- arrival window
-    "arrival_between": ("between {earliest} and {latest}", "entre as {earliest} e as {latest}"),
-    "arrival_from": ("from {earliest}", "a partir das {earliest}"),
-    "arrival_until": ("by {latest}", "até às {latest}"),
-    "arrival_same_day": ("the same day, by the last connection", "no próprio dia, até à última ligação"),
-    # ---- why a flight is rejected
-    "unverified_basis": ("[based on unverified data from a model]", "[com base em dados não verificados de um modelo]"),
-    "model_timetable": ("the model's timetable", "horário do modelo"),
-    "reject_stopovers": ("flight with {stops} stopover(s), the maximum is {maximum}", "voo com {stops} escala(s), o máximo é {maximum}"),
-    "reject_arrival_airport": ("lands at {airport}, which is not an allowed arrival airport",
-                               "aterra em {airport}, que não é um aeroporto de chegada permitido"),
-    "reject_price_unknown": ("a ground transport price was not found and estimates are not allowed",
-                             "um preço de transporte terrestre não foi encontrado e as estimativas não são permitidas"),
-    "reject_no_real_connection": (
-        "the real timetable has no connection that leaves between {earliest} and {latest} and reaches {airport} by {limit} (closest real connections: {real})",
-        "o horário real não tem nenhuma ligação que saia entre as {earliest} e as {latest} e chegue a {airport} até às {limit} (ligações reais mais próximas: {real})"),
-    "reject_no_transfer": ("no transport to airport {airport} was found", "não foi encontrado transporte até ao aeroporto {airport}"),
-    "reject_unreachable": ("airport {airport} has no public transport: {notes}", "aeroporto {airport} sem transporte público: {notes}"),
-    "reject_too_far": ("leaving at {earliest} you only reach {airport} at {arrive}, and the flight is at {flight} (minimum {minimum} min before)",
-                       "saindo às {earliest} só chegas a {airport} às {arrive}, e o voo é às {flight} (mínimo {minimum} min antes)"),
-    "reject_no_connection_after_landing": (
-        "lands at {airport} at {landing} and no connection reaches the destination {limits} (timetable of {day}; connections after landing: {real})",
-        "aterra em {airport} às {landing} e nenhuma ligação chega ao destino {limits} (horário de {day}; ligações depois da aterragem: {real})"),
-    "reject_no_route": ("no transport from airport {airport} to the destination was found",
-                        "não foi encontrado transporte do aeroporto {airport} até ao destino"),
-    "reject_arrival_outside": ("would reach the destination at {arrive}, outside the window asked for ({limits})",
-                               "chegaria ao destino às {arrive}, fora do intervalo pedido ({limits})"),
-    "reject_not_worth_it": (
-        "{total} EUR in total, from a distant airport and not worth it: saves {saving} EUR and takes {extra} longer than the option from {reference} (minimum saving required: {required} EUR)",
-        "{total} EUR no total, parte de um aeroporto distante e não compensa: poupa {saving} EUR e demora mais {extra} do que a opção de {reference} (poupança mínima exigida: {required} EUR)"),
-    "reject_below_minimum": ("its schedules are {grade}, below the minimum {minimum} asked for",
-                             "os horários são {grade}, abaixo do mínimo {minimum} pedido"),
-    "note_impossible_duration": (
-        "Travel time to {airport}: the model said {minutes} min for {km} km, which is impossible; {used} min were used, estimated from the distance.",
-        "Duração até {airport}: o modelo indicou {minutes} min para {km} km, o que é impossível; foram usados {used} min, estimados pela distância."),
-    # ---- warnings
-    "warnings": ("Warnings", "Avisos"),
-    "warn_below_minimum": (
-        "No itinerary reaches reliability {minimum}. The options below are NOT VERIFIED: confirm every connection before buying anything.",
-        "Nenhum itinerário atinge a fiabilidade {minimum}. As opções abaixo NÃO ESTÃO VERIFICADAS: confirma todas as ligações antes de comprar o que quer que seja."),
-    "warn_flights_not_checked": (
-        "Ground transport was looked up for the {checked} cheapest flights only; {skipped} more expensive flights were not evaluated.",
-        "O transporte terrestre só foi consultado para os {checked} voos mais baratos; {skipped} voos mais caros não foram avaliados."),
-    "warn_flight_gaps": ("The flight list may be incomplete in {count} place(s), see the full report.",
-                         "A lista de voos pode estar incompleta em {count} ponto(s), ver o relatório completo."),
-    "warn_recommendation_differs": (
-        "Integrity warning: this text, written by a model, names option {model}, but the rules computed in code recommend option {rules}. Trust the table.",
-        "Aviso de integridade: este texto, escrito por um modelo, refere a opção {model}, mas as regras calculadas em código recomendam a opção {rules}. Confia na tabela."),
-    # ---- reliability grades and sources
-    "grade_a": ("confirmed for the travel date", "confirmado para o dia da viagem"),
-    "grade_b": ("typical timetable (same weekday, {day})", "horário típico (mesmo dia da semana, {day})"),
-    "grade_c": ("NOT VERIFIED", "NÃO VERIFICADO"),
-    "grade_reseller": ("reseller's price, the airline may differ", "preço do revendedor, a companhia pode ter outro"),
-    "source_kiwi": ("{source}, for the travel date", "{source}, para o dia da viagem"),
-    "source_kiwi_price": ("{source} (not the airline)", "{source} (não é a companhia)"),
-    "source_airline": ("{airline}'s own site", "site da {airline}"),
-    "source_operator": ("{operator}'s booking system", "sistema de reservas da {operator}"),
-    "source_timetable": ("timetable published by the operators", "horário publicado pelos operadores"),
-    "source_model": ("a model, from web search", "um modelo, em pesquisa web"),
-    "price_operator": ("operator's booking system", "sistema de reservas do operador"),
-    "price_free": ("free for this traveller", "gratuito para este viajante"),
-    "price_model": ("a model, from web search", "um modelo, em pesquisa web"),
-    "price_estimate": ("estimated by code from the distance", "estimado pelo código a partir da distância"),
-    # ---- comparison table
-    "comparison": ("Comparison", "Comparação"),
-    "recommended": ("recommended", "recomendada"),
-    "fastest": ("the fastest", "a mais rápida"),
-    "option": ("Option", "Opção"),
-    "direct": ("direct", "direto"),
-    "stopovers": ("{count} stopover(s)", "{count} escala(s)"),
-    "col_option": ("Option", "Opção"),
-    "col_date": ("Date", "Data"),
-    "col_route": ("Route", "Rota"),
-    "col_total": ("Total cost", "Custo total"),
-    "col_leave": ("Leave", "Saída"),
-    "col_arrive": ("Arrive", "Chegada"),
-    "col_duration": ("Duration", "Duração"),
-    "col_extra_time": ("Extra time", "Tempo a mais"),
-    "col_time_value": ("Value of that time", "Valor desse tempo"),
-    "col_schedules": ("Schedules", "Horários"),
-    "col_confirmed": ("Confirmed price", "Preço confirmado"),
-    "legend_time": (
-        "\"Extra time\" is the difference to the fastest option, and its value follows your preferences ({table}). The recommended option has the lowest sum of total cost and value of the extra time.",
-        "\"Tempo a mais\" é a diferença para a opção mais rápida, e o valor desse tempo segue as tuas preferências ({table}). É recomendada a opção com a menor soma de custo total e valor do tempo a mais."),
-    "legend_grades": (
-        "\"Schedules\" is the worst light among the ground connections of the option: 🟢 confirmed for the travel date, 🟡 typical timetable of the same weekday, 🔴 not verified. \"Confirmed price\" is how much of the total was read from an operator's own system.",
-        "\"Horários\" é a pior cor entre as ligações terrestres da opção: 🟢 confirmado para o dia da viagem, 🟡 horário típico do mesmo dia da semana, 🔴 não verificado. \"Preço confirmado\" é a parte do total lida do sistema do próprio operador."),
-    "not_cheapest": ("The recommended option is not the cheapest: it costs {extra} EUR more but saves {saved}, which is worth {worth} EUR to you.",
-                     "A opção recomendada não é a mais barata: custa mais {extra} EUR, mas poupa {saved}, que para ti valem {worth} EUR."),
-    # ---- one option
-    "cost_line": (
-        "Cost: flight {flight} EUR + to the airport {to} EUR + from the airport to the destination {back} EUR = **{total} EUR**. Total duration: {duration}.",
-        "Custo: voo {flight} EUR + até ao aeroporto {to} EUR + do aeroporto ao destino {back} EUR = **{total} EUR**. Duração total: {duration}."),
-    "reliability": ("How reliable each part is", "Fiabilidade de cada parte"),
-    "col_part": ("Part", "Parte"),
-    "col_value": ("Value", "Valor"),
-    "col_source": ("Source", "Fonte"),
-    "col_grade": ("Reliability", "Fiabilidade"),
-    "part_flight_times": ("Flight times", "Horário do voo"),
-    "part_flight_price": ("Flight price", "Preço do voo"),
-    "part_to_times": ("To the airport, times", "Até ao aeroporto, horário"),
-    "part_to_price": ("To the airport, price", "Até ao aeroporto, preço"),
-    "part_from_times": ("From the airport to the destination, times", "Do aeroporto ao destino, horário"),
-    "part_from_price": ("From the airport to the destination, price", "Do aeroporto ao destino, preço"),
-    "step_leave": ("Leave {origin}.", "Saída de {origin}."),
-    "computed_time": ("(time computed from the travel time, NOT read from a timetable: a connection may not exist at this time)",
-                      "(hora calculada a partir da duração, NÃO lida de um horário: pode não existir ligação a esta hora)"),
-    "step_at_airport": ("At airport {airport}, {wait} min before the flight.", "No aeroporto {airport}, {wait} min antes do voo."),
-    "step_flight": ("Flight {flights} ({stops}, {duration}).", "Voo {flights} ({stops}, {duration})."),
-    "step_landing": ("Landing at {airport} (local time).", "Aterragem em {airport} (hora local)."),
-    "step_onward": ("Onward, {wait} min after landing.", "Seguimento, {wait} min depois da aterragem."),
-    "step_arrival": ("Arrival in {destination} (local time).", "Chegada a {destination} (hora local)."),
-    "later_connections": ("Later connections if this one is missed: {times}.", "Ligações seguintes se esta falhar: {times}."),
-    "other_by_coach": ("By coach instead: {leave} → {arrive}, about {price} EUR (estimated from the distance).",
-                       "Em alternativa, de autocarro: {leave} → {arrive}, cerca de {price} EUR (estimado pela distância)."),
-    "other_without_coach": ("Without a coach instead: {leave} → {arrive}, about {price} EUR (estimated from the distance).",
-                            "Em alternativa, sem autocarro expresso: {leave} → {arrive}, cerca de {price} EUR (estimado pela distância)."),
-    "where_to_book": ("Where to book, on each company's own site", "Onde reservar, no site de cada empresa"),
-    "book_flight": ("Flight, {airline}", "Voo, {airline}"),
-    "book_confirmed": ("time and price confirmed on the airline's site; {source} gave {kiwi} EUR",
-                       "horário e preço confirmados no site da companhia; {source} indicava {kiwi} EUR"),
-    "book_lookup": ("site found by a lookup, check that it is the airline's official site; price not confirmed there",
-                    "site encontrado por pesquisa, confirma que é o site oficial da companhia; preço não confirmado lá"),
-    "no_cabin_bag": ("cabin bag not included", "mala de cabine não incluída"),
-    "book_to": ("Transport to {airport}", "Transporte até {airport}"),
-    "book_from": ("Transport from {airport} to {destination}", "Transporte de {airport} para {destination}"),
-    "no_site": ("no operator site was found", "não foi encontrado o site do operador"),
-    # ---- check before booking
-    "check_before_booking": ("Check before booking", "A confirmar antes de reservar"),
-    "side_to": ("to the airport", "até ao aeroporto"),
-    "side_from": ("from the airport to the destination", "do aeroporto ao destino"),
-    "check_typical": (
-        "Option {number}, {side}: the times are those of {day}, the same weekday. Timetables change, in Europe every year in mid-December. Confirm them for the travel date.",
-        "Opção {number}, {side}: os horários são os de {day}, o mesmo dia da semana. Os horários mudam, na Europa todos os anos a meio de dezembro. Confirma-os para o dia da viagem."),
-    "check_unverified": (
-        "Option {number}, {side}: NOT VERIFIED. No timetable was read, the connection may not exist. Confirm it on the operator's site before buying the flight.",
-        "Opção {number}, {side}: NÃO VERIFICADO. Não foi lido nenhum horário, a ligação pode não existir. Confirma no site do operador antes de comprar o voo."),
-    "check_flight_price": ("Price of flight {flights}: it is the price given by {source}, check the airline's own site.",
-                           "Preço do voo {flights}: é o preço indicado por {source}, confirma no site da companhia."),
-    "check_general_prices": ("Prices are those at the time of the search and can change.",
-                             "Os preços são os do momento da pesquisa e podem mudar."),
-    "check_general_bags": ("Flight prices are base fares: bags and seats are extra.",
-                           "Os preços dos voos são tarifas base: malas e lugares são à parte."),
-    "check_general_links": ("Links to transport operators come from timetable feeds or from web search results: check they are the official sites before paying.",
-                            "Os links dos operadores de transporte vêm dos horários publicados ou de resultados de pesquisa web: confirma que são os sites oficiais antes de pagar."),
-    "recommendation": ("Recommendation", "Recomendação"),
-    # ---- full report
-    "trip_plan": ("Trip plan", "Plano de viagem"),
-    "generated": ("Generated on {when} by trip-planner.", "Gerado em {when} pelo trip-planner."),
-    "settings": ("Settings", "Definições"),
-    "col_setting": ("Setting", "Definição"),
-    "how_to_read": ("How to read the reliability lights", "Como ler as cores de fiabilidade"),
-    "grades_explained": ("Every figure in this report carries its source and one of three lights. Nothing a model wrote is shown as confirmed.",
-                         "Cada valor deste relatório indica a fonte e uma de três cores. Nada do que um modelo escreveu é apresentado como confirmado."),
-    "grade_a_long": ("confirmed for the travel date: read by code from the operator's own system, from a timetable published for that date, or from the flight search (Kiwi or Google Flights) for flight times.",
-                     "confirmado para o dia da viagem: lido pelo código no sistema do próprio operador, num horário publicado para esse dia, ou na pesquisa de voos (Kiwi ou Google Flights) para o horário do voo."),
-    "grade_b_long": ("typical timetable: read by code from a published timetable, but for the same weekday of a nearer week, because the travel date is not published yet.",
-                     "horário típico: lido pelo código num horário publicado, mas do mesmo dia da semana de uma semana mais próxima, porque o dia da viagem ainda não está publicado."),
-    "grade_c_long": ("not verified: found by a model in web search, or estimated by code from the distance.",
-                     "não verificado: encontrado por um modelo em pesquisa web, ou estimado pelo código a partir da distância."),
-    "min_reliability_explained": (
-        "Only itineraries whose schedules reach {minimum} are kept. When a real timetable shows that a connection is impossible, the itinerary is discarded even if a model said it works.",
-        "Só são mantidos os itinerários cujos horários atingem {minimum}. Quando um horário real mostra que uma ligação é impossível, o itinerário é excluído mesmo que um modelo diga que funciona."),
-    "reasoning": ("Reasoning", "Raciocínio"),
-    "step_places": ("Places and airports", "Locais e aeroportos"),
-    "airports_dropped": ("Airports removed by you", "Aeroportos retirados por ti"),
-    "col_group": ("Group", "Grupo"),
-    "col_code": ("Code", "Código"),
-    "col_airport": ("Airport", "Aeroporto"),
-    "col_city": ("City", "Cidade"),
-    "col_country": ("Country", "País"),
-    "col_distance": ("Straight-line distance", "Distância em linha reta"),
-    "step_flights": ("Flights found ({source}, copied by code)", "Voos encontrados ({source}, copiados pelo código)"),
-    "flights_found": ("{count} flights fit your limits. Ground transport was looked up for the {checked} cheapest.",
-                      "{count} voos cabem nos teus limites. O transporte terrestre foi consultado para os {checked} mais baratos."),
-    "flight_gaps_title": ("The flight list may be incomplete:", "A lista de voos pode estar incompleta:"),
-    "col_flight": ("Flight", "Voo"),
-    "col_departure": ("Departure", "Partida"),
-    "col_arrival": ("Arrival", "Chegada"),
-    "col_airline": ("Airline", "Companhia"),
-    "col_stops": ("Stopovers", "Escalas"),
-    "col_kiwi_price": ("Price found", "Preço encontrado"),
-    "col_checked": ("Ground transport looked up", "Transporte terrestre consultado"),
-    "step_ground": ("Ground transport", "Transporte terrestre"),
-    "ground_explained": (
-        "Real timetables read by code from: {sources} ({requests} requests). Each cell says how reliable the connections found for that flight are.",
-        "Horários reais lidos pelo código em: {sources} ({requests} pedidos). Cada célula indica a fiabilidade das ligações encontradas para esse voo."),
-    "col_to_airport": ("To the departure airport", "Até ao aeroporto de partida"),
-    "col_from_airport": ("From the arrival airport", "A partir do aeroporto de chegada"),
-    "not_covered": ("no timetable covers it: a model's estimate is used (🔴)", "nenhum horário cobre: é usada a estimativa de um modelo (🔴)"),
-    "connections": ("connections", "ligações"),
-    "operator_rides_title": ("Rides and prices read from operators' booking systems, for the travel date (🟢):",
-                             "Viagens e preços lidos nos sistemas de reservas dos operadores, para o dia da viagem (🟢):"),
-    "col_rides": ("Rides", "Viagens"),
-    "model_transfers_title": ("What the airport transfer agent (a model) found in web search. NOT VERIFIED, used for prices and where no timetable exists:",
-                              "O que o agente de transporte até ao aeroporto (um modelo) encontrou em pesquisa web. NÃO VERIFICADO, usado para preços e onde não há horário:"),
-    "model_trains_title": ("What the destination transport agent (a model) found in web search. NOT VERIFIED, used only where no timetable exists:",
-                           "O que o agente de transporte no destino (um modelo) encontrou em pesquisa web. NÃO VERIFICADO, usado só onde não há horário:"),
-    "col_reachable": ("Reachable", "Acessível"),
-    "col_price": ("Price", "Preço"),
-    "col_how": ("How", "Como"),
-    "col_model_says_source": ("The model says it found it in a source", "O modelo diz que encontrou numa fonte"),
-    "col_notes": ("Notes", "Notas"),
-    "not_found": ("not found", "não encontrado"),
-    "col_station": ("Station", "Estação"),
-    "col_link": ("Airport link", "Ligação ao aeroporto"),
-    "col_trains": ("Trains", "Comboios"),
-    "step_rejected": ("Flights discarded, and why", "Voos excluídos e porquê"),
-    "nothing_rejected": ("No flight was discarded.", "Nenhum voo foi excluído."),
-    "step_timings": ("Where the time went", "Onde foi gasto o tempo"),
-    "col_step": ("Step", "Passo"),
-    "col_seconds": ("Seconds", "Segundos"),
-    "final_result": ("Final result", "Resultado final"),
-    "no_itinerary": ("No itinerary respects the hard constraints.", "Nenhum itinerário respeita as regras rígidas."),
-    "no_itinerary_reasons": ("Every flight that fits your limits was discarded:", "Todos os voos que cabem nos teus limites foram excluídos:"),
-    # ---- the closest alternatives, when nothing respects every requirement
-    "progress_closest": ("No flight fits your limits. {count} flights that break them are evaluated, to show the closest alternatives.",
-                         "Nenhum voo cabe nos teus limites. São avaliados {count} voos que os violam, para mostrar as alternativas mais próximas."),
-    "near_title": ("No trip respects every requirement: the closest ones", "Nenhuma viagem cumpre todos os requisitos: as mais próximas"),
-    "near_intro": (
-        "None of the options below can be recommended as asked: each one breaks at least one of your requirements. They are ordered by how little they break, by this order of importance:",
-        "Nenhuma das opções abaixo pode ser recomendada tal como pediste: cada uma viola pelo menos um dos teus requisitos. Estão ordenadas pelo pouco que violam, por esta ordem de importância:"),
-    "near_order_arrival": ("Arriving within your window (`earliest_arrival`, `latest_arrival`): someone or something is usually waiting.",
-                           "Chegar dentro da tua janela (`earliest_arrival`, `latest_arrival`): normalmente há alguém ou alguma coisa à espera."),
-    "near_order_airport": ("The minimum time at the airport (`min_airport_minutes`): below it the flight may be missed. Never under {floor} min.",
-                           "O tempo mínimo no aeroporto (`min_airport_minutes`): abaixo dele o voo pode ser perdido. Nunca menos de {floor} min."),
-    "near_order_stopovers": ("The number of stopovers (`max_stopovers`): a longer trip and one more thing that can go wrong.",
-                             "O número de escalas (`max_stopovers`): uma viagem mais longa e mais uma coisa que pode correr mal."),
-    "near_order_leave": ("The times you accept to leave at (`earliest_leave`, `latest_leave`): a matter of comfort.",
-                         "As horas a que aceitas sair (`earliest_leave`, `latest_leave`): uma questão de conforto."),
-    "near_rule": (
-        "An option that breaks a requirement higher in this list always comes after one that only breaks lower ones. Among options that break the same requirement, the smaller breach comes first, then the cheaper option. The travel dates, the airports you allowed and what the real timetables say are never given up.",
-        "Uma opção que viola um requisito mais acima nesta lista vem sempre depois de uma que só viola requisitos mais abaixo. Entre opções que violam o mesmo requisito, vem primeiro a que viola menos, e depois a mais barata. As datas da viagem, os aeroportos que permitiste e o que os horários reais dizem nunca são sacrificados."),
-    "closest": ("the closest", "a mais próxima"),
-    "col_breaks": ("Does not respect", "Não cumpre"),
-    "breach_arrival": ("arrival {value} (limit {limit})", "chegada {value} (limite {limit})"),
-    "breach_airport": ("{value} min at the airport (minimum {limit})", "{value} min no aeroporto (mínimo {limit})"),
-    "breach_stopovers": ("{value} stopover(s) (maximum {limit})", "{value} escala(s) (máximo {limit})"),
-    "breach_leave": ("leaves {value} (limit {limit})", "saída {value} (limite {limit})"),
-    "near_pros": ("In favour", "A favor"),
-    "near_cons": ("Against", "Contra"),
-    "near_fix": ("It becomes valid with: {changes}.", "Passa a ser válida com: {changes}."),
-    "req_arrival": ("the arrival window", "a janela de chegada"),
-    "req_airport": ("the time at the airport", "o tempo no aeroporto"),
-    "req_stopovers": ("the stopovers", "as escalas"),
-    "req_leave": ("the times to leave at", "as horas de saída"),
-    "pro_closest": ("The closest to what you asked, by the order above.", "A mais próxima do que pediste, pela ordem acima."),
-    "pro_respects": ("Respects: {kept}.", "Cumpre: {kept}."),
-    "pro_cheapest": ("The cheapest of these alternatives ({cost} EUR).", "A mais barata destas alternativas ({cost} EUR)."),
-    "pro_fastest": ("The fastest of these alternatives ({duration}).", "A mais rápida destas alternativas ({duration})."),
-    "pro_confirmed": ("{confirmed} of its {total} EUR are confirmed prices.", "{confirmed} dos seus {total} EUR são preços confirmados."),
-    "con_arrival_after": ("Arrives at {value}, {amount} after your limit of {limit}.", "Chega às {value}, {amount} depois do teu limite das {limit}."),
-    "con_arrival_before": ("Arrives at {value}, {amount} before the {limit} you asked for.", "Chega às {value}, {amount} antes das {limit} que pediste."),
-    "con_airport": (
-        "Only {value} min at the airport before the flight, {amount} less than the {limit} min you asked for: a delay on the way can cost the flight.",
-        "Só {value} min no aeroporto antes do voo, menos {amount} do que os {limit} min que pediste: um atraso no caminho pode custar o voo."),
-    "con_stopovers": ("The flight has {value} stopover(s), and you asked for {limit} at most.", "O voo tem {value} escala(s), e pediste no máximo {limit}."),
-    "con_leave_before": ("Leaves at {value}, {amount} before the {limit} you asked for.", "Sai às {value}, {amount} antes das {limit} que pediste."),
-    "con_leave_after": ("Leaves at {value}, {amount} after your limit of {limit}.", "Sai às {value}, {amount} depois do teu limite das {limit}."),
-    "con_dearer": ("Costs {extra} EUR more than the cheapest of these alternatives.", "Custa mais {extra} EUR do que a mais barata destas alternativas."),
-    "con_slower": ("Takes {extra} longer than the fastest of these alternatives.", "Demora mais {extra} do que a mais rápida destas alternativas."),
-    "con_unverified": ("Its schedules are not verified (🔴).", "Os horários não estão verificados (🔴)."),
-    # ---- why no flight was found
-    "no_flights_title": ("No flight fits your limits", "Nenhum voo cabe nos teus limites"),
-    "no_flights_none": (
-        "Asked again without your limits (any time, up to {stops} stopovers), the flight search still finds no flight on these routes and dates. Try other dates, or more airports (`include_airports`, or the radius settings).",
-        "Mesmo sem os teus limites (qualquer hora, até {stops} escalas), a pesquisa de voos não encontra nenhum voo nestas rotas e datas. Experimenta outras datas, ou mais aeroportos (`include_airports`, ou as definições de raio)."),
-    "no_flights_unknown": ("The flight search did not answer when asked again without your limits, so the reason is not known. Search again.",
-                           "A pesquisa de voos não respondeu quando foi consultada sem os teus limites, por isso o motivo não é conhecido. Pesquisa de novo."),
-    "no_flights_intro": (
-        "Asked again without your limits (any time, up to {stops} stopovers), the flight search finds {count} flights on these routes and dates, counting the cheapest of each departure airport. None can be used. The number that would come back by relaxing one limit alone is given for each:",
-        "Sem os teus limites (qualquer hora, até {stops} escalas), a pesquisa de voos encontra {count} voos nestas rotas e datas, contando os mais baratos de cada aeroporto de partida. Nenhum serve. Para cada limite é indicado quantos voltariam se só esse fosse alargado:"),
-    "no_flights_alone": ("relaxing only this limit brings back {alone}", "alargar só este limite recupera {alone}"),
-    "no_flights_stopovers": ("{count} have more than {maximum} stopover(s) (setting `max_stopovers`)",
-                             "{count} têm mais de {maximum} escala(s) (definição `max_stopovers`)"),
-    "no_flights_too_early": (
-        "{count} depart before {time}, the first flight you can catch leaving at {earliest} with {minutes} min at the airport (setting `earliest_leave`)",
-        "{count} partem antes das {time}, o primeiro voo que consegues apanhar saindo às {earliest} com {minutes} min no aeroporto (definição `earliest_leave`)"),
-    "no_flights_too_late": ("{count} land after {latest}, your limit to arrive (setting `latest_arrival`)",
-                            "{count} aterram depois das {latest}, o teu limite de chegada (definição `latest_arrival`)"),
-    "no_flights_next_day": (
-        "{count} land the day after they depart. This planner only handles trips that end the day they start, so no setting brings them back",
-        "{count} aterram no dia seguinte ao da partida. Este planeador só trata viagens que terminam no dia em que começam, por isso nenhuma definição os recupera"),
-}
+Each language is one file of the folder languages/, named after its code: en.py, pt-PT.py. Whatever file is there is
+a language of the program, with nothing else to change:
+- to add one,     python main.py --add-language it      (translated by a model: read it once)
+- to remove one,  python main.py --remove-language it   (or delete its file)
+- to see them,    python main.py --languages            (and what is missing in each)
+A text that a language does not have is shown in English."""
+import re
+import runpy
+from pathlib import Path
+
+from trip_planner import current
+from trip_planner.utils import plain
+
+FOLDER = Path(__file__).parent / "languages"
+REFERENCE = "en"   # the language every text exists in
+
+def load_languages() -> dict[str, dict[str, str]]:
+    """The texts of every language of the folder, the reference first: {language code: {key: text}}."""
+    files = sorted(FOLDER.glob("*.py"), key=lambda file: (file.stem != REFERENCE, file.stem))
+    return {file.stem: runpy.run_path(str(file))["TEXTS"] for file in files}
+
+TEXTS = load_languages()
+# Language code -> its name in English, which is how the models are told what language to write in
+LANGUAGES = {code: texts.get("language_english_name", code) for code, texts in TEXTS.items()}
 
 def text_in(language: str, key: str, **values) -> str:
-    """A text in one language."""
-    text = TEXTS[key][list(LANGUAGES).index(language)]
-    return text.format(**values) if values else text
+    """A text in one language. In English if that language does not have it, or has it with the wrong {values}."""
+    for code in (language, REFERENCE):
+        text = TEXTS.get(code, {}).get(key)
+        if text is not None:
+            try:
+                return text.format(**values) if values else text
+            except (KeyError, IndexError, ValueError):
+                continue   # a translation that lost or invented a {value}
+    raise KeyError(key)
 
 def tr(key: str, **values) -> str:
     """A text in the language of the trip being planned."""
     return text_in(current.SETTINGS.language, key, **values)
+
+def words(key: str) -> list[str]:
+    """Every word of a list text ("and,or") in every language, without accents or capitals: a traveller may write
+    a date, or a model its answer, in any of them."""
+    found = [plain(word) for texts in TEXTS.values() for word in texts.get(key, "").split(",")]
+    return list(dict.fromkeys(word for word in found if word))
+
+def any_of(key: str) -> str:
+    """The words of a list text as a regular expression that matches any of them, the longest first."""
+    return "|".join(re.escape(word) for word in sorted(words(key), key=len, reverse=True))

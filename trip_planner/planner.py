@@ -20,7 +20,7 @@ from trip_planner.config import TripSettings
 from trip_planner.places import ask_airports, choose_airports, codes, show_airports, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS, save_report
 from trip_planner.sources import web
-from trip_planner.texts import tr
+from trip_planner.texts import any_of, tr
 from trip_planner.utils import message_text, plain, say, show, TIMINGS
 
 def build_request(settings: TripSettings, places: TripPlaces) -> str:
@@ -46,7 +46,7 @@ def build_request(settings: TripSettings, places: TripPlaces) -> str:
 def check_recommendation(text: str, recommended: int) -> str:
     """The recommendation is written by a model. If it names another option than the one the rules chose,
     say so instead of letting the two disagree silently."""
-    named = re.search(r"(?:option|op[cç][aã]o)\s*\**\s*([0-9]+)", plain(text))
+    named = re.search(rf"(?:{any_of('option_word')})\s*\**\s*([0-9]+)", plain(text))
     if recommended and named and int(named[1]) != recommended:
         return text + "\n\n> " + tr("warn_recommendation_differs", model=named[1], rules=recommended)
     return text

@@ -49,6 +49,23 @@ env\.venv\Scripts\python main.py --terminal   no window: the trip in settings.py
 env\.venv\Scripts\python main.py --check      check the services
 ```
 
+### Languages
+
+Each language is one file in `trip_planner/languages/`, named after its code (`en.py`, `pt-PT.py`). Whatever file is
+there is a language of the program: it appears in the window and can be used in `settings.py`, with nothing else to change.
+
+```
+env\.venv\Scripts\python main.py --languages              the languages there are, and what is missing in each
+env\.venv\Scripts\python main.py --add-language italiano  add one, by name or by code (it, fr, pt-BR)
+env\.venv\Scripts\python main.py --remove-language it     remove one (or delete its file)
+env\.venv\Scripts\python main.py --add-language all       translate what is missing in every language
+```
+
+A language is added by a model that translates `en.py`: it takes under a minute, and the result is checked by code
+(nothing between `{braces}` or backticks may change). Read the file once, a model's translation is not proofread.
+A text that a language does not have is shown in English, so a language still works while it is incomplete.
+New texts are written in `en.py`; `--add-language all` then brings the other languages up to date.
+
 ### Set up by hand
 
 `TripPlanner.bat` does this for you on Windows. Everything about the environment is in `env/`.
@@ -95,7 +112,10 @@ env\.venv\Scripts\python main.py --check      check the services
 trip_planner/
 ├── config.py          TripSettings: every setting of a trip and its default
 ├── current.py         the trip being planned, read by every other module
-├── texts.py           every text the traveller reads, in each language
+├── texts.py           reads the languages and gives every text the traveller reads in the right one
+├── languages/         one file per language: en.py (the reference), pt-PT.py, it.py...
+├── translate.py       adds, removes and checks languages
+├── dates.py           travel dates as travellers write them
 ├── utils.py           times, text, progress lines, timings
 ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance
 ├── sources/           where the data comes from, one module per outside service
@@ -125,6 +145,22 @@ trip_planner/
 
 A trip goes through them in this order: `main.py` → `gui.py` (or the terminal) → `planner.py` → the coordinator (`agents/`) runs the three
 steps → each step reads `sources/` → `itineraries/` checks and ranks → `report/` writes the result.
+
+## Tests
+
+```
+pip install -r env/requirements-dev.txt
+pytest                  replays the saved checkpoints: no network, a few seconds
+pytest --live           asks the real services again and saves new checkpoints: about three minutes
+pytest --live -k BRU    the same for one airport
+```
+
+`tests/arrival/` follows the leg from the arrival airport to the destination for an airport of every country of
+the European Union (`cases.py`). Each test is one stage of that leg: locating the city, the terminal, the
+airport's stops, the connections after landing, and the leg the itinerary gets. What the services answered at
+each stage is saved in `tests/arrival/checkpoints/`, one file per airport, so a failure says at which stage a
+country breaks and the stages can be run again on today's code without asking anyone. A route that cannot work
+is marked with `known_gap` and its reason (Malta: its buses are in no published timetable).
 
 ## What can and cannot be reproduced
 

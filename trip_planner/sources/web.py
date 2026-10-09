@@ -33,6 +33,21 @@ def safe_url(url: str) -> str:
         return ""
     return url.split()[0]
 
+def secure_url(url: str) -> str:
+    """A link from a data source, always opened over https. Empty if it is not a web link."""
+    url = (url or "").strip()
+    if url.lower().startswith("http://"):
+        url = "https://" + url[7:]
+    return url if url.lower().startswith("https://") else ""
+
+LINK = r"https?://[^\s)\]>,;]+"
+
+def only_known_links(text: str, known: str) -> str:
+    """Text written by a model, without the links to sites that do not appear in known (the report computed
+    by code). A model may have been told by a web page to send the traveller somewhere else."""
+    sites = {domain_of(url) for url in re.findall(LINK, known)}
+    return re.sub(LINK, lambda link: link[0] if domain_of(link[0]) in sites else "", text or "")
+
 @tool
 def web_search(query: str, runtime: ToolRuntime) -> Command:
     """Search the web for information. The number of searches is limited and counted for you:

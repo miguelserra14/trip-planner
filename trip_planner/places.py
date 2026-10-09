@@ -41,6 +41,17 @@ class Place:
         return f"{' / '.join(names)}, {self.country}"
 
 PLACES: dict[str, Place] = {}
+SETTLEMENTS = {"city", "town", "village", "municipality", "hamlet", "suburb", "borough"}
+SAME_NAME_IMPORTANCE = 0.15   # a city this close in importance to the region or country of its name is what is meant
+
+def settlement(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """The place a traveller means by a name. The first result may be the province or the country of that name
+    ("Pavia", "Luxembourg"), whose middle is kilometres from any station: then the city of the same name."""
+    first = results[0]
+    if first.get("addresstype") in SETTLEMENTS:
+        return first
+    return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS
+                 and result.get("importance", 0) >= first.get("importance", 0) - SAME_NAME_IMPORTANCE), first)
 
 def geocode(name: str) -> Place:
     """Locate a city written in any language, with OpenStreetMap's Nominatim."""
@@ -48,7 +59,7 @@ def geocode(name: str) -> Place:
     if key not in PLACES:
         response = httpx.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"q": name, "format": "jsonv2", "limit": 1, "namedetails": 1, "addressdetails": 1, "accept-language": "en"},
+            params={"q": name, "format": "jsonv2", "limit": 5, "namedetails": 1, "addressdetails": 1, "accept-language": "en"},
             headers={"User-Agent": USER_AGENT},
             timeout=30,
         )
@@ -56,7 +67,7 @@ def geocode(name: str) -> Place:
         results = response.json()
         if not results:
             raise ValueError(tr("place_not_found", name=name))
-        found = results[0]
+        found = settlement(results)
         names = found.get("namedetails") or {}
         PLACES[key] = Place(
             written=name,

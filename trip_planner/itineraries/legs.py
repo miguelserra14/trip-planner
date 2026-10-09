@@ -15,6 +15,7 @@ ESTIMATE_EUR_PER_KM = 0.12        # typical price of bus and train in Europe
 MIN_TICKET_EUR = 2.0              # no ticket is cheaper than this
 MAX_PLAUSIBLE_SPEED_KMH = 200     # no public transport is faster than this in a straight line, door to door
 MAX_PLAUSIBLE_EUR_PER_KM = 1.0    # ... or more expensive than this
+UNVERIFIED_PRICE_FACTOR = 2       # a price that is a guess is compared as this many times itself with a real price
 SMALL_ESTIMATE_EUR = 5.0          # estimates up to this (a metro ticket) are accepted even when estimates are not allowed
 
 def estimated_minutes(km: float) -> int:
@@ -70,7 +71,13 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
     preference = lambda o: (o["price_kind"] not in ("operator", "free"), o["price_eur"], -o["leave"])
     suitable = [o for o in real if earliest <= o["leave"] <= latest and o["leave"] < o["arrive"] <= at_terminal]
     if suitable:
-        return min(suitable, key=preference)
+        # Leaving hours before it is needed is not free: every hour spent waiting at the airport, compared with the
+        # connection that leaves last, costs what an extra hour of travel costs this traveller. A price that is a
+        # guess counts UNVERIFIED_PRICE_FACTOR times, so that it only beats a real one when it clearly would.
+        last = max(o["leave"] for o in suitable)
+        waiting = lambda o: current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, (last - o["leave"]) / 60)
+        weighed = lambda o: o["price_eur"] * (1 if o["price_kind"] in ("operator", "free") else UNVERIFIED_PRICE_FACTOR)
+        return min(suitable, key=lambda o: (weighed(o) + waiting(o), *preference(o)))
     if closest:
         # Whatever real connection still reaches the airport: first the one that cuts the least of the time at the
         # airport, then the one that leaves closest to the window (see REQUIREMENTS in ranking.py)
@@ -79,7 +86,7 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         if reachable:
             return min(reachable, key=lambda o: (max(0, o["arrive"] - at_terminal),
                                                  max(earliest - o["leave"], o["leave"] - latest, 0), *preference(o)))
-    if rides is not None or timetable["covered"]:
+    if rides or timetable["covered"]:
         # Real timetables cover this airport and nothing fits: the flight cannot be caught, whatever a model says
         # Show the connections that come closest: the last ones that reach the airport in time but leave outside
         # the window, and the first ones that leave inside it but arrive too late

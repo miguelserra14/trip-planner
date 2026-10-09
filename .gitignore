@@ -4,3 +4,5 @@ __pycache__/
 .ipynb_checkpoints/
 # The recent reports come and go. Only the ones kept on purpose, in reports/saved/, belong in the repository
 /reports/*.md
+# Crash dumps of command-line tools
+*.stackdump

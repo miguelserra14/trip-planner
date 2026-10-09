@@ -107,6 +107,7 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     TIMINGS["4 coordinator model (thinking between the steps and writing the recommendation)"] = max(0.0, total - steps)
     TIMINGS["total"] = total
     recommendation = check_recommendation(message_text(response["messages"][-1]), response.get("recommended") or 0)
+    recommendation = web.only_known_links(recommendation, response.get("report") or "")
     show((response.get("report") or "") + "\n\n" + recommendation)
     PLANNED[-1]["report"] = save_report(response, recommendation).resolve()
     say(tr("progress_done", seconds=round(total), path=PLANNED[-1]["report"]))
@@ -122,7 +123,8 @@ async def ask(question: str, trip: int = -1) -> None:
     current.SETTINGS, current.TRIP = planned["settings"], planned["places"]
     response = await coordinator.ainvoke({"messages": [HumanMessage(content=question)]}, config=planned["config"])
     # The answer is written by a model: it is shown as such, and the report stays the reference
-    markdown = (f"**{web.clean_text(question)}**\n\n{message_text(response['messages'][-1])}\n\n> {tr('followup_note')}")
+    answer = web.only_known_links(message_text(response["messages"][-1]), response.get("report") or "")
+    markdown = (f"**{web.clean_text(question)}**\n\n{answer}\n\n> {tr('followup_note')}")
     show(markdown)
 
 responses: list[dict[str, Any]] = []

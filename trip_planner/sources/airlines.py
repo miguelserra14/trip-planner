@@ -62,12 +62,11 @@ def airline_site(carrier: str, airline: str) -> str:
         site = ""
         for lookup in (lambda: wikidata_site(carrier, airline), lambda: searched_site(airline)):
             try:
-                site = lookup()
+                site = web.secure_url(lookup())
             except Exception:
                 site = ""   # Wikidata often refuses automatic requests, the next lookup takes over
-            if site.lower().startswith("https://") or site.lower().startswith("http://"):
+            if site:
                 break
-            site = ""
         AIRLINE_SITES[carrier] = site or f"https://www.google.com/search?q={quote_plus(airline + ' official site')}"
     return AIRLINE_SITES[carrier]
 

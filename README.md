@@ -2,7 +2,7 @@
 
 A multi-agent trip planner built with LangChain. Given an origin city, a destination city and travel dates, it
 finds the cheapest sensible one-way trip: transport to the airport, flight, and transport at the destination.
-Every figure in the result carries its source and a reliability light (🟢 confirmed, 🟡 typical timetable, 🔴 not verified; A, B and C in the settings and the code).
+Every figure in the result carries its source and a reliability light (🔵 confirmed, 🟢 typical timetable, 🟠 not verified; A, B and C in the settings and the code).
 
 The trip is described in `settings.py` and the program is the `trip_planner/` package, run through `main.py`.
 `trip_planner/__init__.py` explains who does what and how far each part can be trusted.
@@ -53,6 +53,11 @@ env\.venv\Scripts\python main.py --check      check the services
 
 Each language is one file in `trip_planner/languages/`, named after its code (`en.py`, `pt-PT.py`). Whatever file is
 there is a language of the program: it appears in the window and can be used in `settings.py`, with nothing else to change.
+
+In the window, **Languages...** next to the language list adds one (write its name or its code) and removes one.
+Only `en.py` and `pt-PT.py`, written by hand, are in the repository: a language added by a model stays on your
+computer (`.gitignore`), because it is made again with one click.
+From the command line:
 
 ```
 env\.venv\Scripts\python main.py --languages              the languages there are, and what is missing in each
@@ -150,17 +155,22 @@ steps → each step reads `sources/` → `itineraries/` checks and ranks → `re
 
 ```
 pip install -r env/requirements-dev.txt
-pytest                  replays the saved checkpoints: no network, a few seconds
-pytest --live           asks the real services again and saves new checkpoints: about three minutes
-pytest --live -k BRU    the same for one airport
+pytest                          replays the saved checkpoints: no network, a few seconds
+pytest --live                   asks the real services again and saves new checkpoints: about fifteen minutes
+pytest --live tests/departure   the same for one direction
+pytest --live -k BRU            the same for one airport
 ```
 
-`tests/arrival/` follows the leg from the arrival airport to the destination for an airport of every country of
-the European Union (`cases.py`). Each test is one stage of that leg: locating the city, the terminal, the
-airport's stops, the connections after landing, and the leg the itinerary gets. What the services answered at
-each stage is saved in `tests/arrival/checkpoints/`, one file per airport, so a failure says at which stage a
-country breaks and the stages can be run again on today's code without asking anyone. A route that cannot work
-is marked with `known_gap` and its reason (Malta: its buses are in no published timetable).
+The tests follow the ground transport between an airport and a place, in both directions: `tests/arrival/` from
+the arrival airport to the destination, `tests/departure/` from the origin to the departure airport. The places
+are in `tests/cases.py`: a city of every country of the European Union, and a small town of every country, far
+from the airport, where what the country's regional trains and buses publish decides the result.
+
+Each test is one stage: locating the place, the terminal, the airport's stops, the connections, and the leg the
+itinerary gets. What the services answered at each stage is saved in the `checkpoints/` folder of each direction,
+one file per place, so a failure says at which stage a country breaks and the stages can be run again on today's
+code without asking anyone. A route that cannot work is marked with `known_gap` and its reason, such as Malta,
+whose buses are in no published timetable.
 
 ## What can and cannot be reproduced
 

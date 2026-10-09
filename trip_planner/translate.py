@@ -4,6 +4,8 @@
     python main.py --add-language it       write languages/it.py, translated from English by a model
     python main.py --remove-language it    delete languages/it.py
 
+The window does the same with its Languages button (gui.py), through `add`, `remove` and `refresh`.
+
 Adding a language that is already there only fills in the texts it is missing, so it is also how to bring every
 language up to date after new texts were written in en.py: python main.py --add-language all"""
 import asyncio
@@ -11,7 +13,8 @@ import json
 import re
 import string
 
-from trip_planner.texts import FOLDER, load_languages, REFERENCE
+from trip_planner import dates
+from trip_planner.texts import FOLDER, load_languages, read_languages, REFERENCE
 from trip_planner.utils import message_text
 
 BATCH = 45    # texts translated in one request
@@ -36,6 +39,12 @@ NOTES = {
                            "that opens a range, 'from', in all its forms (Italian: da,dal; French: de,du)"),
     "ui_dates_hint": "examples of dates as a traveller would type them in the target language",
 }
+
+class UnknownLanguage(ValueError):
+    """What was asked for is not a language the model knows."""
+
+    def __init__(self, name: str):
+        super().__init__(f"'{name}' is not a language the model knows. Use a name or a code such as it, fr, de, es or pt-BR.")
 
 def problem(key: str, original: str, translated) -> str:
     """Why a translation cannot be used, or an empty text. What the code relies on must have survived."""
@@ -125,8 +134,7 @@ async def fill_language(model, code: str, languages: dict) -> int:
         except ValueError:
             identity = {}
         if not identity.get("known") or not identity.get("language_english_name"):
-            print(f"'{code}' is not a language code the model knows. Use a code such as it, fr, de, es or pt-BR.")
-            return -1
+            raise UnknownLanguage(code)
         texts["language_english_name"] = str(identity["language_english_name"])
         texts["language_name"] = str(identity.get("language_name") or identity["language_english_name"])
     target = texts["language_english_name"]
@@ -158,49 +166,78 @@ async def fill_language(model, code: str, languages: dict) -> int:
         print(f"    left in English: {key} ({reason})")
     return len(wanted)
 
-def add_language(code: str) -> int:
+def find_language(name: str, languages: dict) -> str | None:
+    """The code of a language of the program, from its code or its name in itself or in English: "it", "italiano"
+    or "Italian"."""
+    for code, texts in languages.items():
+        if name.strip().lower() in (code.lower(), texts.get("language_name", "").lower(), texts.get("language_english_name", "").lower()):
+            return code
+    return None
+
+async def add(name: str) -> dict[str, int]:
+    """Add a language, given by code or by name, or fill in what it is missing if it is already there ("all": every
+    language). Returns {code: texts left in English}. Raises ValueError, with the reason, if it cannot be done."""
     languages = load_languages()
-    codes = [other for other in languages if other != REFERENCE] if code == "all" else [code]
-    if code == REFERENCE:
-        print(f"{REFERENCE} is the reference: its texts are written by hand in {FOLDER / (REFERENCE + '.py')}.")
-        return 1
+    name = find_language(name, languages) or name.strip()
+    # Only translating needs a model: listing and removing languages work without the API keys
+    from langchain.chat_models import init_chat_model
+    from trip_planner.agents.subagents import SUBAGENT_MODEL
+    model = init_chat_model(SUBAGENT_MODEL, max_retries=4)
+    if name == "all":
+        codes = [code for code in languages if code != REFERENCE]
+    elif re.fullmatch(CODE, name):
+        language, dash, country = name.partition("-")
+        codes = [language.lower() + dash + country]
+    else:
+        # A name instead of a code, such as "italiano" or "French": the model says which code it is
+        answer = message_text(await model.ainvoke(
+            f"Which language is meant by '{name}'? Answer with its ISO 639-1 code only, such as it, or with ? if it is not a language."))
+        codes = [answer.strip().strip("`'\". ").lower()]
+        if not re.fullmatch(CODE, codes[0]):
+            raise UnknownLanguage(name)
+    if codes == [REFERENCE]:
+        raise ValueError(f"{REFERENCE} is the reference: its texts are written by hand in {FOLDER / (REFERENCE + '.py')}.")
+    return {code: await fill_language(model, code, languages) for code in codes}
 
-    async def work() -> int:
-        # Only translating needs a model: listing and removing languages work without the API keys
-        from langchain.chat_models import init_chat_model
-        from trip_planner.agents.subagents import SUBAGENT_MODEL
-        model = init_chat_model(SUBAGENT_MODEL, max_retries=4)
-        if code != "all" and not re.fullmatch(CODE, code):
-            # A name instead of a code, such as "italiano" or "French": the model says which code it is
-            answer = message_text(await model.ainvoke(
-                f"Which language is meant by '{code}'? Answer with its ISO 639-1 code only, such as it, or with ? if it is not a language."))
-            found = answer.strip().strip("`'\". ").lower()
-            if not re.fullmatch(CODE, found):
-                print(f"'{code}' is not a language the model knows. Use a name or a code such as it, fr, de, es or pt-BR.")
-                return 1
-            codes[0] = found
-        left = [await fill_language(model, each, languages) for each in codes]
-        return 1 if any(count < 0 for count in left) else 0
-    result = asyncio.run(work())
-    if result == 0:
-        print('It is ready to use: choose it in the window, or set language="' + codes[-1] + '" in settings.py.' if code != "all" else "Every language is up to date.")
-    return result
-
-def remove_language(code: str) -> int:
-    # By its code, or by its name in itself or in English: "it", "italiano" or "Italian"
-    for other, texts in load_languages().items():
-        if code.lower() in (other.lower(), texts.get("language_name", "").lower(), texts.get("language_english_name", "").lower()):
-            code = other
-    file = FOLDER / f"{code}.py"
+def remove(name: str) -> str:
+    """Delete the file of a language, given by code or by name. Returns its code. Raises ValueError if it cannot be."""
+    languages = load_languages()
+    code = find_language(name, languages)
     if code == REFERENCE:
-        print(f"{REFERENCE} cannot be removed: it is the language the others fall back to.")
-        return 1
-    if not file.exists():
-        print(f"There is no language '{code}'. The languages are: {', '.join(load_languages())}.")
-        return 1
-    file.unlink()
-    print(f"{code} removed. The languages are now: {', '.join(load_languages())}.")
+        raise ValueError(f"{REFERENCE} cannot be removed: it is the language the others fall back to.")
+    if code is None:
+        raise ValueError(f"There is no language '{name}'. The languages are: {', '.join(languages)}.")
+    (FOLDER / f"{code}.py").unlink()
+    return code
+
+def in_settings(code: str) -> bool:
+    """Whether settings.py asks for a language. If that language is not there, the program does not start."""
     settings = (FOLDER.parent.parent / "settings.py").read_text(encoding="utf-8")
-    if re.search(rf"language\s*=\s*[\"']{re.escape(code)}[\"']", settings):
+    return bool(re.search(rf"language\s*=\s*[\"']{re.escape(code)}[\"']", settings))
+
+def refresh() -> None:
+    """In a program that stays open (the window), take in a language that was just added or removed."""
+    read_languages()
+    dates.read_words()
+
+# ---------------------------------------------------------------- from the command line
+def add_language(name: str) -> int:
+    try:
+        left = asyncio.run(add(name))
+    except ValueError as error:
+        print(error)
+        return 1
+    print("Every language is up to date." if name == "all" else
+          f'It is ready to use: choose it in the window, or set language="{list(left)[-1]}" in settings.py.')
+    return 0
+
+def remove_language(name: str) -> int:
+    try:
+        code = remove(name)
+    except ValueError as error:
+        print(error)
+        return 1
+    print(f"{code} removed. The languages are now: {', '.join(load_languages())}.")
+    if in_settings(code):
         print(f'settings.py still asks for language="{code}": change it there, or the program will not start.')
     return 0

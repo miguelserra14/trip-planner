@@ -14,15 +14,21 @@ def numbered(key: str, first: int) -> dict[str, int]:
     return {plain(name): first + position for texts in TEXTS.values()
             for position, name in enumerate(texts.get(key, "").split(",")) if name.strip()}
 
-MONTHS = numbered("cal_months", 1)
-WEEKDAYS = numbered("date_weekdays", 0)   # Monday is 0
-# Words that carry no date. A word that separates dates in one language ("a" in Portuguese) stays, even if another
-# language lists it here (the Italian "a"): adding a language must not change how the others are read.
-SEPARATORS = set(words("date_range_words")) | set(words("date_and_words"))
-FILLER = rf"\b({'|'.join(re.escape(word) for word in words('date_ignored_words') if word not in SEPARATORS)})\b"
-RANGE_WORD = rf"(?:-|–|\b(?:{any_of('date_range_words')})\b)"    # between the two ends of a range
-RANGE_SPLIT = rf" +(?:{any_of('date_range_words')}) +| +[-–] +|–|-(?=[0-9]{{1,2}} ?[/.] ?[0-9])"
-AND_SPLIT = rf"[,;\n]| +(?:{any_of('date_and_words')}) +"       # between two dates
+def read_words() -> None:
+    """Build the word tables from the languages there are now. Again whenever one is added or removed."""
+    global MONTHS, WEEKDAYS, FILLER, RANGE_WORD, RANGE_SPLIT, AND_SPLIT, RELATIVE
+    MONTHS = numbered("cal_months", 1)
+    WEEKDAYS = numbered("date_weekdays", 0)   # Monday is 0
+    # Words that carry no date. A word that separates dates in one language ("a" in Portuguese) stays, even if another
+    # language lists it here (the Italian "a"): adding a language must not change how the others are read.
+    separators = set(words("date_range_words")) | set(words("date_and_words"))
+    FILLER = rf"\b({'|'.join(re.escape(word) for word in words('date_ignored_words') if word not in separators)})\b"
+    RANGE_WORD = rf"(?:-|–|\b(?:{any_of('date_range_words')})\b)"    # between the two ends of a range
+    RANGE_SPLIT = rf" +(?:{any_of('date_range_words')}) +| +[-–] +|–|-(?=[0-9]{{1,2}} ?[/.] ?[0-9])"
+    AND_SPLIT = rf"[,;\n]| +(?:{any_of('date_and_words')}) +"       # between two dates
+    # "tomorrow" in every language, with the days it is from today. Tidied like what the traveller writes.
+    RELATIVE = {tidy(word): days for key, days in (("date_today", 0), ("date_tomorrow", 1), ("date_day_after", 2)) for word in words(key)}
+
 MAX_RANGE_DAYS = 60   # a longer range is a mistake, not a choice of travel dates
 OVER_MONTH_END_DAYS = 10   # "30-2/1" runs over the end of a month: only believed when it is this short
 
@@ -51,8 +57,7 @@ def tidy(written: str) -> str:
     spaced = re.sub(r"(?<=[a-z])-(?=[a-z])", " ", plain(written))
     return re.sub(r"\s+", " ", re.sub(FILLER, " ", spaced)).strip()
 
-# "tomorrow" in every language, with the days it is from today. Tidied like what the traveller writes.
-RELATIVE = {tidy(word): days for key, days in (("date_today", 0), ("date_tomorrow", 1), ("date_day_after", 2)) for word in words(key)}
+read_words()
 
 def named(word: str, names: dict[str, int]) -> int | None:
     """The month or the weekday a word names: the whole name, or its start when that can only be one of them

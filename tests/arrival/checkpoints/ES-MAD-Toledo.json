@@ -1,5 +1,6 @@
 {
-"case": {"country": "ES", "airport": "MAD", "city": "Toledo, Spain", "known_gap": ""},
+"case": {"country": "ES", "airport": "MAD", "city": "Toledo, Spain", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "ES-MAD-Toledo", "date": "2026-12-18", "arrival_airport": "MAD", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

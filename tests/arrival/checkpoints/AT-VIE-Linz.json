@@ -1,5 +1,6 @@
 {
-"case": {"country": "AT", "airport": "VIE", "city": "Linz", "known_gap": ""},
+"case": {"country": "AT", "airport": "VIE", "city": "Linz", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "AT-VIE-Linz", "date": "2026-12-18", "arrival_airport": "VIE", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

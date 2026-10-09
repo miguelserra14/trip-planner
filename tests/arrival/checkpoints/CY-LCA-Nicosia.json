@@ -1,5 +1,6 @@
 {
-"case": {"country": "CY", "airport": "LCA", "city": "Nicosia", "known_gap": ""},
+"case": {"country": "CY", "airport": "LCA", "city": "Nicosia", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "CY-LCA-Nicosia", "date": "2026-12-18", "arrival_airport": "LCA", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

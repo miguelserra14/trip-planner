@@ -1,5 +1,6 @@
 {
-"case": {"country": "MT", "airport": "MLA", "city": "Valletta", "known_gap": "Malta's buses are not in the published timetables"},
+"case": {"country": "MT", "airport": "MLA", "city": "Valletta", "known_gap": "Malta's buses are not in the published timetables", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "MT-MLA-Valletta", "date": "2026-12-18", "arrival_airport": "MLA", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

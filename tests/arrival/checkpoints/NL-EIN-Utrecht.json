@@ -1,5 +1,6 @@
 {
-"case": {"country": "NL", "airport": "EIN", "city": "Utrecht", "known_gap": ""},
+"case": {"country": "NL", "airport": "EIN", "city": "Utrecht", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "NL-EIN-Utrecht", "date": "2026-12-18", "arrival_airport": "EIN", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

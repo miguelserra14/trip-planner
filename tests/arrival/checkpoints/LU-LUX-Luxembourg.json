@@ -1,5 +1,6 @@
 {
-"case": {"country": "LU", "airport": "LUX", "city": "Luxembourg", "known_gap": ""},
+"case": {"country": "LU", "airport": "LUX", "city": "Luxembourg", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "LU-LUX-Luxembourg", "date": "2026-12-18", "arrival_airport": "LUX", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

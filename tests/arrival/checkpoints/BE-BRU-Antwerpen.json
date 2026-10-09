@@ -1,5 +1,6 @@
 {
-"case": {"country": "BE", "airport": "BRU", "city": "Antwerpen", "known_gap": ""},
+"case": {"country": "BE", "airport": "BRU", "city": "Antwerpen", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "BE-BRU-Antwerpen", "date": "2026-12-18", "arrival_airport": "BRU", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

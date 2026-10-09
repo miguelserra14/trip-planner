@@ -15,7 +15,7 @@ load_dotenv(ROOT / "env" / ".env")       # the API keys, before any client is cr
 
 SCALES = ("near", "wide")   # how far around a city its airports are looked for, see TripSettings
 GRADES = "ABC"   # reliability grades, best first. See "Data integrity" in trip_planner/__init__.py.
-LIGHTS = dict(zip(GRADES, "🟢🟡🔴"))   # how the traveller sees each grade: a traffic light, never the letter
+LIGHTS = dict(zip(GRADES, "🔵🟢🟠"))   # how the traveller sees each grade: a colour (blue, green, orange), never the letter
 
 # The values each number may take: (lowest, highest). Outside them the setting is a mistake, not a preference.
 RANGES = {

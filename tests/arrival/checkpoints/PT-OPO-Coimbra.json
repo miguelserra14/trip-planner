@@ -1,5 +1,6 @@
 {
-"case": {"country": "PT", "airport": "OPO", "city": "Coimbra", "known_gap": ""},
+"case": {"country": "PT", "airport": "OPO", "city": "Coimbra", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "PT-OPO-Coimbra", "date": "2026-12-18", "arrival_airport": "OPO", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

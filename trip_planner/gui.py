@@ -15,22 +15,22 @@ import tkinter as tk
 import traceback
 import webbrowser
 from datetime import date, timedelta
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
-from trip_planner import current, planner, utils
+from trip_planner import current, planner, translate, utils
 from trip_planner.check import check_setup
 from trip_planner.config import GRADES, LANGUAGES, LIGHTS, MAX_DATES, MAX_DAYS_AHEAD, SCALES, TripSettings
 from trip_planner.dates import read_dates
 from trip_planner.places import airport_groups, choose_airports, remove_airports, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS
 from trip_planner.sources import kiwi
-from trip_planner.texts import tr
+from trip_planner.texts import REFERENCE, TEXTS, tr
 
 FONT = "Segoe UI"
 TABLE_FONT = "Consolas"
 # The reliability lights. The text of the window cannot draw the coloured symbols of the reports, so each one is
 # written as a mark that takes one character and then painted as a dot of its colour.
-LIGHT_COLOURS = dict(zip(GRADES, ("#2e9e4f", "#e0a800", "#c0392b")))
+LIGHT_COLOURS = dict(zip(GRADES, ("#1f6fd0", "#2e9e4f", "#e67e22")))
 LIGHT_MARKS = {LIGHTS[grade]: chr(0xE000 + number) for number, grade in enumerate(GRADES)}
 LIGHT_DOT = "●"
 
@@ -58,6 +58,7 @@ class TripWindow:
         self.events: queue.Queue = queue.Queue()
         self.links = 0
         self.advice = ""
+        self.manager: LanguageManager | None = None   # the list of languages, while it is open
         current.SETTINGS = settings
 
         # The planner's thread. One loop for the whole session: the saved trips and the Kiwi connection live in it.
@@ -177,8 +178,11 @@ class TripWindow:
                            foreground=LIGHT_COLOURS[grade], activeforeground=LIGHT_COLOURS[grade], selectcolor="#d6d6d6",
                            font=(FONT, 15), width=2, borderwidth=1, offrelief="flat", cursor="hand2").pack(side="left", padx=(0, 4))
         field(2, 2, tr("ui_reliability"), lights)
-        field(2, 4, tr("ui_language"),
-              ttk.Combobox(form, textvariable=self.language, values=list(LANGUAGES), state="readonly", width=8))
+        languages = ttk.Frame(form)   # the language is chosen in the list, and the list is changed with the button
+        self.language_box = ttk.Combobox(languages, textvariable=self.language, values=list(LANGUAGES), state="readonly", width=8)
+        self.language_box.pack(side="left")
+        ttk.Button(languages, text=tr("ui_languages"), command=lambda: LanguageManager(self)).pack(side="left", padx=(6, 0))
+        field(2, 4, tr("ui_language"), languages)
         field(3, 0, tr("ui_departure_scale"),
               ttk.Combobox(form, textvariable=self.departure_scale, values=list(self.scales), state="readonly", width=30))
         field(3, 2, tr("ui_arrival_scale"),
@@ -314,10 +318,52 @@ class TripWindow:
             return
         trip = planner.PLANNED[-1]
         trip["report"] = keep_report(trip["report"], self.keep.get())
-        if self.keep.get():
-            self.say_status(tr("ui_report_kept", folder=trip["report"].parent))
-        else:
-            self.say_status(tr("ui_report_not_kept", limit=RECENT_REPORTS))
+        note = tr("ui_report_kept", folder=trip["report"].parent) if self.keep.get() else tr("ui_report_not_kept", limit=RECENT_REPORTS)
+        self.say_status(note)
+        self.confirm(note, self.keep_box)
+
+    def confirm(self, text: str, over: tk.Widget, seconds: float = 4) -> None:
+        """A small note that shows up over a widget and goes away by itself: what was just clicked did happen."""
+        if getattr(self, "note", None) is not None and self.note.winfo_exists():
+            self.note.destroy()   # one at a time
+        self.note = note = tk.Toplevel(self.root)
+        note.overrideredirect(True)   # no title bar: it is not a window to deal with
+        note.attributes("-topmost", True)
+        tk.Label(note, text="✓  " + text, bg="#2e7d32", fg="#ffffff", padx=12, pady=7, wraplength=420, justify="left").pack()
+        note.update_idletasks()
+        # Just above the widget, without leaving the window on the right
+        left = min(over.winfo_rootx(), self.root.winfo_rootx() + self.root.winfo_width() - note.winfo_reqwidth() - 14)
+        note.geometry(f"+{max(left, self.root.winfo_rootx())}+{over.winfo_rooty() - note.winfo_reqheight() - 6}")
+        note.after(int(seconds * 1000), note.destroy)
+
+    def add_language(self, name: str) -> None:
+        """Translate the program into one more language. A model does it, so it runs like a search does."""
+        async def work() -> None:
+            try:
+                self.events.put(("language", await translate.add(name)))
+            except translate.UnknownLanguage:
+                raise ValueError(tr("ui_language_unknown", name=name)) from None
+        self.start(work(), tr("ui_language_adding", name=name))
+
+    def remove_language(self, code: str) -> None:
+        language = TEXTS[code].get("language_name", code)
+        translate.remove(code)
+        self.languages_changed()
+        self.say_status(" ".join([tr("ui_language_removed", name=language)]
+                                 + [tr("ui_language_in_settings", code=code)] * translate.in_settings(code)))
+
+    def languages_changed(self) -> None:
+        """A language was added or removed: read them again and show them wherever they are listed."""
+        translate.refresh()
+        self.language_box.configure(values=list(LANGUAGES))
+        if self.language.get() not in LANGUAGES:
+            self.language.set(REFERENCE)
+        # A trip in a language that is gone carries on in English
+        for settings in (self.defaults, self.settings, current.SETTINGS, *(trip["settings"] for trip in planner.PLANNED)):
+            if settings.language not in LANGUAGES:
+                settings.language = REFERENCE
+        if self.manager is not None:
+            self.manager.draw()
 
     def open_report(self) -> None:
         path = planner.PLANNED[-1].get("report") if planner.PLANNED else None
@@ -366,6 +412,11 @@ class TripWindow:
                     self.keep.set(False)   # a new report: it is only kept if the box is ticked again
                     self.asking(True)
                     self.done(tr("ui_done"))
+                elif kind == "language":   # {code: texts that stayed in English}
+                    self.languages_changed()
+                    self.done(" ".join(
+                        tr("ui_language_added", name=TEXTS[code].get("language_name", code))
+                        + (f" ({tr('ui_language_incomplete', count=left)})" if left else "") for code, left in value.items()))
                 elif kind in ("answered", "checked"):
                     self.done("")
                 elif kind == "failed":
@@ -394,6 +445,8 @@ class TripWindow:
             self.progress.stop()
             self.progress.pack_forget()
         self.asking(bool(planner.PLANNED) and not running)
+        if self.manager is not None:
+            self.manager.draw()
 
     def asking(self, possible: bool) -> None:
         """Questions and the report only make sense once a trip was planned."""
@@ -401,7 +454,9 @@ class TripWindow:
             widget.configure(state="normal" if possible else "disabled")
 
     def say_status(self, text: str, error: bool = False) -> None:
-        self.status.configure(text=text, foreground="#b03a2e" if error else "#222222")
+        for label in (self.status, self.manager.message if self.manager is not None else None):
+            if label is not None:
+                label.configure(text=text, foreground="#b03a2e" if error else "#222222")
 
     # ---------------------------------------------------------------- the output
     def clear(self) -> None:
@@ -560,6 +615,80 @@ class DatePicker:
 
     def use(self) -> None:
         self.window.dates.set(", ".join(f"{day:%d/%m/%Y}" for day in sorted(self.chosen)))
+        self.top.destroy()
+
+class LanguageManager:
+    """The languages of the program, to add one or remove one without leaving the window (translate.py does it).
+    What happens is told by the window, here and in its own status line."""
+
+    def __init__(self, window: TripWindow):
+        self.window, self.codes = window, []
+        self.top = tk.Toplevel(window.root)
+        self.top.title(tr("ui_languages").rstrip("."))
+        self.top.transient(window.root)
+        self.top.resizable(False, False)
+        self.top.geometry(f"+{window.root.winfo_rootx() + 380}+{window.root.winfo_rooty() + 90}")
+        self.top.protocol("WM_DELETE_WINDOW", self.close)
+        body = ttk.Frame(self.top, padding=12)
+        body.pack()
+        self.list = tk.Listbox(body, height=7, width=58, font=(TABLE_FONT, 10), activestyle="none", exportselection=False)
+        self.list.grid(row=0, column=0, sticky="we")
+        self.list.bind("<<ListboxSelect>>", lambda event: self.draw_buttons())
+        self.remove_button = ttk.Button(body, text=tr("ui_language_remove"), command=self.remove)
+        self.remove_button.grid(row=0, column=1, sticky="n", padx=(8, 0))
+        self.name = tk.StringVar()
+        entry = ttk.Entry(body, textvariable=self.name)
+        entry.grid(row=1, column=0, sticky="we", pady=(10, 0))
+        entry.bind("<Return>", lambda event: self.add())
+        self.add_button = ttk.Button(body, text=tr("ui_language_add"), command=self.add)
+        self.add_button.grid(row=1, column=1, padx=(8, 0), pady=(10, 0))
+        ttk.Label(body, text=tr("ui_languages_hint"), foreground="#666666", wraplength=520, justify="left").grid(
+            row=2, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        self.message = ttk.Label(body, wraplength=520, justify="left")
+        self.message.grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        window.manager = self
+        self.draw()
+        self.top.grab_set()
+        entry.focus_set()
+
+    def draw(self) -> None:
+        """The languages there are now, each with how complete it is."""
+        chosen = self.selected()
+        self.codes = list(TEXTS)
+        self.list.delete(0, "end")
+        for code in self.codes:
+            gaps = len(translate.missing(code, TEXTS))
+            state = tr("ui_language_reference") if code == REFERENCE else tr("ui_language_incomplete", count=gaps) if gaps else tr("ui_language_complete")
+            self.list.insert("end", f" {code:7} {TEXTS[code].get('language_name', code):18} {state}")
+        if chosen in self.codes:
+            self.list.selection_set(self.codes.index(chosen))
+        self.draw_buttons()
+
+    def draw_buttons(self) -> None:
+        free = not self.window.running   # one thing at a time: not while a search or a translation is running
+        self.add_button.configure(state="normal" if free else "disabled")
+        self.remove_button.configure(state="normal" if free and self.selected() not in (None, REFERENCE) else "disabled")
+
+    def selected(self) -> str | None:
+        rows = self.list.curselection()
+        return self.codes[rows[0]] if rows else None
+
+    def add(self) -> None:
+        name = self.name.get().strip()
+        if name and not self.window.running:
+            self.name.set("")
+            self.window.add_language(name)
+
+    def remove(self) -> None:
+        code = self.selected()
+        if code in (None, REFERENCE) or self.window.running:
+            return
+        language = TEXTS[code].get("language_name", code)
+        if messagebox.askyesno(self.top.title(), tr("ui_language_confirm", name=language), parent=self.top):
+            self.window.remove_language(code)
+
+    def close(self) -> None:
+        self.window.manager = None
         self.top.destroy()
 
 def run(settings: TripSettings) -> int:

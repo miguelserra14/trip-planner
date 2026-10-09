@@ -1,5 +1,6 @@
 {
-"case": {"country": "EE", "airport": "TLL", "city": "Tartu", "known_gap": ""},
+"case": {"country": "EE", "airport": "TLL", "city": "Tartu", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "EE-TLL-Tartu", "date": "2026-12-18", "arrival_airport": "TLL", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

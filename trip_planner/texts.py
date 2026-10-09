@@ -22,9 +22,19 @@ def load_languages() -> dict[str, dict[str, str]]:
     files = sorted(FOLDER.glob("*.py"), key=lambda file: (file.stem != REFERENCE, file.stem))
     return {file.stem: runpy.run_path(str(file))["TEXTS"] for file in files}
 
-TEXTS = load_languages()
+TEXTS: dict[str, dict[str, str]] = {}
 # Language code -> its name in English, which is how the models are told what language to write in
-LANGUAGES = {code: texts.get("language_english_name", code) for code, texts in TEXTS.items()}
+LANGUAGES: dict[str, str] = {}
+
+def read_languages() -> None:
+    """Fill TEXTS and LANGUAGES from the folder. In place: the other modules hold these same two dictionaries, so
+    a language added or removed while the program is open (translate.refresh) reaches all of them."""
+    found = load_languages()
+    for held, new in ((TEXTS, found), (LANGUAGES, {code: texts.get("language_english_name", code) for code, texts in found.items()})):
+        held.clear()
+        held.update(new)
+
+read_languages()
 
 def text_in(language: str, key: str, **values) -> str:
     """A text in one language. In English if that language does not have it, or has it with the wrong {values}."""

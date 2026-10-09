@@ -104,7 +104,7 @@ def coordinator_prompt(request: ModelRequest) -> str:
     - a level 2 heading "{tr('recommendation')}"
     - which option you recommend and why, in 2 to 4 short sentences, referring to the options by their number
     - how reliable that option is: say which of its parts are {LIGHTS['B']} or {LIGHTS['C']} and must be confirmed before booking.
-      The traveller sees reliability as a traffic light, {LIGHTS['A']} {LIGHTS['B']} {LIGHTS['C']}: use those symbols and never the letters A, B or C
+      The traveller sees reliability as a colour, {LIGHTS['A']} {LIGHTS['B']} {LIGHTS['C']}: use those symbols and never the letters A, B or C
     - the main trade-off against the other options, in 1 or 2 sentences
     Do not use any other emojis.
 

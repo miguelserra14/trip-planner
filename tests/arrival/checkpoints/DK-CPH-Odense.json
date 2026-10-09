@@ -1,5 +1,6 @@
 {
-"case": {"country": "DK", "airport": "CPH", "city": "Odense", "known_gap": ""},
+"case": {"country": "DK", "airport": "CPH", "city": "Odense", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "DK-CPH-Odense", "date": "2026-12-18", "arrival_airport": "CPH", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

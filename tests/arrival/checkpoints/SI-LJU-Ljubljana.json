@@ -1,5 +1,6 @@
 {
-"case": {"country": "SI", "airport": "LJU", "city": "Ljubljana", "known_gap": ""},
+"case": {"country": "SI", "airport": "LJU", "city": "Ljubljana", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "SI-LJU-Ljubljana", "date": "2026-12-18", "arrival_airport": "LJU", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

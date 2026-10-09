@@ -1,5 +1,6 @@
 {
-"case": {"country": "PL", "airport": "WAW", "city": "Lodz", "known_gap": ""},
+"case": {"country": "PL", "airport": "WAW", "city": "Lodz", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "PL-WAW-Lodz", "date": "2026-12-18", "arrival_airport": "WAW", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

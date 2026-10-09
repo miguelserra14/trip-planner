@@ -1,5 +1,6 @@
 {
-"case": {"country": "HR", "airport": "ZAG", "city": "Rijeka", "known_gap": ""},
+"case": {"country": "HR", "airport": "ZAG", "city": "Rijeka", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "HR-ZAG-Rijeka", "date": "2026-12-18", "arrival_airport": "ZAG", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

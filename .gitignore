@@ -6,3 +6,8 @@ __pycache__/
 /reports/*.md
 # Crash dumps of command-line tools
 *.stackdump
+# Languages added by a model are made again with one click (Languages... in the window), so only the two
+# written by hand belong in the repository
+/trip_planner/languages/*.py
+!/trip_planner/languages/en.py
+!/trip_planner/languages/pt-PT.py

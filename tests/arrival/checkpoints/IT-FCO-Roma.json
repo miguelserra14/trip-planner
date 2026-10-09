@@ -1,5 +1,6 @@
 {
-"case": {"country": "IT", "airport": "FCO", "city": "Roma", "known_gap": ""},
+"case": {"country": "IT", "airport": "FCO", "city": "Roma", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "IT-FCO-Roma", "date": "2026-12-18", "arrival_airport": "FCO", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

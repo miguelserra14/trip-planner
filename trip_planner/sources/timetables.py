@@ -210,7 +210,7 @@ class Timetables:
         """The stops travellers use at an airport, see choose_airport_stops."""
         return choose_airport_stops(await self.stops_around(airport, terminal), airport, terminal)
 
-    async def plan(self, start: tuple | str, end: tuple, day: str, minutes: int, arrive_by: bool, zones: tuple,
+    async def plan(self, start: tuple | str, end: tuple | str, day: str, minutes: int, arrive_by: bool, zones: tuple,
                    to_airport: bool, terminal_known: bool, modes: str = "", stop_walk: int = 0,
                    city_walk: int = CITY_WALK_SECONDS) -> list[dict[str, Any]]:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
@@ -218,14 +218,16 @@ class Timetables:
         vehicle, empty for everything on the ground.
         One end is the city and the other the airport terminal (to_airport says which way). On the city side the
         time returned is that of the vehicle, on the airport side it includes the walk to or from the terminal.
-        start may be a stop of the airport instead of a point (see airport_stops): stop_walk is then the minutes
-        on foot from the terminal to it."""
-        from_stop = isinstance(start, str)
+        The airport end (start, or end when to_airport) may be a stop of the airport instead of a point (see
+        airport_stops): stop_walk is then the minutes on foot between the terminal and it."""
+        from_stop, to_stop = isinstance(start, str), isinstance(end, str)
+        # The time asked for is at the terminal: at the stop it is the walk later when leaving, earlier when arriving
+        at_stop = minutes + stop_walk if from_stop else minutes - stop_walk if to_stop and arrive_by else minutes
         airport_walk = AIRPORT_WALK_SECONDS if terminal_known else AIRFIELD_WALK_SECONDS
         walks = (city_walk, airport_walk) if to_airport else (airport_walk, city_walk)
         params = {
-            "fromPlace": start if from_stop else f"{start[0]},{start[1]}", "toPlace": f"{end[0]},{end[1]}",
-            "time": local_to_utc(day, minutes + (stop_walk if from_stop else 0), zones[1] if arrive_by else zones[0]),
+            "fromPlace": start if from_stop else f"{start[0]},{start[1]}", "toPlace": end if to_stop else f"{end[0]},{end[1]}",
+            "time": local_to_utc(day, at_stop, zones[1] if arrive_by else zones[0]),
             "arriveBy": "true" if arrive_by else "false", "numItineraries": PAGE_SIZE,
             "maxPreTransitTime": walks[0], "maxPostTransitTime": walks[1],
             "transitModes": modes or GROUND_MODES,
@@ -239,11 +241,13 @@ class Timetables:
             # Vehicle time on the city side. On the airport side the door of the terminal: the walk the planner
             # found when the terminal is known, a fixed time otherwise.
             first = itinerary["startTime"] if (terminal_known or from_stop) and not to_airport else legs[0]["startTime"]
-            last = itinerary["endTime"] if terminal_known and to_airport else legs[-1]["endTime"]
+            last = itinerary["endTime"] if (terminal_known or to_stop) and to_airport else legs[-1]["endTime"]
             start_day, leave = utc_to_local(first, zones[0])
             end_day, arrive = utc_to_local(last, zones[1])
             if from_stop:
                 leave -= stop_walk
+            elif to_stop:
+                arrive += stop_walk
             elif not terminal_known:
                 leave, arrive = (leave, arrive + AIRFIELD_WALK_MINUTES) if to_airport else (leave - AIRFIELD_WALK_MINUTES, arrive)
             if start_day != day or end_day != day or not 0 <= leave < arrive < 24 * 60:
@@ -266,7 +270,7 @@ class Timetables:
             return await self.plan(start, end, day, minutes, arrive_by, zones, to_airport, terminal_known, modes, stop_walk, WIDE_CITY_WALK_SECONDS)
         return connections
 
-    async def is_covered(self, start: tuple | str, end: tuple, day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
+    async def is_covered(self, start: tuple | str, end: tuple | str, day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
         """Whether any timetable covers a route: is there a connection in the middle of the day?"""
         key = (start, end, day)
         if key not in self.probes:   # several flights ask about the same route at once: they share the answer
@@ -280,33 +284,50 @@ class Timetables:
                    for option in unique.values()]
         return {"covered": True, "service_day": service, "grade": grade, "options": options}
 
-    async def to_airport(self, start: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool) -> dict[str, Any]:
-        """Connections from the origin city that reach the terminal in time for a flight."""
+    async def to_airport(self, start: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool,
+                         stops: list[tuple] = ()) -> dict[str, Any]:
+        """Connections from the origin city that reach the terminal in time for a flight.
+        Asked for up to the airport's stops (see airport_stops), and up to the point on the map when they give nothing."""
         service = reference_day(flight["date"])
         at_terminal = to_minutes(flight["departure_time"]) - current.SETTINGS.min_airport_minutes
-        # The connections that arrive last before the limit. If none of them leaves within the times the traveller
-        # accepts, also the ones that leave first after the earliest of those times and the ones that leave in the
-        # last LAST_RIDES_MINUTES before the latest, to be sure nothing suitable exists.
         # Free trains: look for trains first, a paid coach is only worth it when no train fits
         modes = NO_COACH_MODES if current.SETTINGS.free_trains_at_origin else ""
         earliest, latest = to_minutes(current.SETTINGS.earliest_leave), to_minutes(current.SETTINGS.latest_leave)
         fits = lambda c: earliest <= c["leave"] <= latest and c["arrive"] <= at_terminal
-        found = list(await self.plan(start, airport, service, at_terminal, True, zones, True, known, modes))
-        if modes and not any(map(fits, found)):
-            found += await self.plan(start, airport, service, at_terminal, True, zones, True, known)
-        if not any(map(fits, found)):
-            key = (start, airport, service)   # the same question for every flight of that airport and day: asked once
-            if key not in self.first_rides:
-                self.first_rides[key] = asyncio.ensure_future(self.plan(start, airport, service, earliest, False, zones, True, known))
-            if latest < at_terminal:
-                # A flight late in the day: the connections that arrive last all leave after the traveller's latest
-                # time, and the first ones of the day would leave the traveller waiting for hours at the airport
-                if key not in self.last_rides:
-                    self.last_rides[key] = asyncio.ensure_future(
-                        self.plan(start, airport, service, max(earliest, latest - LAST_RIDES_MINUTES), False, zones, True, known))
-                found += await self.last_rides[key]
-        if not found and not await self.is_covered(start, airport, service, zones, True, known):
-            return dict(NOT_COVERED)
+
+        async def reaching(target: tuple | str, walk: int) -> list[dict[str, Any]]:
+            """The connections that reach one point or one stop of the airport."""
+            # The connections that arrive last before the limit. If none of them leaves within the times the traveller
+            # accepts, also the ones that leave first after the earliest of those times and the ones that leave in the
+            # last LAST_RIDES_MINUTES before the latest, to be sure nothing suitable exists.
+            found = list(await self.plan(start, target, service, at_terminal, True, zones, True, known, modes, walk))
+            if modes and not any(map(fits, found)):
+                found += await self.plan(start, target, service, at_terminal, True, zones, True, known, "", walk)
+            if not any(map(fits, found)):
+                key = (start, target, service)   # the same question for every flight of that airport and day: asked once
+                if key not in self.first_rides:
+                    self.first_rides[key] = asyncio.ensure_future(self.plan(start, target, service, earliest, False, zones, True, known, "", walk))
+                found += await self.first_rides[key]
+                if latest < at_terminal:
+                    # A flight late in the day: the connections that arrive last all leave after the traveller's latest
+                    # time, and the first ones of the day would leave the traveller waiting for hours at the airport
+                    if key not in self.last_rides:
+                        self.last_rides[key] = asyncio.ensure_future(
+                            self.plan(start, target, service, max(earliest, latest - LAST_RIDES_MINUTES), False, zones, True, known, "", walk))
+                    found += await self.last_rides[key]
+            return found
+
+        found: list[dict[str, Any]] = []
+        for target, walk in [*stops, (airport, 0)]:
+            found = await reaching(target, walk)
+            if found:
+                break
+        if not found:
+            for target, walk in [*stops[:1], (airport, 0)]:
+                if await self.is_covered(start, target, service, zones, True, known):
+                    break
+            else:
+                return dict(NOT_COVERED)
         # Kept up to the shortest time at the airport ever offered: the ones that arrive after the time asked for
         # only serve the closest alternatives, when nothing respects every requirement
         last_call = to_minutes(flight["departure_time"]) - MIN_AIRPORT_FLOOR
@@ -398,9 +419,8 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
             return_exceptions=True,
         )
         zones = dict(zip(["origin", "destination", *airports], [zone if isinstance(zone, str) else "" for zone in zone_list]))
-        landed = sorted({flight["arrival_airport"] for flight in flights})
-        found_stops = await asyncio.gather(*(timetables.airport_stops(airports[code], terminals.get(code)) for code in landed), return_exceptions=True)
-        stops = {code: found if isinstance(found, list) else [] for code, found in zip(landed, found_stops)}
+        found_stops = await asyncio.gather(*(timetables.airport_stops(airports[code], terminals.get(code)) for code in airports), return_exceptions=True)
+        stops = {code: found if isinstance(found, list) else [] for code, found in zip(airports, found_stops)}
 
         async def leg(lookup, missing_zone: bool) -> dict[str, Any]:
             if missing_zone:
@@ -415,7 +435,7 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
         async def one(flight: dict[str, Any]) -> tuple:
             departure, arrival = flight["departure_airport"], flight["arrival_airport"]
             to_airport, from_airport = await asyncio.gather(
-                leg(lambda: timetables.to_airport(origin, spots[departure], flight, (zones["origin"], zones[departure]), known[departure]),
+                leg(lambda: timetables.to_airport(origin, spots[departure], flight, (zones["origin"], zones[departure]), known[departure], stops[departure]),
                     not zones["origin"] or not zones[departure]),
                 leg(lambda: timetables.from_airport(spots[arrival], destination, flight, (zones[arrival], zones["destination"]), known[arrival], stops[arrival]),
                     not zones["destination"] or not zones[arrival]),

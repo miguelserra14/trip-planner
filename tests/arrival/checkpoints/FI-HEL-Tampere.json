@@ -1,5 +1,6 @@
 {
-"case": {"country": "FI", "airport": "HEL", "city": "Tampere", "known_gap": ""},
+"case": {"country": "FI", "airport": "HEL", "city": "Tampere", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "FI-HEL-Tampere", "date": "2026-12-18", "arrival_airport": "HEL", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

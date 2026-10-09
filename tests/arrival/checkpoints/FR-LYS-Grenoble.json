@@ -1,5 +1,6 @@
 {
-"case": {"country": "FR", "airport": "LYS", "city": "Grenoble", "known_gap": ""},
+"case": {"country": "FR", "airport": "LYS", "city": "Grenoble", "known_gap": "", "remote": false},
+"direction": "arrival",
 "recorded": "2026-10-09",
 "flight": {"id": "FR-LYS-Grenoble", "date": "2026-12-18", "arrival_airport": "LYS", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],

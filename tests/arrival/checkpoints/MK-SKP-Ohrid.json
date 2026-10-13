@@ -1,0 +1,13 @@
+{
+"case": {"country": "MK", "airport": "SKP", "city": "Ohrid", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "arrival",
+"recorded": "2026-10-13",
+"flight": {"id": "MK-SKP-Ohrid", "date": "2026-12-22", "arrival_airport": "SKP", "arrival_time": "11:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "Ohrid", "display_name": "Ohrid, Municipality of Ohrid, 6000, North Macedonia", "addresstype": "city", "importance": 0.5881657199467167, "lat": "41.1170203", "lon": "20.8017715", "namedetails": {"name": "Охрид", "name:en": "Ohrid"}, "address": {"country": "North Macedonia"}}, {"name": "Ohrid", "display_name": "Ohrid, Boichinovtsi, Montana, 3430, Bulgaria", "addresstype": "village", "importance": 0.31074813956852465, "lat": "43.4562586", "lon": "23.3787677", "namedetails": {"name": "Охрид", "name:en": "Ohrid"}, "address": {"country": "Bulgaria"}}],
+"airport": {"code": "SKP", "name": "Skopje International Airport", "city": "Ilinden", "country": "MK", "large": true, "latitude": 41.958087, "longitude": 21.622581, "km": 116},
+"terminal": [41.9608718, 21.626923],
+"stops_around": [],
+"zones": ["Europe/Skopje", "Europe/Skopje"],
+"answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
+}

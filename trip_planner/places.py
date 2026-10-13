@@ -17,7 +17,7 @@ from trip_planner.texts import tr
 from trip_planner.utils import as_duration, plain, say
 
 AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"   # OurAirports, public domain
-AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused
+AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused. Only the airports with_flights are kept
 AIRPORT_TYPES = {"large_airport", "medium_airport"}     # with scheduled service only, see load_airports
 MIN_TRIP_KM = 80                                        # cities closer than this are not a trip by plane
 CITY_AIRPORT_RADIUS_KM = 45                             # "Londres" means every airport this close to London
@@ -47,21 +47,39 @@ PLACES: dict[str, Place] = {}
 SETTLEMENTS = {"city", "town", "village", "municipality", "hamlet", "suburb", "borough"}
 SAME_NAME_IMPORTANCE = 0.15   # a city this close in importance to the region or country of its name is what is meant
 MUNICIPALITY_KM = 30          # the town a municipality is named after is this close to the middle of its territory
+SAME_NAME_KM = 60             # ... and the city a province or a small country is named after, this close to its middle
+TOWNS = SETTLEMENTS - {"municipality"}   # places that are a point on the map, not a territory
 
-def settlement(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """The place a traveller means by a name. The first result may be the province or the country of that name
-    ("Pavia", "Luxembourg"), whose middle is kilometres from any station: then the city of the same name."""
+def settlement(results: list[dict[str, Any]], written: str = "") -> dict[str, Any]:
+    """The place a traveller means by a name, among what was found for it, most important first.
+    - A name without its accents can be found as something else first ("Boras": Bor, in Serbia, before Borås):
+      the town that has exactly the name written, when it is about as important.
+    - The first result may be a territory of that name, whose middle is kilometres from any station: the province
+      ("Pavia", "Oristano"), the country ("Luxembourg") or the municipality ("Bovec": 5 km from the town, on a
+      slope). Then the town of the same name inside it, or the town a municipality is named after ("Voss")."""
     first = results[0]
     close = lambda result: result.get("importance", 0) >= first.get("importance", 0) - SAME_NAME_IMPORTANCE
-    if first.get("addresstype") == "municipality":
-        # A municipality is located in the middle of its territory, which in the mountains is kilometres from the
-        # town it is named after ("Bovec": 5 km, on a slope with no stop). The town itself, when it is also found.
-        inside = lambda result: distance_km(float(first["lat"]), float(first["lon"]), float(result["lat"]), float(result["lon"])) <= MUNICIPALITY_KM
-        return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS - {"municipality"}
-                     and close(result) and inside(result)), first)
-    if first.get("addresstype") in SETTLEMENTS:
+    names = lambda result: {plain(name) for name in (result.get("name"), *(result.get("namedetails") or {}).get("name", "").split(" / "),
+                                                     (result.get("namedetails") or {}).get("name:en")) if name}
+    wanted = plain(written.split(",")[0])
+    # ... unless the first one has that name among others ("Derry/Londonderry" is the Derry meant, not the one in the USA)
+    if wanted and not any(wanted in re.split(r"[^a-z0-9]+", name) or wanted == name for name in names(first)):
+        first = next((result for result in results[1:] if result.get("addresstype") in TOWNS and wanted in names(result) and close(result)), first)
+    if first.get("addresstype") in TOWNS:
         return first
-    return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS and close(result)), first)
+    others = [result for result in results if result is not first]
+    towns = [result for result in others if result.get("addresstype") in TOWNS]
+
+    def within(result: dict[str, Any], km: float) -> bool:
+        try:
+            return distance_km(float(first["lat"]), float(first["lon"]), float(result["lat"]), float(result["lon"])) <= km
+        except KeyError:
+            return False
+    if first.get("addresstype") == "municipality":
+        return next((town for town in towns if within(town, MUNICIPALITY_KM)), first)
+    return next((town for town in towns if within(town, SAME_NAME_KM)
+                 and any(name in other for name in names(first) for other in names(town))),   # "San Marino" and "City of San Marino"
+                next((result for result in others if result.get("addresstype") in SETTLEMENTS and close(result)), first))
 
 def search_places(name: str) -> list[dict[str, Any]]:
     """What OpenStreetMap's Nominatim finds for a name, most important first."""
@@ -78,7 +96,7 @@ def as_place(name: str, results: list[dict[str, Any]]) -> Place:
     """The place meant by a name, among what Nominatim found for it. Raises ValueError if it found nothing."""
     if not results:
         raise ValueError(tr("place_not_found", name=name))
-    found = settlement(results)
+    found = settlement(results, name)
     names = found.get("namedetails") or {}
     return Place(
         written=name,
@@ -98,6 +116,19 @@ def geocode(name: str) -> Place:
 
 AIRPORTS: dict[str, dict[str, Any]] = {}
 
+def with_flights(row: dict[str, str]) -> bool:
+    """Whether a row of the database is an airport the program uses: one of AIRPORT_TYPES with scheduled flights."""
+    return bool(row["iata_code"]) and row["type"] in AIRPORT_TYPES and row["scheduled_service"] == "yes"
+
+def only_with_flights(database: str) -> str:
+    """The database without the rows the program never reads: nine in ten are airfields and heliports."""
+    rows = csv.DictReader(io.StringIO(database, newline=""))
+    kept = io.StringIO(newline="")
+    writer = csv.DictWriter(kept, rows.fieldnames, quoting=csv.QUOTE_NONNUMERIC, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(row for row in rows if with_flights(row))
+    return kept.getvalue()
+
 def load_airports() -> dict[str, dict[str, Any]]:
     """Every airport with scheduled passenger flights, by IATA code."""
     if not AIRPORTS:
@@ -105,10 +136,10 @@ def load_airports() -> dict[str, dict[str, Any]]:
             AIRPORTS_FILE.parent.mkdir(exist_ok=True)
             response = httpx.get(AIRPORTS_URL, headers={"User-Agent": USER_AGENT}, timeout=120, follow_redirects=True)
             response.raise_for_status()
-            AIRPORTS_FILE.write_bytes(response.content)
+            AIRPORTS_FILE.write_text(only_with_flights(response.text), encoding="utf-8", newline="")
         with AIRPORTS_FILE.open(encoding="utf-8", newline="") as file:
             for row in csv.DictReader(file):
-                if row["iata_code"] and row["type"] in AIRPORT_TYPES and row["scheduled_service"] == "yes":
+                if with_flights(row):
                     AIRPORTS[row["iata_code"]] = {
                         "code": row["iata_code"],
                         "ident": row["ident"],

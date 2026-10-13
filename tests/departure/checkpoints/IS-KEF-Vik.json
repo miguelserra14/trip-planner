@@ -1,0 +1,13 @@
+{
+"case": {"country": "IS", "airport": "KEF", "city": "Vik, Iceland", "known_gap": "", "gap_in": "", "remote": true},
+"direction": "departure",
+"recorded": "2026-10-13",
+"flight": {"id": "IS-KEF-Vik", "date": "2026-12-22", "departure_airport": "KEF", "departure_time": "17:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "Vik", "display_name": "Vik, Mýrdalshreppur, Southern Region, 870, Iceland", "addresstype": "village", "importance": 0.41904740004053065, "lat": "63.4188166", "lon": "-19.0054737", "namedetails": {"name": "Vík", "name:en": "Vik"}, "address": {"country": "Iceland"}}],
+"airport": {"code": "KEF", "name": "Keflavik International Airport", "city": "Reykjavík", "country": "IS", "large": true, "latitude": 63.985001, "longitude": -22.6056, "km": 188},
+"terminal": [63.9950195, -22.6235589],
+"stops_around": [{"name": "Kjóavellir", "stopId": "is-straeto_20000111", "lat": 63.99707, "lon": -22.628118999999998, "modes": ["BUS"]}, {"name": "KEF Brottfarir / Departures", "stopId": "is-straeto_20000112", "lat": 63.997173000000004, "lon": -22.624712, "modes": ["BUS"]}, {"name": "KEF Komur / Arrivals", "stopId": "is-straeto_20000110", "lat": 63.998466, "lon": -22.619944000000004, "modes": ["BUS"]}],
+"zones": ["Africa/Abidjan", "Africa/Abidjan"],
+"answer": {"covered": true, "service_day": "2026-10-13", "grade": "B", "options": []}
+}

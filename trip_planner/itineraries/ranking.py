@@ -5,7 +5,7 @@ from typing import Any
 from trip_planner import current
 from concurrent.futures import ThreadPoolExecutor
 
-from trip_planner.itineraries.legs import from_airport_leg, price_with_tickets, to_airport_leg
+from trip_planner.itineraries.legs import country_of, from_airport_leg, price_with_tickets, to_airport_leg
 from trip_planner.sources import airlines
 from trip_planner.sources.timetables import landing_day
 from trip_planner.texts import tr
@@ -64,6 +64,8 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
         raise ValueError(tr("reject_arrival_airport", airport=flight["arrival_airport"]))
     to_leg = to_airport_leg(flight, ground, transfer, closest)
     from_leg = from_airport_leg(flight, ground, route, closest)
+    # Where each leg runs, for the vehicles no operator prices (price_with_tickets)
+    to_leg["country"], from_leg["country"] = country_of(flight["departure_airport"]), country_of(flight["arrival_airport"])
     itinerary = {
         "flight": flight,
         "to": to_leg,

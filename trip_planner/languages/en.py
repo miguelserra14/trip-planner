@@ -168,6 +168,7 @@ TEXTS = {
     "source_model": "a model, from web search",
     "price_operator": "operator's booking system",
     "price_operator_typical": "operator's booking system, for the same weekday of a nearer week: the travel date is not on sale yet",
+    "price_tariff": "operators' booking systems and published tariffs",
     "price_partly": "part read from operators' booking systems, the rest estimated from the distance",
     "price_free": "free for this traveller",
     "price_model": "a model, from web search",

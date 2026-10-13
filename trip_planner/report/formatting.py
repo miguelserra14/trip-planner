@@ -44,6 +44,7 @@ def price_source(kind: str) -> tuple:
     return {
         "operator": (tr("price_operator"), "A"),
         "operator_typical": (tr("price_operator_typical"), "B"),
+        "tariff": (tr("price_tariff"), "B"),
         "partly": (tr("price_partly"), "C"),
         "free": (tr("price_free"), "A"),
         "model": (tr("price_model"), "C"),

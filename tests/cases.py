@@ -2,7 +2,11 @@
 to the destination (tests/arrival) and from the origin to the departure airport (tests/departure).
 
 CITIES is a city of every country of the European Union, and the routes that failed before. REMOTE is a small
-town of every country, far from the airport: what a country's regional trains and buses publish decides it."""
+town of every country, far from the airport: what a country's regional trains and buses publish decides it.
+SECOND_AIRPORTS is the airports cheap flights land at, and NEIGHBOURS the countries around the Union.
+
+A case that cannot find a real connection says why in known_gap. Each reason was checked by asking the timetables
+what they know around the place and around the airport, and what they answer when every limit is relaxed."""
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -69,16 +73,17 @@ REMOTE = [
     Case("IE", "DUB", "Westport, Ireland", remote=True),
     Case("IT", "VCE", "Cortina d'Ampezzo, Italy", remote=True),
     Case("LV", "RIX", "Kuldiga, Latvia", remote=True),
-    Case("LT", "VNO", "Nida, Lithuania", remote=True, known_gap="published, but one coach a day each way: it leaves Vilnius at dawn and Nida in the afternoon"),
+    Case("LT", "VNO", "Nida, Lithuania", remote=True, known_gap="published, but one coach a day each way: it leaves Vilnius at dawn and Nida in the afternoon. "
+                                                                   "The other way is by the Klaipeda ferry, which is not published"),
     Case("LU", "LUX", "Vianden, Luxembourg", remote=True),
     Case("MT", "MLA", "Mellieha, Malta", remote=True, known_gap="Malta's buses are not in the published timetables"),
     Case("NL", "AMS", "Giethoorn, Netherlands", remote=True),
     Case("PL", "KRK", "Zakopane, Poland", remote=True),
     Case("PT", "OPO", "Braganca, Portugal", remote=True),
     Case("RO", "OTP", "Sighisoara, Romania", remote=True),
-    Case("SK", "BTS", "Banska Stiavnica, Slovakia", remote=True, gap_in="departure",
-         known_gap="published, but towards Bratislava the timetables only have the trains of the weekend"),
-    Case("SI", "LJU", "Bovec, Slovenia", remote=True, known_gap="the nearest stop published is 2.5 km from Bovec, and nothing fits the day"),
+    Case("SK", "BTS", "Banska Stiavnica, Slovakia", remote=True,
+         known_gap="published, but thinly: its trains run at the weekend only and the one regional bus line on Fridays"),
+    Case("SI", "LJU", "Bovec, Slovenia", remote=True),   # failed: "Bovec" was located in the middle of its municipality, 5 km from the town
     Case("ES", "SVQ", "Ronda, Spain", remote=True),
     Case("SE", "ARN", "Mora, Sweden", remote=True),
 ]
@@ -91,7 +96,8 @@ SECOND_AIRPORTS = [
     Case("BE", "CRL", "Bruxelles"),
     Case("BE", "LGG", "Liege"),
     Case("BG", "VAR", "Varna"),
-    Case("BG", "BOJ", "Nessebar, Bulgaria"),
+    Case("BG", "BOJ", "Nessebar, Bulgaria",
+         known_gap="the timetables know no stop at Burgas airport or in Nessebar: the Black Sea coast south of Varna is not published"),
     Case("HR", "SPU", "Split"),
     Case("HR", "DBV", "Dubrovnik"),
     Case("HR", "ZAD", "Zadar"),
@@ -114,10 +120,13 @@ SECOND_AIRPORTS = [
     Case("DE", "FMM", "Munchen"),
     Case("DE", "HAM", "Lubeck"),
     Case("GR", "SKG", "Thessaloniki"),
-    Case("GR", "HER", "Rethymno"),
-    Case("GR", "CFU", "Corfu, Greece"),
+    Case("GR", "HER", "Rethymno",
+         known_gap="Crete is not published: its only stop in the timetables is the ferry port of Heraklion"),
+    Case("GR", "CFU", "Corfu, Greece",
+         known_gap="Corfu is not published: its only stop in the timetables is the ferry port"),
     Case("HU", "BUD", "Budapest"),
-    Case("HU", "DEB", "Debrecen"),
+    Case("HU", "DEB", "Debrecen",
+         known_gap="Debrecen's city buses (DKV), the only transport at the airport, are not published: the nearest stop with a timetable is 1.7 km away"),
     Case("IE", "ORK", "Cork"),
     Case("IE", "NOC", "Sligo"),
     Case("IE", "SNN", "Limerick"),
@@ -143,12 +152,15 @@ SECOND_AIRPORTS = [
     Case("PL", "POZ", "Poznan"),
     Case("PT", "LIS", "Setubal"),
     Case("PT", "FAO", "Lagos, Portugal"),
-    Case("PT", "FNC", "Funchal"),
-    Case("PT", "PDL", "Ponta Delgada"),
+    Case("PT", "FNC", "Funchal",
+         known_gap="only Funchal's city buses are published, and they do not reach the airport: the Aerobus and the island's coaches are not"),
+    Case("PT", "PDL", "Ponta Delgada",
+         known_gap="the Azores are not published: the timetables know no stop on the island"),
     Case("RO", "CLJ", "Cluj-Napoca"),
     Case("RO", "TSR", "Timisoara"),
     Case("RO", "IAS", "Iasi"),
-    Case("SK", "KSC", "Presov"),
+    Case("SK", "KSC", "Presov",
+         known_gap="Kosice's city transport, the only link between the airport and the station, is not published"),
     Case("SK", "BTS", "Bratislava"),
     Case("SI", "LJU", "Maribor"),
     Case("ES", "BCN", "Girona"),
@@ -156,7 +168,7 @@ SECOND_AIRPORTS = [
     Case("ES", "AGP", "Granada, Spain"),
     Case("ES", "VLC", "Castellon de la Plana"),
     Case("ES", "BIO", "San Sebastian, Spain"),
-    Case("ES", "PMI", "Alcudia, Mallorca"),
+    Case("ES", "PMI", "Alcudia, Spain"),
     Case("ES", "SCQ", "A Coruna"),
     Case("ES", "TFS", "Santa Cruz de Tenerife"),
     Case("SE", "GOT", "Boras"),
@@ -190,20 +202,28 @@ NEIGHBOURS = [
     Case("NO", "TOS", "Tromso"),
     Case("NO", "BGO", "Flam, Norway", remote=True),
     Case("IS", "KEF", "Reykjavik"),
-    Case("IS", "KEF", "Vik, Iceland", remote=True),
+    Case("IS", "KEF", "Vik, Iceland", remote=True,
+         known_gap="published, but the coach to Vik (route 52) does not run every day"),
     Case("RS", "BEG", "Novi Sad"),
-    Case("AL", "TIA", "Shkoder"),
-    Case("BA", "SJJ", "Mostar"),
-    Case("ME", "TGD", "Kotor"),
-    Case("MK", "SKP", "Ohrid"),
-    Case("XK", "PRN", "Prizren"),
+    Case("AL", "TIA", "Shkoder", remote=True, gap_in="departure",
+         known_gap="Albania's minibuses are not published: the only coaches in the timetables go round by Kosovo, seven hours for 75 km"),
+    Case("BA", "SJJ", "Mostar",
+         known_gap="the coaches and trains between Sarajevo and Mostar are not published: only the city transport of both is"),
+    Case("ME", "TGD", "Kotor",
+         known_gap="Montenegro's coaches are not published: nothing links Podgorica airport and the coast"),
+    Case("MK", "SKP", "Ohrid",
+         known_gap="North Macedonia's coaches are not published, and no stop of Skopje airport is"),
+    Case("XK", "PRN", "Prizren",
+         known_gap="Kosovo is not published: the timetables know no stop at Pristina airport"),
     Case("MD", "RMO", "Chisinau"),
-    Case("TR", "IST", "Bursa"),
+    Case("TR", "IST", "Bursa",
+         known_gap="Turkey is not published: the timetables know no stop at Istanbul airport or in Bursa"),
     Case("TR", "SAW", "Istanbul"),
     Case("AD", "BCN", "Andorra la Vella"),
     Case("LI", "ZRH", "Vaduz"),
-    Case("MC", "NCE", "Monaco"),
-    Case("SM", "BLQ", "San Marino"),
+    Case("MC", "NCE", "Monte Carlo, Monaco"),
+    Case("SM", "BLQ", "San Marino",
+         known_gap="San Marino is not published: the coach from Rimini is in no timetable"),
 ]
 
 CASES = CITIES + REMOTE + SECOND_AIRPORTS + NEIGHBOURS

@@ -4,7 +4,7 @@ as a checkpoint. A stage that fails leaves the checkpoints of the stages before 
 The stages, in the order the program goes through them:
 1. place        the city is located (Nominatim)
 2. terminal     the passenger terminal of the airport is located (OpenStreetMap)
-3. stops        the stops around the airport are listed (Transitous)
+3. stops        the stops around the airport that can be its own are listed (Transitous)
 4. connections  the connections are looked up (Transitous): after landing when the direction is "arrival",
                 in time for the flight when it is "departure\""""
 import asyncio
@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from trip_planner.places import airport_from, as_place, distance_km, search_places
+from trip_planner.places import airport_from, as_place, search_places
 from trip_planner.sources import timetables
 
 STAGES = ("place", "terminal", "stops", "connections")
@@ -68,14 +68,14 @@ async def record_case(case, direction: str, transit: timetables.Timetables) -> d
 
         centre = terminal or (airport["latitude"], airport["longitude"])
         around = await transit.stops_around(airport, terminal)
-        record["stops_around"] = [
-            {key: stop.get(key) for key in ("name", "stopId", "lat", "lon", "modes")} for stop in around
-            if distance_km(centre[0], centre[1], stop["lat"], stop["lon"]) <= timetables.AIRPORT_STOP_KM]
+        # Only the stops that can be the airport's are kept: a big airport has hundreds of others around it
+        record["stops_around"] = [{key: stop.get(key) for key in ("name", "stopId", "lat", "lon", "modes")}
+                                  for stop in timetables.airport_stop_candidates(around, airport, terminal)]
         stops = timetables.choose_airport_stops(record["stops_around"], airport, terminal)
         reached("stops")
 
         spot, city = tuple(centre), (place.latitude, place.longitude)
-        airport_zone, city_zone = await transit.zone(*spot), await transit.zone(*city)
+        airport_zone, city_zone = await transit.zone(*spot, airport["country"]), await transit.zone(*city)
         record["zones"] = [airport_zone, city_zone]
         if direction == "arrival":
             record["answer"] = await transit.from_airport(spot, city, flight, (airport_zone, city_zone), terminal is not None, stops)

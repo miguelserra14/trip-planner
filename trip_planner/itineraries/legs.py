@@ -11,7 +11,7 @@ from trip_planner.utils import to_minutes, to_time
 ROAD_FACTOR = 1.3                 # a real trip is about this much longer than the straight line
 ESTIMATE_SPEED_KMH = 70           # door-to-door speed of public transport, changes included
 ESTIMATE_FIXED_MINUTES = 20       # getting to the station and waiting
-ESTIMATE_EUR_PER_KM = 0.12        # typical price of bus and train in Europe
+ESTIMATE_EUR_PER_KM = 0.12        # price of bus and train where nothing better is known about the country
 MIN_TICKET_EUR = 2.0              # no ticket is cheaper than this
 MAX_PLAUSIBLE_SPEED_KMH = 200     # no public transport is faster than this in a straight line, door to door
 MAX_PLAUSIBLE_EUR_PER_KM = 1.0    # ... or more expensive than this
@@ -21,17 +21,49 @@ SMALL_ESTIMATE_EUR = 5.0          # estimates up to this (a metro ticket) are ac
 def estimated_minutes(km: float) -> int:
     return round(km * ROAD_FACTOR / ESTIMATE_SPEED_KMH * 60 + ESTIMATE_FIXED_MINUTES)
 
-def estimated_price(km: float) -> float:
-    return max(MIN_TICKET_EUR, float(round(km * ROAD_FACTOR * ESTIMATE_EUR_PER_KM)))
+# What a km of train costs differs several times over between countries, so the estimate has a rate per country.
+# Measured where the railway's own prices can be read (fares.py): the median, over a handful of routes, of the
+# price divided by the distance by road. Read on 13 October 2026.
+MEASURED_EUR_PER_KM = {"AT": 0.20, "IT": 0.09, "HU": 0.05, "EE": 0.065, "CZ": 0.047}
+# Everywhere else, deduced from how expensive transport is in the country: Eurostat's price level of transport
+# services (prc_ppp_ind, A010703, 2024, European Union = 100). The curve that fits the five measured countries is
+# FITTED_EUR_PER_KM x (level / 100) squared: where transport costs twice as much, trains cost four times as much.
+TRANSPORT_PRICE_LEVEL = {
+    "AL": 55.7, "AT": 118.2, "BA": 118.4, "BE": 118.1, "BG": 57.2, "CH": 151.7, "CY": 97.3, "CZ": 73.6, "DE": 118.7, "DK": 159.9,
+    "EE": 97.9, "GR": 89.5, "ES": 81.5, "FI": 141.2, "FR": 116.3, "HR": 87.0, "HU": 61.6, "IE": 115.1, "IS": 169.6, "IT": 84.8,
+    "LT": 77.4, "LU": 98.4, "LV": 71.5, "ME": 72.0, "MK": 55.2, "MT": 89.8, "NL": 118.4, "NO": 161.6, "PL": 68.7, "PT": 80.6,
+    "RO": 73.4, "RS": 77.4, "SE": 144.1, "SI": 98.9, "SK": 91.0, "TR": 63.5,
+}
+FITTED_EUR_PER_KM = 0.106
+# Long-distance coaches cost about the same per km everywhere: the median of FlixBus's direct rides in 21 countries
+COACH_EUR_PER_KM = 0.05
 
-def model_price(price_eur: float, known: bool, km: float | None) -> tuple:
+def eur_per_km(country: str, coach: bool = False) -> float:
+    """What a km by road costs on public transport in a country (two-letter code), for the estimates."""
+    if coach:
+        return COACH_EUR_PER_KM
+    if country in MEASURED_EUR_PER_KM:
+        return MEASURED_EUR_PER_KM[country]
+    if country in TRANSPORT_PRICE_LEVEL:
+        return round(FITTED_EUR_PER_KM * (TRANSPORT_PRICE_LEVEL[country] / 100) ** 2, 3)
+    return ESTIMATE_EUR_PER_KM
+
+def country_of(airport: str) -> str:
+    """The country of an airport of the trip, which is where its ground transport runs. Empty when not known."""
+    found = current.TRIP.airport(airport) if current.TRIP else None
+    return (found or {}).get("country", "")
+
+def estimated_price(km: float, country: str = "", coach: bool = False) -> float:
+    return max(MIN_TICKET_EUR, float(round(km * ROAD_FACTOR * eur_per_km(country, coach))))
+
+def model_price(price_eur: float, known: bool, km: float | None, country: str = "") -> tuple:
     """The price a model reported, if it can be believed, otherwise an estimate from the distance.
     Returns (price, "model" or "estimate"). Raises ValueError when estimates are not allowed."""
     if known and price_eur > 0 and (km is None or price_eur <= 3 + km * ROAD_FACTOR * MAX_PLAUSIBLE_EUR_PER_KM):
         return float(price_eur), "model"
     if km is None:
         raise ValueError(tr("reject_price_unknown"))
-    price = estimated_price(km)
+    price = estimated_price(km, country)
     if not current.SETTINGS.allow_estimated_prices and price > SMALL_ESTIMATE_EUR:
         raise ValueError(tr("reject_price_unknown"))
     return price, "estimate"
@@ -58,13 +90,13 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
     if timetable["options"] and current.SETTINGS.free_trains_at_origin:
         # Trains cost this traveller nothing: each connection is priced vehicle by vehicle, as at the destination
         for option in timetable["options"]:
-            price = sum(step_price(step, True) for step in option["steps"])
+            price = sum(step_price(step, True, country_of(airport)) for step in option["steps"])
             if current.SETTINGS.allow_estimated_prices or price <= SMALL_ESTIMATE_EUR:
                 real.append({**option, "kind": "timetable", "price_eur": price, "price_kind": "estimate" if price else "free"})
     elif timetable["options"]:
         # A timetable has no prices: the model's price if it found a believable one, otherwise an estimate
         found = transfer is not None and transfer["reachable"]
-        price, price_kind = model_price(transfer["price_eur"] if found else 0, found and transfer["price_known"], km)
+        price, price_kind = model_price(transfer["price_eur"] if found else 0, found and transfer["price_known"], km, country_of(airport))
         real += [{**option, "kind": "timetable", "price_eur": price, "price_kind": price_kind} for option in timetable["options"]]
     # A connection with a known price (an operator's, or a free train) comes before one whose price is a guess:
     # an unverified price must not beat a real one. Then the cheapest, then the one that leaves last.
@@ -107,7 +139,7 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
     if km is not None and minutes < max(10, km / MAX_PLAUSIBLE_SPEED_KMH * 60):
         notes.append(tr("note_impossible_duration", airport=airport, minutes=minutes, km=km, used=estimated_minutes(km)))
         minutes = estimated_minutes(km)
-    price, price_kind = model_price(transfer["price_eur"], transfer["price_known"], km)
+    price, price_kind = model_price(transfer["price_eur"], transfer["price_known"], km, country_of(airport))
     # Aim for the ideal time at the airport, but never leave outside the allowed window
     leave = max(earliest, min(latest, at_terminal + current.SETTINGS.min_airport_minutes - current.SETTINGS.ideal_airport_minutes - minutes))
     if leave + minutes > at_terminal:
@@ -120,12 +152,12 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         "urls": [transfer["operator_url"]] if transfer.get("operator_url") else [], "notes": notes,
     }
 
-def step_price(step: dict[str, Any], free_trains: bool) -> float:
+def step_price(step: dict[str, Any], free_trains: bool, country: str = "") -> float:
     """The price of one vehicle of a timetable connection. Timetables give no prices: a train is free for the
     travellers who said so, and everything else is estimated from the distance."""
     if step["rail"] and free_trains:
         return 0.0
-    return estimated_price(step["km"])
+    return estimated_price(step["km"], country, bool(step.get("coach")))
 
 def price_with_tickets(leg: dict[str, Any], day: str, free_trains: bool) -> None:
     """Replace the estimated price of a connection read from a timetable with what its operators sell it for
@@ -144,9 +176,12 @@ def price_with_tickets(leg: dict[str, Any], day: str, free_trains: bool) -> None
     if rest and leg["price_kind"] == "model":
         return   # a model found a price for the whole way: part of it from operators does not make a better total
     leg["tickets"] = found
-    leg["price_eur"] = sum(ticket["price_eur"] for ticket in found) + sum(estimated_price(step["km"]) for step in rest)
-    leg["confirmed_eur"] = sum(ticket["price_eur"] for ticket in found if ticket["travel_day"])
-    leg["price_kind"] = "partly" if rest else "operator" if all(ticket["travel_day"] for ticket in found) else "operator_typical"
+    leg["price_eur"] = sum(ticket["price_eur"] for ticket in found) + sum(step_price(step, False, leg.get("country", "")) for step in rest)
+    # Confirmed is what a booking system answered for the travel date. A published tariff is real, but nobody checked
+    # it against that departure: it makes the price typical, like a price read for another day
+    leg["confirmed_eur"] = sum(ticket["price_eur"] for ticket in found if ticket["travel_day"] and not ticket.get("tariff"))
+    leg["price_kind"] = ("partly" if rest else "operator_typical" if not all(ticket["travel_day"] for ticket in found)
+                         else "tariff" if any(ticket.get("tariff") for ticket in found) else "operator")
 
 def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict[str, Any] | None,
                      closest: bool = False) -> dict[str, Any]:
@@ -158,7 +193,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
     timetable = (ground.get(flight["id"]) or {}).get("from_airport") or timetables.NOT_COVERED
 
     if timetable["covered"]:
-        options = [{**o, "kind": "timetable", "price_eur": sum(step_price(step, current.SETTINGS.free_trains_at_destination) for step in o["steps"])} for o in timetable["options"]]
+        options = [{**o, "kind": "timetable", "price_eur": sum(step_price(step, current.SETTINGS.free_trains_at_destination, country_of(airport)) for step in o["steps"])} for o in timetable["options"]]
         suitable = [o for o in options if in_window(o["arrive"])]
         if not suitable and closest and options:
             outside = lambda o: max(current.SETTINGS.earliest_arrival_minutes - o["arrive"], o["arrive"] - current.SETTINGS.latest_arrival_minutes)
@@ -216,7 +251,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
         raise ValueError(unverified + tr("reject_no_connection_after_landing", airport=airport, landing=flight["arrival_time"],
                                          limits=arrival_limits(), day=tr("model_timetable"),
                                          real=", ".join(f"{to_time(t[0])} -> {to_time(t[1])}" for t in sorted(trains, key=lambda t: t[0])[-4:])))
-    price_of = lambda t: 0.0 if current.SETTINGS.free_trains_at_destination else model_price(t[2].get("price_eur") or 0, True, km)[0]
+    price_of = lambda t: 0.0 if current.SETTINGS.free_trains_at_destination else model_price(t[2].get("price_eur") or 0, True, km, country_of(airport))[0]
     leave, arrive, train = min(catchable, key=lambda t: (price_of(t), t[1]))
     train_price = price_of((leave, arrive, train))
     estimated = not current.SETTINGS.free_trains_at_destination and not (train.get("price_eur") or 0) > 0

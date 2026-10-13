@@ -105,7 +105,7 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 | `env/.env.example` | The keys the program needs, without values |
 | `env/.python-version` | The Python version the project was tested with |
 | `env/.env`, `env/.venv/` | Your keys and your environment. Created by you, not in the repository |
-| `resources/airports.csv` | Snapshot of the OurAirports database (8 October 2026). Delete it to download the current one |
+| `resources/airports.csv` | The airports with scheduled flights of the OurAirports database (snapshot of 8 October 2026). Delete it to download the current one |
 | `resources/airfields.json` | Airports left out of the automatic choice because no airline flies from them (Viseu, Cascais...). Worked out once from OurAirports runways and OpenFlights routes. Delete it to work it out again |
 | `resources/terminals.json`, `resources/timezones.json` | Caches of terminal coordinates and time zones, filled as trips are planned |
 | `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted |
@@ -201,8 +201,10 @@ The program depends on these services. None of them is under the project's contr
 | Google Flights, through the `fast-flights` library | Flights when Kiwi does not answer. Not an official service: it reads the page a browser gets, so it can stop working or be refused without notice | none |
 | Transitous | Published timetables of trains, coaches and local transport | none |
 | FlixBus, Ryanair | Prices confirmed for the travel date (unofficial endpoints, they can change without notice) | none |
-| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/fares.py` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance | none |
-| European Central Bank | Exchange rates, for prices in forints | none |
+| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/fares.py` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance, at a rate per country (`itineraries/legs.py`) | none |
+| Eurostat | Price level of transport services per country, copied into the code: the rate per km of the countries where no railway price can be read | none |
+| European Central Bank | Exchange rates, for prices in forints and crowns | none |
+| PID (Prague), BKK (Budapest), STIB and De Lijn (Belgium), TEC (Charleroi airport bus), Carris and Metro (Lisbon) | Published tariffs of city networks, copied into `sources/fares.py` with the page and the day each was read. A tariff is no longer used a year after it was read | none |
 | OpenStreetMap (Nominatim, Overpass), OurAirports, Wikidata | Cities, terminals, airports, airline sites | none |
 | OSRM (public server) | Hours by road from a city to its airports, so that one across a sea is left out (`max_road_hours`). Without it the airports are chosen by the straight line alone | none |
 

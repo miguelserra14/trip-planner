@@ -9,9 +9,11 @@ by code in two kinds of sources, and what a model says is only used where neithe
    usually published only a few weeks ahead, so a far travel date is looked up on the same weekday of a nearer
    week (grade B, "typical timetable")."""
 import asyncio
+import importlib.resources
 import json
 import math
 import random
+import re
 import time
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
@@ -33,8 +35,11 @@ TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ",
 TIMETABLE_CONCURRENCY = 2
 TIMETABLE_SPACING_SECONDS = 0.5  # leave this long between two requests
 PAGE_SIZE = 8                    # connections asked for per request
-GROUND_MODES = "RAIL,SUBURBAN,SUBWAY,TRAM,BUS,COACH,FERRY"   # everything but planes: the planner also flies, and those answers are no use here
-NO_COACH_MODES = "RAIL,SUBURBAN,SUBWAY,TRAM,BUS,FERRY"       # ... and but long-distance coaches
+# People movers, funiculars and cable cars count: the link between a terminal and its station is often one of them
+# (Bologna, Pisa), and so is the last stretch to a mountain village.
+LIFT_MODES = "FUNICULAR,AERIAL_LIFT,OTHER"
+GROUND_MODES = "RAIL,SUBURBAN,SUBWAY,TRAM,BUS,COACH,FERRY," + LIFT_MODES   # everything but planes: the planner also flies, and those answers are no use here
+NO_COACH_MODES = "RAIL,SUBURBAN,SUBWAY,TRAM,BUS,FERRY," + LIFT_MODES       # ... and but long-distance coaches
 ROAD_MODES = "COACH,BUS,TRAM,SUBWAY,FERRY"                   # ... and but trains
 CITY_WALK_SECONDS = 2400         # walking allowed between the city centre and a stop. It is not counted: the traveller is somewhere in the city
 WIDE_CITY_WALK_SECONDS = 5400    # ... tried when nothing is found: where the timetables lack the city's own transport (Athens), the station is further than that on foot
@@ -66,8 +71,9 @@ def landing_day(flight: dict[str, Any]) -> str:
     return flight.get("arrival_date") or flight["date"]
 
 def reference_day(day: str) -> str:
-    """The same weekday as a travel date, in the first week that timetables are sure to be published for."""
-    target, soon = date.fromisoformat(day), date.today() + timedelta(days=2)
+    """The same weekday as a travel date, in the week that starts today: the days every operator has published.
+    Some publish no further than six days ahead (Zadar, Thessaloniki), so a day a week from now finds them empty."""
+    target, soon = date.fromisoformat(day), date.today()
     soon += timedelta(days=(target.weekday() - soon.weekday()) % 7)
     return min(soon, target).isoformat() if target >= date.today() else day
 
@@ -144,18 +150,26 @@ def find_terminals(airports: list[dict[str, Any]]) -> dict[str, Any]:
         TERMINALS_FILE.write_text(json.dumps(TERMINALS), encoding="utf-8")
     return {airport["code"]: TERMINALS.get(airport["code"]) for airport in airports}
 
+def airport_stop_candidates(stops: list[dict[str, Any]], airport: dict[str, Any], terminal: list[float] | None) -> list[dict[str, Any]]:
+    """The stops around an airport that can be the airport's own: next to its terminal, or named after it."""
+    centre = terminal or (airport["latitude"], airport["longitude"])
+    km = lambda stop: distance_km(centre[0], centre[1], stop["lat"], stop["lon"])
+    named = lambda stop: any(word in plain(stop.get("name") or "") for word in AIRPORT_WORDS)
+    return [stop for stop in stops if set(stop.get("modes") or []) - {"AIRPLANE"}
+            and (km(stop) <= TERMINAL_STOP_KM and terminal or km(stop) <= AIRPORT_STOP_KM and named(stop))]
+
 def choose_airport_stops(stops: list[dict[str, Any]], airport: dict[str, Any], terminal: list[float] | None) -> list[tuple]:
     """The stops travellers use at an airport, among the stops around it, as (stop id, minutes on foot from the
     terminal): the nearest with trains, then with buses, then with coaches. Empty when none is the airport's."""
     centre = terminal or (airport["latitude"], airport["longitude"])
-    ground = [stop for stop in stops if set(stop.get("modes") or []) - {"AIRPLANE"}]
+    ground = airport_stop_candidates(stops, airport, terminal)
     km = lambda stop: distance_km(centre[0], centre[1], stop["lat"], stop["lon"])
     named = lambda stop: any(word in plain(stop.get("name") or "") for word in AIRPORT_WORDS)
     chosen = [stop for stop in ground if km(stop) <= TERMINAL_STOP_KM] if terminal else []
     by_name = not chosen   # no terminal, or none of the stops is next to it: the ones named after the airport
     if by_name:
         chosen = [stop for stop in ground if km(stop) <= AIRPORT_STOP_KM and named(stop)]
-    kinds = (lambda modes: any(is_rail(mode) for mode in modes), lambda modes: bool(modes & {"BUS", "TRAM", "SUBWAY"}),
+    kinds = (lambda modes: any(is_rail(mode) for mode in modes), lambda modes: bool(modes & {"BUS", "TRAM", "SUBWAY", *LIFT_MODES.split(",")}),
              lambda modes: "COACH" in modes)
     best: list[dict[str, Any]] = []
     for kind in kinds:
@@ -164,6 +178,23 @@ def choose_airport_stops(stops: list[dict[str, Any]], airport: dict[str, Any], t
             best.append(min(of_kind, key=km))
     walk = lambda stop: AIRFIELD_WALK_MINUTES if by_name else max(MIN_STOP_WALK_MINUTES, round(km(stop) * 1.3 / WALK_KMH * 60))
     return [(stop["stopId"], walk(stop)) for stop in best[:MAX_AIRPORT_STOPS]]
+
+def zone_of_country(country: str, latitude: float, longitude: float) -> str:
+    """The time zone of a point from its country alone: of the zones of that country, the one whose city is the
+    nearest (Portugal has three). From the list that comes with the time zone database. Empty when not known."""
+    try:
+        table = importlib.resources.files("tzdata.zoneinfo").joinpath("zone.tab").read_text(encoding="utf-8")
+    except Exception:
+        return ""
+    zones = []
+    for line in table.splitlines():
+        code, where, name = (line.split("\t") + ["", ""])[:3]
+        place = re.fullmatch(r"([+-])(\d\d)(\d\d)(?:\d\d)?([+-])(\d\d\d)(\d\d)(?:\d\d)?", where)   # degrees and minutes
+        if code == country and place:
+            north = (int(place[2]) + int(place[3]) / 60) * (-1 if place[1] == "-" else 1)
+            east = (int(place[5]) + int(place[6]) / 60) * (-1 if place[4] == "-" else 1)
+            zones.append((distance_km(latitude, longitude, north, east), name))
+    return min(zones)[1] if zones else ""
 
 NOT_COVERED = {"covered": False, "service_day": None, "grade": "C", "options": []}
 
@@ -204,12 +235,13 @@ class Timetables:
             await asyncio.sleep(1.5 * (attempt + 1) + random.random())
         response.raise_for_status()
 
-    async def zone(self, latitude: float, longitude: float) -> str:
-        """The time zone of a place, such as 'Europe/Lisbon'."""
+    async def zone(self, latitude: float, longitude: float, country: str = "") -> str:
+        """The time zone of a place, such as 'Europe/Lisbon'. country is its two-letter code, when it is known:
+        the planner's map has nothing around some airfields (Paphos), and then the country says the zone."""
         key = f"{latitude:.2f},{longitude:.2f}"
         if key not in TIMEZONES:
             found = await self.get("reverse-geocode", {"place": f"{latitude},{longitude}"})
-            zone = next((place["tz"] for place in found if place.get("tz")), "")
+            zone = next((place["tz"] for place in found if place.get("tz")), "") or zone_of_country(country, latitude, longitude)
             if not zone:
                 return ""
             TIMEZONES[key] = zone
@@ -443,7 +475,7 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
         spots = {code: tuple(terminals[code]) if known[code] else (airport["latitude"], airport["longitude"])
                  for code, airport in airports.items()}
         zone_list = await asyncio.gather(
-            timetables.zone(*origin), timetables.zone(*destination), *(timetables.zone(*spots[code]) for code in airports),
+            timetables.zone(*origin), timetables.zone(*destination), *(timetables.zone(*spots[code], airport["country"]) for code, airport in airports.items()),
             return_exceptions=True,
         )
         zones = dict(zip(["origin", "destination", *airports], [zone if isinstance(zone, str) else "" for zone in zone_list]))

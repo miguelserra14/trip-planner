@@ -6,7 +6,7 @@
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Nesebar", "display_name": "Nesebar, Burgas, Bulgaria", "addresstype": "town", "importance": 0.5523490609405084, "lat": "42.6607865", "lon": "27.7167464", "namedetails": {"name": "Несебър", "name:en": "Nesebar"}, "address": {"country": "Bulgaria"}}],
 "airport": {"code": "BOJ", "name": "Burgas Airport", "city": "Burgas", "country": "BG", "large": true, "latitude": 42.569917, "longitude": 27.515173, "km": 19},
-"terminal": null,
+"terminal": [42.5655391, 27.5164071],
 "stops_around": [],
 "zones": ["Europe/Sofia", "Europe/Sofia"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}

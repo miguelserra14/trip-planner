@@ -1,0 +1,13 @@
+{
+"case": {"country": "PT", "airport": "FNC", "city": "Funchal", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "departure",
+"recorded": "2026-10-13",
+"flight": {"id": "PT-FNC-Funchal", "date": "2026-12-22", "departure_airport": "FNC", "departure_time": "17:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "Funchal", "display_name": "Funchal, Madeira, Portugal", "addresstype": "city", "importance": 0.5937604003580179, "lat": "32.6496497", "lon": "-16.9086783", "namedetails": {"name": "Funchal"}, "address": {"country": "Portugal"}}],
+"airport": {"code": "FNC", "name": "Cristiano Ronaldo International Airport", "city": "Funchal", "country": "PT", "large": true, "latitude": 32.697812, "longitude": -16.774613, "km": 14},
+"terminal": [32.6936362, -16.7753806],
+"stops_around": [],
+"zones": ["Atlantic/Madeira", "Atlantic/Madeira"],
+"answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
+}

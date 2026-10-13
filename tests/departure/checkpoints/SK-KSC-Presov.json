@@ -1,0 +1,13 @@
+{
+"case": {"country": "SK", "airport": "KSC", "city": "Presov", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "departure",
+"recorded": "2026-10-13",
+"flight": {"id": "SK-KSC-Presov", "date": "2026-12-22", "departure_airport": "KSC", "departure_time": "17:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "Prešov", "display_name": "Prešov, District of Prešov, Region of Prešov, Slovakia", "addresstype": "city", "importance": 0.6138908412813392, "lat": "49.0000074", "lon": "21.2392122", "namedetails": {"name": "Prešov", "name:en": "Prešov"}, "address": {"country": "Slovakia"}}, {"name": "Prešov", "display_name": "Prešov, Prešov 4, Prešov, District of Prešov, Region of Prešov, 080 01, Slovakia", "addresstype": "city", "importance": 0.6138908412813392, "lat": "49.0000074", "lon": "21.2392122", "namedetails": {"name": "Prešov", "name:en": "Prešov"}, "address": {"country": "Slovakia"}}, {"name": "Region of Prešov", "display_name": "Region of Prešov, Slovakia", "addresstype": "state", "importance": 0.6460883659290907, "lat": "49.1117685", "lon": "21.1875978", "namedetails": {"name": "Prešovský kraj", "name:en": "Region of Prešov"}, "address": {"country": "Slovakia"}}],
+"airport": {"code": "KSC", "name": "Košice International Airport", "city": "Košice", "country": "SK", "large": false, "latitude": 48.663101, "longitude": 21.2411, "km": 37},
+"terminal": [48.6729115, 21.2373843],
+"stops_around": [],
+"zones": ["Europe/Bratislava", "Europe/Bratislava"],
+"answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
+}

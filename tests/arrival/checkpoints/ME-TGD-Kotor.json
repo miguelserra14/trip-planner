@@ -1,0 +1,13 @@
+{
+"case": {"country": "ME", "airport": "TGD", "city": "Kotor", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "arrival",
+"recorded": "2026-10-13",
+"flight": {"id": "ME-TGD-Kotor", "date": "2026-12-22", "arrival_airport": "TGD", "arrival_time": "11:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "Kotor", "display_name": "Kotor, Kotor Municipality, 85339, Montenegro", "addresstype": "town", "importance": 0.5858431469128833, "lat": "42.4249205", "lon": "18.7713332", "namedetails": {"name": "Kotor"}, "address": {"country": "Montenegro"}}, {"name": "Općina Kotoriba", "display_name": "Općina Kotoriba, Međimurje County, 40329, Croatia", "addresstype": "village", "importance": 0.457189794829536, "lat": "46.3538428", "lon": "16.8127706", "namedetails": {"name": "Općina Kotoriba"}, "address": {"country": "Croatia"}}, {"name": "Kotor'", "display_name": "Kotor', Думиничский муниципальный округ, Kaluga Oblast, Central Federal District, Russia", "addresstype": "village", "importance": 0.3343910964012564, "lat": "54.0464400", "lon": "34.9328500", "namedetails": {"name": "Которь", "name:en": "Kotor'"}, "address": {"country": "Russia"}}],
+"airport": {"code": "TGD", "name": "Podgorica Airport / Podgorica Golubovci Airbase", "city": "Podgorica", "country": "ME", "large": true, "latitude": 42.359402, "longitude": 19.2519, "km": 40},
+"terminal": [42.3678602, 19.2467056],
+"stops_around": [{"name": "Aerodrom", "stopId": "me-zpcg_7", "lat": 42.365307, "lon": 19.234533, "modes": ["REGIONAL_RAIL"]}, {"name": "Podgorica Airport Bus Stop", "stopId": "al-ShowMeBus_station-406", "lat": 42.35920699999999, "lon": 19.249928, "modes": ["COACH"]}],
+"zones": ["Europe/Podgorica", "Europe/Podgorica"],
+"answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
+}

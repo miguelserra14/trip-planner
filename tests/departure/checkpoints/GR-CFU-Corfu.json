@@ -7,7 +7,7 @@
 "place_results": [{"name": "Corfu", "display_name": "Corfu, Corfu Regional Unit, Ioanian Islands, Peloponnese, Western Greece and the Ionian, Greece", "addresstype": "island", "importance": 0.6290507446596773, "lat": "39.5913370", "lon": "19.8596189", "namedetails": {"name": "Κέρκυρα", "name:en": "Corfu"}, "address": {"country": "Greece"}}, {"name": "Corfu", "display_name": "Corfu, Municipality of Central Corfu and Diapontia Islands, Corfu Regional Unit, Ioanian Islands, Peloponnese, Western Greece and the Ionian, 491 00, Greece", "addresstype": "city", "importance": 0.5518346225045071, "lat": "39.6217347", "lon": "19.9180908", "namedetails": {"name": "Κέρκυρα", "name:en": "Corfu"}, "address": {"country": "Greece"}}],
 "airport": {"code": "CFU", "name": "Corfu Ioannis Kapodistrias International Airport", "city": "Kerkyra (Corfu)", "country": "GR", "large": true, "latitude": 39.60145, "longitude": 19.912179, "km": 2},
 "terminal": [39.6067236, 19.9147283],
-"stops_around": [{"name": "Κέρκυρα", "stopId": "gr-Hellenic-Train_7350006", "lat": 39.631710000000005, "lon": 19.901578999999998, "modes": ["FERRY"]}],
+"stops_around": [],
 "zones": ["Europe/Athens", "Europe/Athens"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
 }

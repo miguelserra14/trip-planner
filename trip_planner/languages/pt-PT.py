@@ -168,6 +168,7 @@ TEXTS = {
     "source_model": "um modelo, em pesquisa web",
     "price_operator": "sistema de reservas do operador",
     "price_operator_typical": 'sistema de reservas do operador, para o mesmo dia da semana de uma semana mais próxima: o dia da viagem ainda não está à venda',
+    "price_tariff": 'sistemas de reservas e tarifas publicadas pelos operadores',
     "price_partly": 'parte lida nos sistemas de reservas dos operadores, o resto estimado pela distância',
     "price_free": "gratuito para este viajante",
     "price_model": "um modelo, em pesquisa web",

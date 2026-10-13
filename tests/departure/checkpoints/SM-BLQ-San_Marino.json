@@ -1,0 +1,13 @@
+{
+"case": {"country": "SM", "airport": "BLQ", "city": "San Marino", "known_gap": "San Marino is not published: the coach from Rimini is in no timetable", "gap_in": "", "remote": false},
+"direction": "departure",
+"recorded": "2026-10-13",
+"flight": {"id": "SM-BLQ-San_Marino", "date": "2026-12-22", "departure_airport": "BLQ", "departure_time": "17:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "San Marino", "display_name": "San Marino", "addresstype": "country", "importance": 0.7142320757141661, "lat": "43.9458623", "lon": "12.4583060", "namedetails": {"name": "San Marino", "name:en": "San Marino"}, "address": {"country": "San Marino"}}, {"name": "City of San Marino", "display_name": "City of San Marino, 47890, San Marino", "addresstype": "town", "importance": 0.5620672030167349, "lat": "43.9363996", "lon": "12.4466991", "namedetails": {"name": "Città di San Marino", "name:en": "City of San Marino"}, "address": {"country": "San Marino"}}],
+"airport": {"code": "BLQ", "name": "Bologna Guglielmo Marconi Airport", "city": "Bologna", "country": "IT", "large": true, "latitude": 44.5354, "longitude": 11.2887, "km": 114},
+"terminal": [44.5288763, 11.2917],
+"stops_around": [{"name": "Bologna Aeroporto", "stopId": "it-Emilia-Romagna-TPER-BLQ-Airport_BLQ", "lat": 44.528760000000005, "lon": 11.2944, "modes": ["OTHER"]}],
+"zones": ["Europe/Rome", "Europe/San_Marino"],
+"answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
+}

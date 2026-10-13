@@ -1,0 +1,479 @@
+[
+ {
+  "country": "AT",
+  "kind": "rail",
+  "operator": "ÖBB",
+  "route": "Wien Hbf - Linz/Donau Hbf",
+  "km": 155,
+  "price": 32.5,
+  "per_km": 0.161
+ },
+ {
+  "country": "AT",
+  "kind": "rail",
+  "operator": "ÖBB",
+  "route": "Wien Hbf - Graz Hbf",
+  "km": 143,
+  "price": 14.9,
+  "per_km": 0.08
+ },
+ {
+  "country": "AT",
+  "kind": "rail",
+  "operator": "ÖBB",
+  "route": "Salzburg Hbf - Innsbruck Hbf",
+  "km": 138,
+  "price": 19.9,
+  "per_km": 0.111
+ },
+ {
+  "country": "AT",
+  "kind": "rail",
+  "operator": "ÖBB",
+  "route": "Linz/Donau Hbf - Wels Hbf",
+  "km": 24,
+  "price": 7.6,
+  "per_km": 0.243
+ },
+ {
+  "country": "AT",
+  "kind": "rail",
+  "operator": "ÖBB",
+  "route": "Wien Hbf - St.Pölten Hbf",
+  "km": 56,
+  "price": 17.5,
+  "per_km": 0.241
+ },
+ {
+  "country": "AT",
+  "kind": "rail",
+  "operator": "ÖBB",
+  "route": "Graz Hbf - Leoben Hbf",
+  "km": 43,
+  "price": 19.4,
+  "per_km": 0.349
+ },
+ {
+  "country": "IT",
+  "kind": "rail fast",
+  "operator": "Trenitalia",
+  "route": "Roma Termini - Napoli Centrale",
+  "km": 188,
+  "price": 18.9,
+  "per_km": 0.077
+ },
+ {
+  "country": "IT",
+  "kind": "rail fast",
+  "operator": "Trenitalia",
+  "route": "Milano Centrale - Bologna Centrale",
+  "km": 200,
+  "price": 36.9,
+  "per_km": 0.142
+ },
+ {
+  "country": "IT",
+  "kind": "rail regional",
+  "operator": "Trenitalia",
+  "route": "Milano Centrale - Pavia",
+  "km": 33,
+  "price": 4.6,
+  "per_km": 0.106
+ },
+ {
+  "country": "IT",
+  "kind": "rail regional",
+  "operator": "Trenitalia",
+  "route": "Milano Centrale - Bergamo",
+  "km": 43,
+  "price": 6.3,
+  "per_km": 0.112
+ },
+ {
+  "country": "IT",
+  "kind": "rail regional",
+  "operator": "Trenitalia",
+  "route": "Bologna Centrale - Firenze S. M. Novella",
+  "km": 82,
+  "price": 10.0,
+  "per_km": 0.094
+ },
+ {
+  "country": "IT",
+  "kind": "rail regional",
+  "operator": "Trenitalia",
+  "route": "Bari Centrale - Lecce",
+  "km": 139,
+  "price": 13.2,
+  "per_km": 0.073
+ },
+ {
+  "country": "IT",
+  "kind": "rail regional",
+  "operator": "Trenitalia",
+  "route": "Milano Centrale - Verona Porta Nuova",
+  "km": 139,
+  "price": 12.75,
+  "per_km": 0.071
+ },
+ {
+  "country": "IT",
+  "kind": "rail regional",
+  "operator": "Trenitalia",
+  "route": "Roma Termini - Napoli Centrale",
+  "km": 188,
+  "price": 14.05,
+  "per_km": 0.057
+ },
+ {
+  "country": "HU",
+  "kind": "rail",
+  "operator": "MÁV",
+  "route": "Budapest-Nyugati - Szeged",
+  "km": 164,
+  "price": 10.25,
+  "per_km": 0.048
+ },
+ {
+  "country": "HU",
+  "kind": "rail",
+  "operator": "MÁV",
+  "route": "Budapest-Nyugati - Debrecen",
+  "km": 193,
+  "price": 12.63,
+  "per_km": 0.05
+ },
+ {
+  "country": "HU",
+  "kind": "rail",
+  "operator": "MÁV",
+  "route": "Budapest-Keleti - Győr",
+  "km": 111,
+  "price": 8.7,
+  "per_km": 0.061
+ },
+ {
+  "country": "HU",
+  "kind": "rail",
+  "operator": "MÁV",
+  "route": "Budapest-Keleti - Miskolc-Tiszai",
+  "km": 145,
+  "price": 11.14,
+  "per_km": 0.059
+ },
+ {
+  "country": "HU",
+  "kind": "rail",
+  "operator": "MÁV",
+  "route": "Budapest-Keleti - Pécs",
+  "km": 172,
+  "price": 12.63,
+  "per_km": 0.056
+ },
+ {
+  "country": "HU",
+  "kind": "rail",
+  "operator": "MÁV",
+  "route": "Budapest-Nyugati - Vác",
+  "km": 31,
+  "price": 1.78,
+  "per_km": 0.045
+ },
+ {
+  "country": "EE",
+  "kind": "rail",
+  "operator": "Elron",
+  "route": "Tallinn - Tartu",
+  "km": 164,
+  "price": 16.0,
+  "per_km": 0.075
+ },
+ {
+  "country": "EE",
+  "kind": "rail",
+  "operator": "Elron",
+  "route": "Tallinn - Narva",
+  "km": 196,
+  "price": 13.9,
+  "per_km": 0.055
+ },
+ {
+  "country": "EE",
+  "kind": "rail",
+  "operator": "Elron",
+  "route": "Tallinn - Viljandi",
+  "km": 130,
+  "price": 10.9,
+  "per_km": 0.065
+ },
+ {
+  "country": "EE",
+  "kind": "rail",
+  "operator": "Elron",
+  "route": "Tallinn - Rakvere",
+  "km": 93,
+  "price": 8.0,
+  "per_km": 0.066
+ },
+ {
+  "country": "CZ",
+  "kind": "rail",
+  "operator": "RegioJet",
+  "route": "Prague - Brno",
+  "km": 186,
+  "price": 11.15,
+  "per_km": 0.046
+ },
+ {
+  "country": "CZ",
+  "kind": "coach",
+  "operator": "RegioJet",
+  "route": "Prague - Brno",
+  "km": 186,
+  "price": 13.9,
+  "per_km": 0.058
+ },
+ {
+  "country": "CZ",
+  "kind": "rail",
+  "operator": "RegioJet",
+  "route": "Prague - Ostrava",
+  "km": 275,
+  "price": 17.7,
+  "per_km": 0.049
+ },
+ {
+  "country": "CZ",
+  "kind": "coach",
+  "operator": "RegioJet",
+  "route": "Prague - Ostrava",
+  "km": 275,
+  "price": 27.3,
+  "per_km": 0.076
+ },
+ {
+  "country": "CZ",
+  "kind": "rail",
+  "operator": "RegioJet",
+  "route": "Prague - Olomouc",
+  "km": 211,
+  "price": 12.6,
+  "per_km": 0.046
+ },
+ {
+  "country": "CZ",
+  "kind": "coach",
+  "operator": "RegioJet",
+  "route": "Prague - Olomouc",
+  "km": 211,
+  "price": 20.6,
+  "per_km": 0.075
+ },
+ {
+  "country": "SK",
+  "kind": "rail",
+  "operator": "RegioJet",
+  "route": "Bratislava - Žilina",
+  "km": 169,
+  "price": 7.1,
+  "per_km": 0.032
+ },
+ {
+  "country": "PT",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Lisbon - Porto",
+  "km": 274,
+  "price": 3.99,
+  "per_km": 0.011
+ },
+ {
+  "country": "PT",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Porto - Coimbra",
+  "km": 108,
+  "price": 2.99,
+  "per_km": 0.021
+ },
+ {
+  "country": "FR",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Paris - Lyon",
+  "km": 390,
+  "price": 19.99,
+  "per_km": 0.039
+ },
+ {
+  "country": "FR",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Lyon - Grenoble",
+  "km": 94,
+  "price": 5.49,
+  "per_km": 0.045
+ },
+ {
+  "country": "DE",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Berlin - Hamburg",
+  "km": 252,
+  "price": 15.49,
+  "per_km": 0.047
+ },
+ {
+  "country": "DE",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Munich - Nuremberg",
+  "km": 150,
+  "price": 10.49,
+  "per_km": 0.054
+ },
+ {
+  "country": "PL",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Warsaw - Krakow",
+  "km": 252,
+  "price": 6.49,
+  "per_km": 0.02
+ },
+ {
+  "country": "PL",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Warsaw - Lodz",
+  "km": 118,
+  "price": 6.49,
+  "per_km": 0.042
+ },
+ {
+  "country": "NL",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Amsterdam - Eindhoven",
+  "km": 114,
+  "price": 8.99,
+  "per_km": 0.061
+ },
+ {
+  "country": "BE",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Brussels - Antwerp",
+  "km": 41,
+  "price": 3.99,
+  "per_km": 0.075
+ },
+ {
+  "country": "IT",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Milan - Turin",
+  "km": 129,
+  "price": 3.99,
+  "per_km": 0.024
+ },
+ {
+  "country": "IT",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Rome - Naples",
+  "km": 188,
+  "price": 8.49,
+  "per_km": 0.035
+ },
+ {
+  "country": "AT",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Vienna - Graz",
+  "km": 144,
+  "price": 18.99,
+  "per_km": 0.102
+ },
+ {
+  "country": "HU",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Budapest - Szeged",
+  "km": 157,
+  "price": 9.99,
+  "per_km": 0.049
+ },
+ {
+  "country": "CZ",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Prague - Brno",
+  "km": 185,
+  "price": 9.99,
+  "per_km": 0.042
+ },
+ {
+  "country": "HR",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Zagreb - Split",
+  "km": 258,
+  "price": 15.99,
+  "per_km": 0.048
+ },
+ {
+  "country": "RO",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Bucharest - Brasov",
+  "km": 142,
+  "price": 3.99,
+  "per_km": 0.022
+ },
+ {
+  "country": "BG",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Sofia - Plovdiv",
+  "km": 133,
+  "price": 27.04,
+  "per_km": 0.157
+ },
+ {
+  "country": "SE",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Stockholm - Gothenburg",
+  "km": 397,
+  "price": 39.99,
+  "per_km": 0.078
+ },
+ {
+  "country": "DK",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Copenhagen - Aarhus",
+  "km": 157,
+  "price": 13.49,
+  "per_km": 0.066
+ },
+ {
+  "country": "SK",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Bratislava - Kosice",
+  "km": 308,
+  "price": 31,
+  "per_km": 0.077
+ },
+ {
+  "country": "LT",
+  "kind": "coach",
+  "operator": "FlixBus",
+  "route": "Vilnius - Kaunas",
+  "km": 91,
+  "price": 11.5,
+  "per_km": 0.097
+ }
+]

@@ -34,6 +34,27 @@ def test_a_municipality_is_kept_when_the_town_of_its_name_is_elsewhere():
     namesake = {"addresstype": "town", "importance": 0.50, "lat": "48.0", "lon": "16.0"}
     assert settlement([municipality, namesake]) is municipality
 
+def test_a_town_gives_its_name_to_the_municipality_around_it():
+    municipality = {"addresstype": "municipality", "name": "Voss", "importance": 0.5, "lat": "60.70", "lon": "6.42"}
+    town = {"addresstype": "town", "name": "Vossavangen", "importance": 0.3, "lat": "60.63", "lon": "6.42"}
+    assert settlement([municipality, town]) is town
+
+def test_the_town_of_a_province_is_found_however_unimportant():
+    province = {"addresstype": "county", "name": "Oristano", "importance": 0.6, "lat": "40.0", "lon": "8.75"}
+    town = {"addresstype": "town", "name": "Oristano", "importance": 0.3, "lat": "39.9", "lon": "8.59"}
+    assert settlement([province, town]) is town
+
+def test_a_name_written_without_accents_is_the_town_of_that_name():
+    other = {"addresstype": "town", "name": "Bor", "importance": 0.45, "lat": "44.07", "lon": "22.1"}
+    meant = {"addresstype": "city", "name": "Borås", "importance": 0.5, "lat": "57.72", "lon": "12.94"}
+    assert settlement([other, meant], "Boras") is meant
+    assert settlement([other, meant], "Bor") is other
+
+def test_a_name_in_another_language_keeps_the_first_result():
+    city = {"addresstype": "city", "name": "Antwerpen", "namedetails": {"name": "Antwerpen", "name:en": "Antwerp"}, "importance": 0.7}
+    village = {"addresstype": "village", "name": "Antuérpia", "importance": 0.65}
+    assert settlement([city, village], "Antwerp") is city
+
 def test_a_city_first_is_kept():
     city = {"addresstype": "city", "importance": 0.6}
     assert settlement([city, {"addresstype": "town", "importance": 0.9}]) is city

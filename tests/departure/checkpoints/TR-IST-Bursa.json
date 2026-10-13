@@ -1,0 +1,13 @@
+{
+"case": {"country": "TR", "airport": "IST", "city": "Bursa", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "departure",
+"recorded": "2026-10-13",
+"flight": {"id": "TR-IST-Bursa", "date": "2026-12-22", "departure_airport": "IST", "departure_time": "17:00"},
+"reached": ["place", "terminal", "stops", "connections"],
+"place_results": [{"name": "Bursa", "display_name": "Bursa, Osmangazi, Bursa, Marmara Region, 16010, Turkey", "addresstype": "city", "importance": 0.6424909434520987, "lat": "40.1825734", "lon": "29.0675039", "namedetails": {"name": "Bursa", "name:en": "Bursa"}, "address": {"country": "Turkey"}}, {"name": "Bursa", "display_name": "Bursa, Marmara Region, Turkey", "addresstype": "province", "importance": 0.5921370279579445, "lat": "39.9895878", "lon": "28.8944669", "namedetails": {"name": "Bursa", "name:en": "Bursa"}, "address": {"country": "Turkey"}}],
+"airport": {"code": "IST", "name": "İstanbul Airport", "city": "Istanbul", "country": "TR", "large": true, "latitude": 41.274874, "longitude": 28.732136, "km": 125},
+"terminal": [41.2626736, 28.7425028],
+"stops_around": [],
+"zones": ["Europe/Istanbul", "Europe/Istanbul"],
+"answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
+}

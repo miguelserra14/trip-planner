@@ -1,13 +1,13 @@
 {
-"case": {"country": "MT", "airport": "MLA", "city": "Mellieha, Malta", "known_gap": "Malta's buses are not in the published timetables", "remote": true},
+"case": {"country": "MT", "airport": "MLA", "city": "Mellieha, Malta", "known_gap": "Malta's buses are not in the published timetables", "gap_in": "", "remote": true},
 "direction": "departure",
-"recorded": "2026-10-09",
-"flight": {"id": "MT-MLA-Mellieha", "date": "2026-12-18", "departure_airport": "MLA", "departure_time": "17:00"},
+"recorded": "2026-10-13",
+"flight": {"id": "MT-MLA-Mellieha", "date": "2026-12-22", "departure_airport": "MLA", "departure_time": "17:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Mellieħa", "display_name": "Mellieħa, Northern Region, Malta", "addresstype": "village", "importance": 0.4879857979937154, "lat": "35.9599618", "lon": "14.3683670", "namedetails": {"name": "Il-Mellieħa", "name:en": "Mellieħa"}, "address": {"country": "Malta"}}],
 "airport": {"code": "MLA", "name": "Malta International Airport", "city": "Valletta", "country": "MT", "large": true, "latitude": 35.845932, "longitude": 14.491546, "km": 17},
 "terminal": [35.8491269, 14.4952824],
-"stops_around": [{"name": "Aeroporto di Malta (MLA)", "stopId": "it-Sardegna-Planes-Cagliari-Airport_MLA", "lat": 35.857499999999995, "lon": 14.477500000000001, "modes": ["AIRPLANE"]}],
+"stops_around": [],
 "zones": ["Europe/Malta", "Europe/Malta"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
 }

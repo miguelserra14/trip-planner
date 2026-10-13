@@ -11,7 +11,7 @@ import threading
 import xml.etree.ElementTree as ElementTree
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import httpx
@@ -38,6 +38,11 @@ class Trip:
     day: str              # yyyy-mm-dd
     leave: str            # hh:mm on the local clock
     arrive: str
+    line: str = ""        # the line of the first vehicle, for the tariffs that price one line apart
+
+    @property
+    def minutes(self) -> int:
+        return to_minutes(self.arrive) - to_minutes(self.leave)
 
     def matches(self, leave: str, arrive: str) -> bool:
         """Whether a departure of the operator ("...T10:28...", or "10:28") is this trip."""
@@ -215,8 +220,62 @@ class FareSource:
     sells: Callable[[dict[str, Any]], bool]    # whether a vehicle of a connection is one of its own
     fare: Callable[[Trip], float | None]
     through: bool = False                  # one ticket covers several of its vehicles in a row
+    checked: str = ""                      # a published tariff, not a booking system: the day it was read (yyyy-mm-dd)
+
+    @property
+    def tariff(self) -> bool:
+        return bool(self.checked)
+
+    @property
+    def expired(self) -> bool:
+        """A tariff read too long ago is no longer believed: prices change every year, some more often."""
+        return self.tariff and (date.today() - date.fromisoformat(self.checked)).days > TARIFF_DAYS
 
 agency = lambda step: plain(step.get("agency") or "")
+
+# ---------------------------------------------------------------- published tariffs
+# City networks sell one ticket at one price, whatever the stops: no booking system to ask, the price is the one
+# the network publishes. Each tariff below was read on the page given, on the day given, and stops being used
+# TARIFF_DAYS later: the vehicles then go back to an estimate until someone reads the page again and updates it.
+# A ticket valid for a time covers the vehicles of the network in a row, as long as they fit in that time.
+TARIFF_DAYS = 365
+PRAGUE = (50.0755, 14.4378)
+PRAGUE_KM = 17   # the airport is 11 km from the centre: further than this is another zone of the region, and another price
+
+def timed(prices: list[tuple], currency: str = "EUR") -> Callable[[Trip], float | None]:
+    """A tariff of tickets valid for a time: [(minutes, price)], shortest first. None when the ride is longer than all."""
+    def fare(trip: Trip) -> float | None:
+        price = next((price for minutes, price in prices if 0 <= trip.minutes <= minutes), None)
+        return in_eur(price, currency) if price is not None else None
+    return fare
+
+def prague_fare(trip: Trip) -> float | None:
+    in_prague = all(at and distance_km(at[0], at[1], *PRAGUE) <= PRAGUE_KM for at in (trip.start_at, trip.end_at))
+    return timed([(30, 39), (90, 50)], "CZK")(trip) if in_prague else None
+
+def budapest_fare(trip: Trip) -> float | None:
+    """One ticket per vehicle. The airport bus 100E has its own."""
+    return in_eur(2500 if trip.line.strip().upper() == "100E" else 500, "HUF")
+
+TARIFFS = [
+    # https://pid.cz/en/new-pid-tariff-from-1-january-2026-dont-pay-more-than-you-have-to/ : paper tickets, zones P, 0 and B
+    FareSource("PID Prague (published tariff)", "CZ", lambda step: agency(step) == "prazska integrovana doprava", prague_fare, through=True, checked="2026-10-13"),
+    # https://bkk.hu/en/tickets-and-passes/prices/ : single ticket 500 Ft, airport shuttle bus single ticket 2 500 Ft
+    FareSource("BKK Budapest (published tariff)", "HU", lambda step: agency(step) == "bkk", budapest_fare, checked="2026-10-13"),
+    # https://www.vrt.be/vrtnws/en/2026/01/27/brussels-public-transport-company-to-increase-fare-prices-from-1 : 2.40 from 1 February 2026.
+    # Line 12 to the airport has a dearer ticket, which was not read: it is left to the estimate
+    FareSource("STIB Brussels (published tariff)", "BE", lambda step: agency(step) == "stib" and str(step.get("line")) != "12",
+               timed([(60, 2.40)]), through=True, checked="2026-10-13"),
+    # https://www.vrt.be/vrtnws/en/2026/01/02/de-lijn-to-increase-its-fares-from-february : the single ticket stays at 3.00, 60 minutes
+    FareSource("De Lijn (published tariff)", "BE", lambda step: agency(step) == "de lijn", timed([(60, 3.00)]), through=True, checked="2026-10-13"),
+    # https://www.belgiantrain.be/en/tickets-and-railcards/bus-ticket-charleroi-airport : the bus between the airport and Charleroi station
+    FareSource("TEC Charleroi Airport (published tariff)", "BE", lambda step: agency(step) == "letec" and str(step.get("line")) == "A1",
+               lambda trip: 6.00, checked="2026-10-13"),
+    # https://www.metrolisboa.pt/wp-content/uploads/2025/12/Tarifas_site_2026_PT.pdf : Carris/Metro ticket, one hour on both networks
+    FareSource("Carris/Metro Lisbon (published tariff)", "PT", lambda step: agency(step) in ("metropolitano de lisboa, e.p.e.", "carris"),
+               timed([(60, 1.90)]), through=True, checked="2026-10-13"),
+]
+
 FARE_SOURCES = [
     FareSource("Luxembourg (free public transport)", "LU",
                lambda step: all((step.get(end) or "").startswith(LUXEMBOURG_STOPS) for end in ("from_id", "to_id")), luxembourg_fare, through=True),
@@ -226,10 +285,11 @@ FARE_SOURCES = [
     FareSource("Trenitalia", "IT", lambda step: step["rail"] and agency(step) in ("trenitalia", "trenord"), trenitalia_fare, through=True),
     FareSource("MÁV", "HU", lambda step: step["rail"] and (step.get("from_id") or "").startswith("hu-mav_"), mav_fare, through=True),
     FareSource("Elron", "EE", lambda step: step["rail"] and "elron" in agency(step), elron_fare),
+    *TARIFFS,
 ]
 
 def source_of(step: dict[str, Any]) -> FareSource | None:
-    return next((source for source in FARE_SOURCES if source.sells(step)), None)
+    return next((source for source in FARE_SOURCES if not source.expired and source.sells(step)), None)
 
 def runs(steps: list[dict[str, Any]]) -> list[tuple]:
     """The vehicles of a connection grouped into tickets: (operator, positions of the vehicles the ticket covers).
@@ -263,9 +323,10 @@ def fare(source: FareSource, trip: Trip) -> float | None:
     return price
 
 def tickets(steps: list[dict[str, Any]], travel_day: str, service_day: str | None, skip: Callable[[dict[str, Any]], bool] = lambda step: False) -> list[dict[str, Any]]:
-    """The tickets found for the vehicles of a connection: {"positions", "operator", "price_eur", "travel_day"}.
+    """The tickets found for the vehicles of a connection: {"positions", "operator", "price_eur", "travel_day", "tariff"}.
     Each is asked for the travel date. When the operator does not sell that date yet, for the day the timetable
-    was read on, and travel_day is then False. skip leaves out vehicles that cost this traveller nothing."""
+    was read on, and travel_day is then False. tariff says the price is a published one and not a booking system's
+    answer for that departure. skip leaves out vehicles that cost this traveller nothing."""
     found = []
     for source, positions in runs(steps):
         first, last = steps[positions[0]], steps[positions[-1]]
@@ -275,8 +336,10 @@ def tickets(steps: list[dict[str, Any]], travel_day: str, service_day: str | Non
             if datetime.fromisoformat(day).date() < datetime.now().date():
                 continue
             price = fare(source, Trip(first["from"], last["to"], first.get("from_id") or "", last.get("to_id") or "",
-                                      tuple(first.get("from_at") or ()), tuple(last.get("to_at") or ()), day, first["time"], last["arrive"]))
+                                      tuple(first.get("from_at") or ()), tuple(last.get("to_at") or ()), day, first["time"], last["arrive"],
+                                      str(first.get("line") or "")))
             if price is not None:
-                found.append({"positions": positions, "operator": source.name, "price_eur": price, "travel_day": day == travel_day})
+                found.append({"positions": positions, "operator": source.name, "price_eur": price, "travel_day": day == travel_day,
+                              "tariff": source.tariff})
                 break
     return found

@@ -1,0 +1,9 @@
+{
+"case": {"country": "PT", "airport": "FAO", "city": "Lagos, Portugal", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "arrival",
+"recorded": "2026-10-13",
+"flight": {"id": "PT-FAO-Lagos", "date": "2026-12-22", "arrival_airport": "FAO", "arrival_time": "11:00"},
+"reached": ["place"],
+"place_results": [{"name": "Lagos", "display_name": "Lagos, Faro, Portugal", "addresstype": "city", "importance": 0.5333233047252, "lat": "37.1027964", "lon": "-8.6728689", "namedetails": {"name": "Lagos"}, "address": {"country": "Portugal"}}],
+"airport": {"code": "FAO", "name": "Faro - Gago Coutinho International Airport", "city": "Faro", "country": "PT", "large": true, "latitude": 37.015909, "longitude": -7.970939, "km": 63}
+}

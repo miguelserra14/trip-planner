@@ -3,8 +3,11 @@ cost and rank the itineraries by the traveller's preferences."""
 from typing import Any
 
 from trip_planner import current
-from trip_planner.itineraries.legs import from_airport_leg, to_airport_leg
+from concurrent.futures import ThreadPoolExecutor
+
+from trip_planner.itineraries.legs import from_airport_leg, price_with_tickets, to_airport_leg
 from trip_planner.sources import airlines
+from trip_planner.sources.timetables import landing_day
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_minutes, to_time
 
@@ -71,8 +74,9 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
         "airport_wait": to_minutes(flight["departure_time"]) - to_leg["arrive"],
         "wait_after_landing": from_leg["leave"] - to_minutes(flight["arrival_time"]),
         "arrival_time": to_time(from_leg["arrive"]),
-        # The two clocks may differ, the flight tells by how much
-        "total_minutes": from_leg["arrive"] + flight["timezone_shift_minutes"] - to_leg["leave"],
+        # The two clocks may differ, the flight tells by how much. The destination's clock is that of the day the
+        # flight lands, which a night flight makes a later day than the one the traveller left on.
+        "total_minutes": from_leg["arrive"] + flight.get("arrival_day_offset", 0) * 24 * 60 + flight["timezone_shift_minutes"] - to_leg["leave"],
         # Flight times come from Kiwi for the travel date (A). The ground legs decide the grade of the schedule.
         "schedule_grade": max(to_leg["grade"], from_leg["grade"]),
     }
@@ -82,14 +86,30 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
 def price_itinerary(itinerary: dict[str, Any]) -> None:
     """Confirm the flight on the airline's own site when possible, then add up the cost and how much of it is confirmed."""
     flight = itinerary["flight"]
+    price_with_tickets(itinerary["to"], flight["date"], current.SETTINGS.free_trains_at_origin)
+    price_with_tickets(itinerary["from"], landing_day(flight), current.SETTINGS.free_trains_at_destination)
     booking = airlines.verify_with_airline(flight)   # the traveller books on the airline's site: that price counts when it is known
     itinerary["booking"] = booking
     itinerary["flight_price"] = booking["price_eur"]
     itinerary["total_cost"] = booking["price_eur"] + itinerary["to"]["price_eur"] + itinerary["from"]["price_eur"]
     itinerary["confirmed_eur"] = (
         (booking["price_eur"] if booking["verified"] else 0.0)
-        + (itinerary["to"]["price_eur"] if itinerary["to"]["price_kind"] == "operator" else 0.0)
+        + sum(leg.get("confirmed_eur", leg["price_eur"] if leg["price_kind"] == "operator" else 0.0) for leg in (itinerary["to"], itinerary["from"]))
     )
+
+FARE_THREADS = 6   # operators asked at the same time: each ticket is one or two requests to a different site
+
+def price_itineraries(itineraries: list[dict[str, Any]]) -> None:
+    """price_itinerary for several itineraries. The operators are asked for their tickets at the same time first,
+    and every answer is remembered, so the itineraries that share a connection ask once."""
+    settings = current.SETTINGS
+    legs = [(itinerary[side], day(itinerary["flight"]), free) for itinerary in itineraries
+            for side, day, free in (("to", lambda flight: flight["date"], settings.free_trains_at_origin),
+                                    ("from", landing_day, settings.free_trains_at_destination))]
+    with ThreadPoolExecutor(FARE_THREADS) as pool:
+        list(pool.map(lambda leg: price_with_tickets(*leg), legs))
+    for itinerary in itineraries:
+        price_itinerary(itinerary)
 
 def rank_itineraries(itineraries: list[dict[str, Any]]) -> tuple:
     """Apply the traveller's two preferences, both expressed as EUR per extra hour.

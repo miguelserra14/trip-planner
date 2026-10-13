@@ -1,0 +1,51 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "OPO",
+  "date": "2026-10-29",
+  "arrival_airport": "OPO",
+  "arrival_time": "11:00"
+ },
+ "km": 172,
+ "estimate_eur": 27.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "12:15",
+    "arrive": "15:50",
+    "line": "FlixBus 1020",
+    "agency": "FlixBus-eu",
+    "from": "Porto (Airport)",
+    "to": "Bragança (Bus Station)",
+    "rail": false,
+    "coach": true,
+    "from_id": "eu-flixbus_e9e4caca-0ae6-434f-9079-610de5e00a1d",
+    "to_id": "eu-flixbus_61c3f49f-c1cb-4c71-b24b-2659b2b03222",
+    "from_at": [
+     41.23593000000001,
+     -8.669926
+    ],
+    "to_at": [
+     41.810706999999994,
+     -6.761313
+    ],
+    "km": 171
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0
+    ],
+    "operator": "FlixBus",
+    "price_eur": 3.48,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 3.48,
+  "price_kind": "operator",
+  "confirmed_eur": 3.48
+ }
+}

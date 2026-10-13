@@ -8,7 +8,8 @@ To plan a trip, edit settings.py and run main.py. Nothing else needs to change.
 Who does what, and where:
 
 - Places and airports (code, places.py): the cities are located with OpenStreetMap, whatever language they are
-  written in, and the airports are found by distance.
+  written in, and the airports are found by distance: the straight line, then the hours by road (OSRM), so that
+  an airport across a sea is left out.
 - Flight search (code, sources/kiwi.py): every departure airport against every arrival airport on every date, on
   Kiwi. Nothing is retyped by a model.
 - Real timetables (code, sources/timetables.py and sources/operators.py): the ground transport of every flight is

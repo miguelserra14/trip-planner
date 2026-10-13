@@ -12,7 +12,7 @@ from langgraph.types import Command
 from trip_planner import current
 from trip_planner.agents import subagents
 from trip_planner.config import LIGHTS
-from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itinerary, rank_itineraries
+from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itineraries, price_itinerary, rank_itineraries
 from trip_planner.places import describe_airport
 from trip_planner.report.summary import render_closest, render_report
 from trip_planner.sources import airlines, google_flights, kiwi, timetables, web
@@ -188,8 +188,8 @@ def build_itineraries(runtime: ToolRuntime) -> Command | str:
             except (ValueError, KeyError, TypeError) as reason:
                 rejected.append(f"{flight['id']} ({flight['price_eur']:.0f} EUR): {reason}")
                 continue
-            price_itinerary(itinerary)
             itineraries.append(itinerary)
+        price_itineraries(itineraries)
 
         # Reliability comes before price: an itinerary below the minimum grade is only shown when nothing better exists
         reliable = [itinerary for itinerary in itineraries if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]

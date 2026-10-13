@@ -1,0 +1,51 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "BUD",
+  "date": "2026-10-29",
+  "arrival_airport": "BUD",
+  "arrival_time": "11:00"
+ },
+ "km": 147,
+ "estimate_eur": 23.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "12:07",
+    "arrive": "14:16",
+    "line": "IC 714 NAPFÉNY",
+    "agency": "MÁV",
+    "from": "Ferihegy",
+    "to": "Szeged",
+    "rail": true,
+    "coach": false,
+    "from_id": "hu-mav_2121",
+    "to_id": "hu-mav_6110",
+    "from_at": [
+     47.437219999999996,
+     19.223888000000002
+    ],
+    "to_at": [
+     46.239723000000005,
+     20.143057000000002
+    ],
+    "km": 150
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0
+    ],
+    "operator": "MÁV",
+    "price_eur": 8.59,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 8.59,
+  "price_kind": "operator",
+  "confirmed_eur": 8.59
+ }
+}

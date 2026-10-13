@@ -59,7 +59,11 @@ TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place,
 TIMEZONES: dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}
 
 def is_rail(mode: str) -> bool:
-    return "RAIL" in mode or mode in ("SUBURBAN", "METRO")
+    return "RAIL" in mode or mode in ("SUBURBAN", "METRO", "LONG_DISTANCE")
+
+def landing_day(flight: dict[str, Any]) -> str:
+    """The day a flight lands, which is the day of everything at the destination. Later than its date for a night flight."""
+    return flight.get("arrival_date") or flight["date"]
 
 def reference_day(day: str) -> str:
     """The same weekday as a travel date, in the first week that timetables are sure to be published for."""
@@ -82,6 +86,28 @@ OVERPASS_SERVERS = ("https://overpass-api.de/api/interpreter", "https://overpass
 TERMINALS: dict[str, list[float]] = json.loads(TERMINALS_FILE.read_text(encoding="utf-8")) if TERMINALS_FILE.exists() else {}
 NOT_A_PASSENGER_TERMINAL = ("general aviation", "executive", "gat", "cargo", "private", "vip", "pier", "connector", "freight")
 
+OVERPASS_ROUNDS = 3              # times the servers are gone through: a busy one answers a moment later
+SILENT_SERVERS: set[str] = set() # mirrors that did not answer in time. Not asked again in this run: each silence costs the whole wait
+
+def ask_overpass(query: str) -> list[dict[str, Any]] | None:
+    """The elements OpenStreetMap has for a query, or None when no server answers. These public servers are often
+    busy: the main one refuses for a few seconds and then answers, the mirrors can be silent for days."""
+    for attempt in range(OVERPASS_ROUNDS):
+        for server in OVERPASS_SERVERS:
+            if server in SILENT_SERVERS:
+                continue
+            try:
+                response = httpx.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=25)
+                response.raise_for_status()
+                return response.json()["elements"]
+            except httpx.TimeoutException:
+                if server != OVERPASS_SERVERS[0]:
+                    SILENT_SERVERS.add(server)
+            except Exception:
+                continue
+        time.sleep(3 * (attempt + 1))
+    return None
+
 def find_terminals(airports: list[dict[str, Any]]) -> dict[str, Any]:
     """Where the passenger terminal of each airport is, from OpenStreetMap, or None when it is not known.
     The airport database only gives the middle of the airfield, which can be kilometres from the stops.
@@ -91,15 +117,7 @@ def find_terminals(airports: list[dict[str, Any]]) -> dict[str, Any]:
         query = "[out:json][timeout:25];(" + "".join(
             f"nwr[aeroway=terminal](around:3500,{airport['latitude']},{airport['longitude']});" for airport in missing
         ) + ");out center tags;"
-        elements = None
-        for server in OVERPASS_SERVERS * 2:   # these public servers are often busy: each one is asked twice
-            try:
-                response = httpx.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=25)
-                response.raise_for_status()
-                elements = response.json()["elements"]
-                break
-            except Exception:
-                continue
+        elements = ask_overpass(query)
         if elements is None:
             say("[timetables] OpenStreetMap did not answer: using the middle of each airfield instead of the terminal")
             return {airport["code"]: TERMINALS.get(airport["code"]) for airport in airports}
@@ -261,6 +279,9 @@ class Timetables:
                     "agency": web.clean_text(leg.get("agencyName") or "", 60),
                     "from": web.clean_text(leg["from"]["name"], 60), "to": web.clean_text(leg["to"]["name"], 60),
                     "rail": is_rail(leg["mode"]), "coach": leg["mode"] == "COACH",
+                    # What an operator needs to recognise the two stops when it is asked for the price (fares.py)
+                    "from_id": leg["from"].get("stopId") or "", "to_id": leg["to"].get("stopId") or "",
+                    "from_at": [leg["from"]["lat"], leg["from"]["lon"]], "to_at": [leg["to"]["lat"], leg["to"]["lon"]],
                     "km": round(distance_km(leg["from"]["lat"], leg["from"]["lon"], leg["to"]["lat"], leg["to"]["lon"])),
                 } for leg in legs],
                 # Operator links come from the timetable feed the operator published
@@ -277,8 +298,9 @@ class Timetables:
             self.probes[key] = asyncio.ensure_future(self.plan(start, end, day, 11 * 60, False, zones, to_airport, terminal_known))
         return bool(await self.probes[key])
 
-    def answer(self, options: list[dict[str, Any]], service: str, flight: dict[str, Any]) -> dict[str, Any]:
-        grade = "A" if service == flight["date"] else "B"
+    def answer(self, options: list[dict[str, Any]], service: str, day: str) -> dict[str, Any]:
+        """What was found for one side of a flight. day is the day the traveller is there, service the day read."""
+        grade = "A" if service == day else "B"
         unique = {(option["leave"], option["arrive"], len(option["steps"])): option for option in options}
         options = [{**option, "grade": grade, "source": "timetable", "service_day": service, "price_eur": None}
                    for option in unique.values()]
@@ -319,7 +341,10 @@ class Timetables:
 
         found: list[dict[str, Any]] = []
         for target, walk in [*stops, (airport, 0)]:
-            found = await reaching(target, walk)
+            try:
+                found = await reaching(target, walk)
+            except httpx.HTTPStatusError:
+                continue   # a stop the planner no longer knows: the next one, or the point on the map
             if found:
                 break
         if not found:
@@ -331,7 +356,7 @@ class Timetables:
         # Kept up to the shortest time at the airport ever offered: the ones that arrive after the time asked for
         # only serve the closest alternatives, when nothing respects every requirement
         last_call = to_minutes(flight["departure_time"]) - MIN_AIRPORT_FLOOR
-        return self.answer([c for c in found if c["arrive"] <= max(at_terminal, last_call)], service, flight)
+        return self.answer([c for c in found if c["arrive"] <= max(at_terminal, last_call)], service, flight["date"])
 
     async def onward(self, airport: tuple | str, end: tuple, service: str, ready: int, zones: tuple, known: bool,
                      modes: str = "", stop_walk: int = 0) -> list[dict[str, Any]]:
@@ -368,11 +393,14 @@ class Timetables:
                            stops: list[tuple] = ()) -> dict[str, Any]:
         """Connections from the arrival airport to the destination that the traveller can catch after landing.
         Asked for from the airport's stops (see airport_stops), and from the point on the map when they give nothing."""
-        service = reference_day(flight["date"])
+        service = reference_day(landing_day(flight))
         ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes   # earliest time walking out of the terminal
         found: list[dict[str, Any]] = []
         for start, walk in [*stops, (airport, 0)]:
-            found = await self.leaving(start, walk, end, service, ready, zones, known)
+            try:
+                found = await self.leaving(start, walk, end, service, ready, zones, known)
+            except httpx.HTTPStatusError:
+                continue   # a stop the planner no longer knows: the next one, or the point on the map
             if found:
                 break
         if not found:
@@ -381,7 +409,7 @@ class Timetables:
                     break
             else:
                 return dict(NOT_COVERED)
-        return self.answer(found, service, flight)
+        return self.answer(found, service, landing_day(flight))
 
     async def close(self) -> None:
         await self.http.aclose()
@@ -442,7 +470,7 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
             )
             return flight["id"], {"to_airport": to_airport, "from_airport": from_airport}
 
-        in_landing_order = sorted(flights, key=lambda flight: (flight["arrival_airport"], flight["date"], flight["arrival_time"]))
+        in_landing_order = sorted(flights, key=lambda flight: (flight["arrival_airport"], landing_day(flight), flight["arrival_time"]))
         ground: dict[str, Any] = dict(await asyncio.gather(*(one(flight) for flight in in_landing_order)))
 
         # Operators with their own booking system: real rides and prices for the travel date

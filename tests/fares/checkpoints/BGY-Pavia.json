@@ -1,0 +1,122 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "BGY",
+  "date": "2026-10-29",
+  "arrival_airport": "BGY",
+  "arrival_time": "11:00"
+ },
+ "km": 69,
+ "estimate_eur": 15.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "12:00",
+    "arrive": "12:50",
+    "line": "FlixBus 411",
+    "agency": "FlixBus-eu",
+    "from": "Bergamo (Orio al Serio Airport - BGY)",
+    "to": "Milan (Lampugnano bus station)",
+    "rail": false,
+    "coach": true,
+    "from_id": "eu-flixbus_dcc45a6f-9603-11e6-9066-549f350fcb0c",
+    "to_id": "eu-flixbus_dcbc484a-9603-11e6-9066-549f350fcb0c",
+    "from_at": [
+     45.66581300000001,
+     9.697448
+    ],
+    "to_at": [
+     45.48972,
+     9.127527999999998
+    ],
+    "km": 48
+   },
+   {
+    "time": "12:52",
+    "arrive": "13:06",
+    "line": "1",
+    "agency": "ATM",
+    "from": "LAMPUGNANO",
+    "to": "DUOMO M1",
+    "rail": false,
+    "coach": false,
+    "from_id": "it-Lombardia-ATM_LAMPUGNANO",
+    "to_id": "it-Lombardia-ATM_DUOMO M1",
+    "from_at": [
+     45.489402999999996,
+     9.127318999999998
+    ],
+    "to_at": [
+     45.464622,
+     9.189596000000002
+    ],
+    "km": 6
+   },
+   {
+    "time": "13:09",
+    "arrive": "13:19",
+    "line": "3",
+    "agency": "ATM",
+    "from": "DUOMO M3",
+    "to": "ROGOREDO FS",
+    "rail": false,
+    "coach": false,
+    "from_id": "it-Lombardia-ATM_DUOMO M3",
+    "to_id": "it-Lombardia-ATM_ROGOREDO FS",
+    "from_at": [
+     45.463905000000004,
+     9.188610999999998
+    ],
+    "to_at": [
+     45.433586,
+     9.238089999999998
+    ],
+    "km": 5
+   },
+   {
+    "time": "13:24",
+    "arrive": "13:55",
+    "line": "S13",
+    "agency": "Trenord",
+    "from": "Milano Rogoredo",
+    "to": "Pavia",
+    "rail": true,
+    "coach": false,
+    "from_id": "it-Lombardia-Trenord_S01820",
+    "to_id": "it-Lombardia-Trenord_S01860",
+    "from_at": [
+     45.43359,
+     9.238484
+    ],
+    "to_at": [
+     45.188843,
+     9.144673999999998
+    ],
+    "km": 28
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0
+    ],
+    "operator": "FlixBus",
+    "price_eur": 8.98,
+    "travel_day": true
+   },
+   {
+    "positions": [
+     3
+    ],
+    "operator": "Trenitalia",
+    "price_eur": 4.6,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 17.58,
+  "price_kind": "partly",
+  "confirmed_eur": 13.58
+ }
+}

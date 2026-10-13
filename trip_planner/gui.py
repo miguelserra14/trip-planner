@@ -21,7 +21,7 @@ from trip_planner import current, planner, translate, utils
 from trip_planner.check import check_setup
 from trip_planner.config import GRADES, LANGUAGES, LIGHTS, MAX_DATES, MAX_DAYS_AHEAD, SCALES, TripSettings
 from trip_planner.dates import read_dates
-from trip_planner.places import airport_groups, choose_airports, remove_airports, TripPlaces
+from trip_planner.places import airport_groups, choose_airports, remove_airports, too_far_notice, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS
 from trip_planner.sources import kiwi
 from trip_planner.texts import REFERENCE, TEXTS, tr
@@ -229,6 +229,8 @@ class TripWindow:
         if places.unknown:
             ttk.Label(self.airports, text=tr("unknown_airports", entries=", ".join(places.unknown)),
                       foreground="#b03a2e").pack(anchor="w", pady=(6, 0))
+        if places.too_far:
+            ttk.Label(self.airports, text=too_far_notice(places)).pack(anchor="w", pady=(6, 0))
         buttons = ttk.Frame(self.airports)
         buttons.pack(fill="x", pady=(10, 2))
         self.search_button = ttk.Button(buttons, text=tr("ui_search"), command=self.search)

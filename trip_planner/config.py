@@ -20,7 +20,7 @@ LIGHTS = dict(zip(GRADES, "🔵🟢🟠"))   # how the traveller sees each grade
 # The values each number may take: (lowest, highest). Outside them the setting is a mistake, not a preference.
 RANGES = {
     "primary_radius_km": (1, 1000), "fallback_radius_km": (1, 1500), "arrival_radius_km": (1, 1000),
-    "max_departure_airports": (1, 30), "max_arrival_airports": (1, 15),
+    "max_departure_airports": (1, 30), "max_arrival_airports": (1, 15), "max_road_hours": (1, 48),
     "min_airport_minutes": (30, 360), "ideal_airport_minutes": (30, 480), "min_landing_minutes": (0, 240),
     "max_stopovers": (0, 3),
     "tiebreak_eur_per_hour": (0, 1000), "fallback_saving_eur_per_hour": (0, 1000), "extra_hour_growth": (1, 5),
@@ -57,6 +57,7 @@ class TripSettings:
     arrival_radius_km: int = 200          # arrival airports this close to the destination
     max_departure_airports: int = 12      # primary airports first, then the large ones, then the closest
     max_arrival_airports: int = 3         # large airports first, then the closest
+    max_road_hours: float = 6.0           # an airport further than this by road is left out: close on the map, but across a sea
     # The two scales above can be swapped: "wide" is fallback_radius_km and max_departure_airports,
     # "near" is arrival_radius_km and max_arrival_airports, whichever side it is used on.
     departure_scale: str = "wide"         # around the origin: worth going far when the traveller lives there
@@ -80,6 +81,8 @@ class TripSettings:
     earliest_arrival: str = ""            # earliest time arriving at the destination. Empty or 00:00 = any time
     latest_arrival: str = ""              # latest time arriving at the destination. Empty or 00:00 = whatever the last connection of the day allows
     max_stopovers: int = 0                # 0 = direct flights only
+    next_day_arrivals: bool = True        # accept flights that land on a later day than they leave (night and long flights).
+                                          # The arrival times above are then read on the clock of the day of arrival
 
     # Data integrity
     min_reliability: str = "B"            # worst schedule grade accepted: "A", "B" or "C". See "Data integrity" above

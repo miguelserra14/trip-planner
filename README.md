@@ -122,12 +122,13 @@ trip_planner/
 ├── translate.py       adds, removes and checks languages
 ├── dates.py           travel dates as travellers write them
 ├── utils.py           times, text, progress lines, timings
-├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance
+├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
 ├── sources/           where the data comes from, one module per outside service
 │   ├── kiwi.py            flights
 │   ├── google_flights.py  flights when Kiwi does not answer (plan B)
 │   ├── timetables.py      published timetables (Transitous) and airport terminals
 │   ├── operators.py       rides and prices from operators' booking systems (FlixBus)
+│   ├── fares.py           ticket prices of the vehicles found in the timetables, asked of each operator
 │   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
 │   └── web.py             web search for the subagents (Tavily), cleaning of what models write
 ├── agents/            the models
@@ -200,7 +201,10 @@ The program depends on these services. None of them is under the project's contr
 | Google Flights, through the `fast-flights` library | Flights when Kiwi does not answer. Not an official service: it reads the page a browser gets, so it can stop working or be refused without notice | none |
 | Transitous | Published timetables of trains, coaches and local transport | none |
 | FlixBus, Ryanair | Prices confirmed for the travel date (unofficial endpoints, they can change without notice) | none |
+| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/fares.py` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance | none |
+| European Central Bank | Exchange rates, for prices in forints | none |
 | OpenStreetMap (Nominatim, Overpass), OurAirports, Wikidata | Cities, terminals, airports, airline sites | none |
+| OSRM (public server) | Hours by road from a city to its airports, so that one across a sea is left out (`max_road_hours`). Without it the airports are chosen by the straight line alone | none |
 
 The free tier of Gemini allows about 20 requests a day on the better coordinator model. After that the coordinator
 falls back to a lighter model by itself.

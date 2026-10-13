@@ -7,8 +7,8 @@ from typing import Any
 
 from trip_planner import current
 from trip_planner.config import LIGHTS, ROOT
-from trip_planner.places import airport_groups
-from trip_planner.report.formatting import grade_text, table
+from trip_planner.places import airport_groups, too_far_notice
+from trip_planner.report.formatting import at_destination, grade_text, table
 from trip_planner.sources import timetables
 from trip_planner.texts import tr
 from trip_planner.utils import plain, TIMINGS, to_time
@@ -49,6 +49,7 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         f"- {tr('origin')}: \"{current.TRIP.origin.written}\" → {current.TRIP.origin.label}",
         f"- {tr('destination')}: \"{current.TRIP.destination.written}\" → {current.TRIP.destination.label}",
         f"- {tr('airports_dropped')}: {', '.join(current.TRIP.dropped) or tr('none')}",
+        *([f"- {too_far_notice(current.TRIP)}"] if current.TRIP.too_far else []),
         "",
         *table([tr("col_group"), tr("col_code"), tr("col_airport"), tr("col_city"), tr("col_country"), tr("col_distance")],
                [[title, a["code"], a["name"], a["city"], a["country"], f"{a['km']} km"]
@@ -62,7 +63,7 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
           if response.get("flight_gaps") else []),
         *table([tr("col_flight"), tr("col_date"), tr("col_departure"), tr("col_arrival"), tr("col_airline"), tr("col_stops"),
                 tr("col_kiwi_price"), tr("col_checked")],
-               [[f["id"], f["date"], f"{f['departure_airport']} {f['departure_time']}", f"{f['arrival_airport']} {f['arrival_time']}",
+               [[f["id"], f["date"], f"{f['departure_airport']} {f['departure_time']}", f"{f['arrival_airport']} {at_destination(f['arrival_time'], f)}",
                  f["flights"], f["stops"], f"{f['price_eur']:.0f} EUR", yes_no(f["id"] in checked)] for f in flights]),
         "",
         f"### 3. {tr('step_ground')}",

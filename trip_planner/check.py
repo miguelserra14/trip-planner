@@ -11,8 +11,8 @@ from langchain.chat_models import init_chat_model
 from trip_planner.agents import subagents
 from trip_planner.agents.coordinator import COORDINATOR_MODELS
 from trip_planner.config import ROOT, USER_AGENT
-from trip_planner.places import geocode, load_airports, Place
-from trip_planner.sources import airlines, google_flights, kiwi, operators, timetables, web
+from trip_planner.places import airport_from, geocode, load_airports, Place, road_hours
+from trip_planner.sources import airlines, fares, google_flights, kiwi, operators, timetables, web
 from trip_planner.utils import message_text
 
 async def check_setup() -> int:
@@ -31,6 +31,12 @@ async def check_setup() -> int:
 
     def ourairports() -> str:
         return f"{len(load_airports())} airports with scheduled flights"
+
+    def roads() -> str:
+        hours = road_hours(antwerp, [airport_from(antwerp, "BRU")])
+        if not hours:
+            raise RuntimeError("no answer")
+        return f"Antwerp -> Brussels Airport in {hours['BRU'] * 60:.0f} minutes"
 
     def overpass() -> str:
         query = "[out:json][timeout:25];nwr[aeroway=terminal](around:3500,38.7813,-9.1359);out center tags;"
@@ -89,6 +95,26 @@ async def check_setup() -> int:
         response.raise_for_status()
         return f"{len(response.json()['fares'])} fares Charleroi -> Porto on {day}"
 
+    def operator_prices() -> str:
+        # A departure taken from each operator's own search must come back with its price
+        answered = [name for name, check in (
+            ("ÖBB", lambda: fares.http.get(f"{fares.OEBB}/domain/v4/init").raise_for_status().json()["accessToken"]),
+            ("Trenitalia", lambda: fares.http.get(f"{fares.TRENITALIA}/locations/search", params={"name": "Roma Termini", "limit": 1}).raise_for_status().json()[0]["id"]),
+            ("MÁV", lambda: fares.http.post(f"{fares.MAV}/GetStationList", json={}, headers=fares.MAV_SESSION).raise_for_status().json()["stations"][0]),
+            ("Elron", lambda: fares.http.get(f"{fares.ELRON}/originstops").raise_for_status().json()[0]),
+            ("RegioJet", lambda: fares.http.get(f"{fares.REGIOJET}/consts/locations").raise_for_status().json()[0]),
+            ("exchange rates", lambda: fares.in_eur(1000, "HUF") or 1 / 0),
+        ) if not isinstance(attempt(check), Exception)]
+        if len(answered) < 4:
+            raise RuntimeError(f"only {', '.join(answered) or 'none'} answered")
+        return f"{len(answered)} of 6 answer: {', '.join(answered)}"
+
+    def attempt(check):
+        try:
+            return check()
+        except Exception as error:
+            return error
+
     def wikidata() -> str:
         return airlines.wikidata_site("FR", "Ryanair") or "no site recorded"
 
@@ -106,12 +132,14 @@ async def check_setup() -> int:
         ("API keys", "Gemini and Tavily", keys, True),
         ("Nominatim", "locating the cities", nominatim, True),
         ("OurAirports", "airport database", ourairports, True),
+        ("OSRM", "hours by road to the airports", roads, False),
         (kiwi.NAME, "flights", flights, False),
         (google_flights.NAME, "flights, when Kiwi does not answer", plan_b_flights, False),
         ("Flight search", "one of the two above", any_flights, True),
         ("Transitous", "published timetables", transitous, True),
         ("FlixBus", "coach rides and prices", flixbus, False),
         ("Ryanair", "confirmed flight prices", ryanair, False),
+        ("Rail and coach operators", "ticket prices of ground transport", operator_prices, False),
         ("Overpass", "airport terminals", overpass, False),
         ("Wikidata", "airline sites", wikidata, False),
         ("Tavily", "web search of the subagents", tavily, True),

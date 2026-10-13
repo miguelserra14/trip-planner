@@ -14,6 +14,12 @@ def table(header: list[str], rows: list[list[Any]]) -> list[str]:
         *("| " + " | ".join(clean(cell) for cell in row) + " |" for row in rows),
     ]
 
+def at_destination(time: str, flight: dict[str, Any]) -> str:
+    """A time at the destination. With its date when the flight lands on a later day than it leaves."""
+    if not flight.get("arrival_day_offset"):
+        return time
+    return f"{time} ({date.fromisoformat(flight['arrival_date']).strftime('%d/%m')})"
+
 def day_text(day: str) -> str:
     return date.fromisoformat(day).strftime("%d/%m/%Y")
 
@@ -37,10 +43,17 @@ def price_source(kind: str) -> tuple:
     """Where a price comes from and its grade."""
     return {
         "operator": (tr("price_operator"), "A"),
+        "operator_typical": (tr("price_operator_typical"), "B"),
+        "partly": (tr("price_partly"), "C"),
         "free": (tr("price_free"), "A"),
         "model": (tr("price_model"), "C"),
         "estimate": (tr("price_estimate"), "C"),
     }[kind]
+
+def price_text(leg: dict[str, Any]) -> str:
+    """Where the price of a ground leg comes from, with the operators whose tickets were read."""
+    operators = list(dict.fromkeys(ticket["operator"] for ticket in leg.get("tickets") or []))
+    return price_source(leg["price_kind"])[0] + (f": {', '.join(operators)}" if operators else "")
 
 def steps_text(leg: dict[str, Any]) -> str:
     """The vehicles of a ground leg, in order."""

@@ -5,7 +5,7 @@ from typing import Any
 from trip_planner import current
 from trip_planner.config import LIGHTS
 from trip_planner.itineraries.ranking import REQUIREMENTS
-from trip_planner.report.formatting import day_text, grade_text, leg_source, price_source, steps_text, table
+from trip_planner.report.formatting import at_destination, day_text, grade_text, leg_source, price_source, price_text, steps_text, table
 from trip_planner.sources.timetables import MIN_AIRPORT_FLOOR
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_time
@@ -29,16 +29,16 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
         *table(
             [tr("col_part"), tr("col_value"), tr("col_source"), tr("col_grade")],
             [
-                [tr("part_flight_times"), f"{flight['departure_time']} → {flight['arrival_time']}", tr("source_kiwi", source=flight["source"]), grade_text("A")],
+                [tr("part_flight_times"), f"{flight['departure_time']} → {at_destination(flight['arrival_time'], flight)}", tr("source_kiwi", source=flight["source"]), grade_text("A")],
                 [tr("part_flight_price"), f"{itinerary['flight_price']:.0f} EUR",
                  tr("source_airline", airline=flight["airline"]) if booking["verified"] else tr("source_kiwi_price", source=flight["source"]),
                  grade_text("A") if booking["verified"] else f"{LIGHTS['B']} " + tr("grade_reseller")],
                 [tr("part_to_times"), f"{itinerary['leave_time']} → {itinerary['at_airport_time']}", leg_source(to_leg),
                  grade_text(to_leg["grade"], to_leg.get("service_day"))],
-                [tr("part_to_price"), f"{to_leg['price_eur']:.0f} EUR", to_price[0], grade_text(to_price[1])],
-                [tr("part_from_times"), f"{to_time(from_leg['leave'])} → {itinerary['arrival_time']}", leg_source(from_leg),
+                [tr("part_to_price"), f"{to_leg['price_eur']:.0f} EUR", price_text(to_leg), grade_text(to_price[1])],
+                [tr("part_from_times"), f"{to_time(from_leg['leave'])} → {at_destination(itinerary['arrival_time'], flight)}", leg_source(from_leg),
                  grade_text(from_leg["grade"], from_leg.get("service_day"))],
-                [tr("part_from_price"), f"{from_leg['price_eur']:.0f} EUR", from_price[0], grade_text(from_price[1])],
+                [tr("part_from_price"), f"{from_leg['price_eur']:.0f} EUR", price_text(from_leg), grade_text(from_price[1])],
             ],
         ),
         "",
@@ -46,9 +46,9 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
         + ("" if to_leg["kind"] != "model" else " " + tr("computed_time")) + f" {steps_text(to_leg)}",
         f"- **{itinerary['at_airport_time']}** " + tr("step_at_airport", airport=flight["departure_airport"], wait=itinerary["airport_wait"]),
         f"- **{flight['departure_time']}** " + tr("step_flight", flights=flight["flights"], stops=stops, duration=as_duration(flight["duration_minutes"])),
-        f"- **{flight['arrival_time']}** " + tr("step_landing", airport=flight["arrival_airport"]),
+        f"- **{at_destination(flight['arrival_time'], flight)}** " + tr("step_landing", airport=flight["arrival_airport"]),
         f"- **{to_time(from_leg['leave'])}** " + tr("step_onward", wait=itinerary["wait_after_landing"]) + f" {steps_text(from_leg)}",
-        f"- **{itinerary['arrival_time']}** " + tr("step_arrival", destination=destination)
+        f"- **{at_destination(itinerary['arrival_time'], flight)}** " + tr("step_arrival", destination=destination)
         + (" " + tr("later_connections", times=", ".join(from_leg["later"])) if from_leg.get("later") else ""),
     ]
     other = from_leg.get("other")
@@ -100,7 +100,7 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
              tr("col_duration"), tr("col_extra_time"), tr("col_time_value"), tr("col_schedules"), tr("col_confirmed")],
             [[(f"**{number}** ({tr('recommended')})" if itinerary is recommended else str(number)),
               date.fromisoformat(itinerary["flight"]["date"]).strftime("%d/%m"), itinerary["flight"]["route"],
-              f"{itinerary['total_cost']:.0f} EUR", itinerary["leave_time"], itinerary["arrival_time"],
+              f"{itinerary['total_cost']:.0f} EUR", itinerary["leave_time"], at_destination(itinerary["arrival_time"], itinerary["flight"]),
               as_duration(itinerary["total_minutes"]),
               as_duration(itinerary["extra_minutes"]) if itinerary["extra_minutes"] else tr("fastest"),
               f"{itinerary['time_cost']:.0f} EUR",
@@ -147,7 +147,7 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
              tr("col_duration"), tr("col_breaks"), tr("col_schedules"), tr("col_confirmed")],
             [[f"**{number}** ({tr('closest')})" if number == 1 else str(number),
               date.fromisoformat(itinerary["flight"]["date"]).strftime("%d/%m"), itinerary["flight"]["route"],
-              f"{itinerary['total_cost']:.0f} EUR", itinerary["leave_time"], itinerary["arrival_time"],
+              f"{itinerary['total_cost']:.0f} EUR", itinerary["leave_time"], at_destination(itinerary["arrival_time"], itinerary["flight"]),
               as_duration(itinerary["total_minutes"]),
               "; ".join(tr("breach_" + breach["kind"], value=breach["value"], limit=breach["limit"]) for breach in itinerary["breaches"]),
               LIGHTS[itinerary["schedule_grade"]],

@@ -1,0 +1,51 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "PRG",
+  "date": "2026-10-29",
+  "arrival_airport": "PRG",
+  "arrival_time": "11:00"
+ },
+ "km": 197,
+ "estimate_eur": 31.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "13:00",
+    "arrive": "15:25",
+    "line": "310",
+    "agency": "STUDENT AGENCY k.s.",
+    "from": "Praha,Letiště Václava Havla",
+    "to": "Brno,Benešova tř.hotel GRAND",
+    "rail": false,
+    "coach": true,
+    "from_id": "cz-JDF-merged_jdf:stop:16504:est:1",
+    "to_id": "cz-JDF-merged_jdf:stop:17729:unspecified",
+    "from_at": [
+     50.10741,
+     14.26923
+    ],
+    "to_at": [
+     49.193497,
+     16.614435000000004
+    ],
+    "km": 197
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0
+    ],
+    "operator": "RegioJet",
+    "price_eur": 25.3,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 25.3,
+  "price_kind": "operator",
+  "confirmed_eur": 25.3
+ }
+}

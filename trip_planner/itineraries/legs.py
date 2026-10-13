@@ -3,7 +3,7 @@ one is published, otherwise a model's estimate, checked against the distance."""
 from typing import Any
 
 from trip_planner import current
-from trip_planner.sources import timetables
+from trip_planner.sources import fares, timetables
 from trip_planner.texts import tr
 from trip_planner.utils import to_minutes, to_time
 
@@ -126,6 +126,27 @@ def step_price(step: dict[str, Any], free_trains: bool) -> float:
     if step["rail"] and free_trains:
         return 0.0
     return estimated_price(step["km"])
+
+def price_with_tickets(leg: dict[str, Any], day: str, free_trains: bool) -> None:
+    """Replace the estimated price of a connection read from a timetable with what its operators sell it for
+    (fares.py), vehicle by vehicle. Vehicles no operator priced keep their estimate from the distance.
+    day is the day the traveller makes this leg. The leg then says under "tickets" what was found, and under
+    "confirmed_eur" how much of its price is real."""
+    if leg.get("kind") != "timetable" or not leg.get("steps"):
+        return
+    steps = leg["steps"]
+    free = lambda step: step["rail"] and free_trains
+    found = fares.tickets(steps, day, leg.get("service_day"), skip=free)
+    if not found:
+        return
+    priced = {position for ticket in found for position in ticket["positions"]}
+    rest = [step for position, step in enumerate(steps) if position not in priced and not free(step)]
+    if rest and leg["price_kind"] == "model":
+        return   # a model found a price for the whole way: part of it from operators does not make a better total
+    leg["tickets"] = found
+    leg["price_eur"] = sum(ticket["price_eur"] for ticket in found) + sum(estimated_price(step["km"]) for step in rest)
+    leg["confirmed_eur"] = sum(ticket["price_eur"] for ticket in found if ticket["travel_day"])
+    leg["price_kind"] = "partly" if rest else "operator" if all(ticket["travel_day"] for ticket in found) else "operator_typical"
 
 def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict[str, Any] | None,
                      closest: bool = False) -> dict[str, Any]:

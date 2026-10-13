@@ -6,6 +6,7 @@ import json
 import logging
 import random
 import re
+from datetime import date
 from typing import Any
 
 from langchain.tools import tool
@@ -133,18 +134,20 @@ def flight_problems(leg: dict[str, Any]) -> list[str]:
         problems.append("stopovers")
     if to_minutes(departure_time) < settings.earliest_flight_minutes:
         problems.append("too_early")    # cannot be caught: earliest time leaving plus the minimum time at the airport
-    if arrival_date != departure_date:
-        problems.append("next_day")     # too late to reach the destination the same day
+    if arrival_date != departure_date and not settings.next_day_arrivals:
+        problems.append("next_day")     # lands on a later day, and the traveller does not accept that
     elif settings.latest_arrival and to_minutes(arrival_time) > settings.latest_arrival_minutes:
         problems.append("too_late")     # lands after the time the traveller must already be at the destination
     return problems
 
 def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[str, Any] | None:
     """Copy one Kiwi result into FLIGHTS. Returns the flight, or None if it breaks one of the traveller's limits.
-    closest=True also keeps a flight that breaks them, for the closest alternatives, unless it lands the next day."""
+    closest=True also keeps a flight that breaks them, for the closest alternatives, unless it lands on a later
+    day and the traveller does not accept that."""
     leg = itinerary["outbound"]
     departure_date, departure_time = leg["departureTime"][:10], leg["departureTime"][11:16]
-    arrival_time = leg["arrivalTime"][11:16]
+    arrival_date, arrival_time = leg["arrivalTime"][:10], leg["arrivalTime"][11:16]
+    days_later = (date.fromisoformat(arrival_date) - date.fromisoformat(departure_date)).days
     problems = flight_problems(leg)
     if departure_date not in current.SETTINGS.iso_dates or "next_day" in problems or (problems and not closest):
         return None
@@ -159,6 +162,9 @@ def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[st
         "departure_time": departure_time,
         "arrival_airport": leg["to"],
         "arrival_time": arrival_time,
+        # Everything at the destination is counted on the clock of the day the flight lands
+        "arrival_date": arrival_date,
+        "arrival_day_offset": days_later,
         "stops": leg["stops"],
         "route": " - ".join(leg["route"]),
         "flights": " + ".join(f"{s['carrierName']} {s['flightNumber']}" for s in leg["segments"]),
@@ -167,7 +173,7 @@ def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[st
         "flight_number": leg["segments"][0]["flightNumber"],
         "duration_minutes": duration_minutes,
         # How far the departure clock is ahead of the arrival clock, deduced from the local times
-        "timezone_shift_minutes": duration_minutes - (to_minutes(arrival_time) - to_minutes(departure_time)),
+        "timezone_shift_minutes": duration_minutes - (to_minutes(arrival_time) + days_later * 24 * 60 - to_minutes(departure_time)),
         "price_eur": float(itinerary["price"]),
         "cabin_bag_included": bool((itinerary.get("baggage") or {}).get("cabinBag")),
         "booking_url": itinerary["bookingUrl"],
@@ -302,7 +308,7 @@ def describe_flight(flight: dict[str, Any]) -> str:
     """One line with everything a specialist needs to know about a flight."""
     return (
         f"{flight['id']} | {flight['date']} | {flight['departure_airport']} {flight['departure_time']} -> "
-        f"{flight['arrival_airport']} {flight['arrival_time']} (local times) | route {flight['route']} | "
+        f"{flight['arrival_airport']} {flight['arrival_time']}{' on ' + flight['arrival_date'] if flight['arrival_day_offset'] else ''} (local times) | route {flight['route']} | "
         f"{flight['stops']} stops | {flight['duration_minutes']} min | {flight['price_eur']:.0f} EUR"
     )
 

@@ -1,0 +1,51 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "VCE",
+  "date": "2026-10-29",
+  "arrival_airport": "VCE",
+  "arrival_time": "11:00"
+ },
+ "km": 119,
+ "estimate_eur": 18.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "19:25",
+    "arrive": "21:30",
+    "line": "FlixBus 411",
+    "agency": "FlixBus-eu",
+    "from": "Venice (Marco Polo Airport)",
+    "to": "Cortina d'Ampezzo",
+    "rail": false,
+    "coach": true,
+    "from_id": "eu-flixbus_dcc45c53-9603-11e6-9066-549f350fcb0c",
+    "to_id": "eu-flixbus_dcc569ad-9603-11e6-9066-549f350fcb0c",
+    "from_at": [
+     45.50418,
+     12.336193
+    ],
+    "to_at": [
+     46.537785,
+     12.135897
+    ],
+    "km": 116
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0
+    ],
+    "operator": "FlixBus",
+    "price_eur": 15.48,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 15.48,
+  "price_kind": "operator",
+  "confirmed_eur": 15.48
+ }
+}

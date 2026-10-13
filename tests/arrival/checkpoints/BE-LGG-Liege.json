@@ -1,0 +1,9 @@
+{
+"case": {"country": "BE", "airport": "LGG", "city": "Liege", "known_gap": "", "gap_in": "", "remote": false},
+"direction": "arrival",
+"recorded": "2026-10-13",
+"flight": {"id": "BE-LGG-Liege", "date": "2026-12-22", "arrival_airport": "LGG", "arrival_time": "11:00"},
+"reached": ["place"],
+"place_results": [{"name": "Liège", "display_name": "Liège, Wallonia, Belgium", "addresstype": "state", "importance": 0.621198481575897, "lat": "50.4708135", "lon": "5.7735658", "namedetails": {"name": "Liège", "name:en": "Liège"}, "address": {"country": "Belgium"}}, {"name": "Liège", "display_name": "Liège, Wallonia, 4000, Belgium", "addresstype": "city", "importance": 0.6934928368314668, "lat": "50.6450944", "lon": "5.5736112", "namedetails": {"name": "Liège"}, "address": {"country": "Belgium"}}, {"name": "Liège", "display_name": "Liège, Wallonia, Belgium", "addresstype": "county", "importance": 0.49676410948042765, "lat": "50.6038155", "lon": "5.5431198", "namedetails": {"name": "Liège"}, "address": {"country": "Belgium"}}],
+"airport": {"code": "LGG", "name": "Liège Airport", "city": "Grâce-Hollogne", "country": "BE", "large": false, "latitude": 50.638574, "longitude": 5.443897, "km": 9}
+}

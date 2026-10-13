@@ -1,0 +1,73 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "VIE",
+  "date": "2026-10-29",
+  "arrival_airport": "VIE",
+  "arrival_time": "11:00"
+ },
+ "km": 171,
+ "estimate_eur": 26.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "12:02",
+    "arrive": "12:17",
+    "line": "RJ 750",
+    "agency": "OEBB Personenverkehr AG Kundenservice",
+    "from": "Flughafen Wien Bahnhof",
+    "to": "Wien Hauptbahnhof",
+    "rail": true,
+    "coach": false,
+    "from_id": "at-Railway-Current-Reference-Data-2026_at:43:4708:0:1",
+    "to_id": "at-Railway-Current-Reference-Data-2026_at:49:1349:0:31",
+    "from_at": [
+     48.120224,
+     16.564429999999998
+    ],
+    "to_at": [
+     48.18496,
+     16.378479
+    ],
+    "km": 16
+   },
+   {
+    "time": "12:28",
+    "arrive": "13:43",
+    "line": "RJX 19982",
+    "agency": "OEBB Personenverkehr AG Kundenservice",
+    "from": "Wien Hauptbahnhof",
+    "to": "Linz/Donau Hauptbahnhof",
+    "rail": true,
+    "coach": false,
+    "from_id": "at-Railway-Current-Reference-Data-2026_at:49:1349:0:27",
+    "to_id": "at-Railway-Current-Reference-Data-2026_at:44:41164:0:7",
+    "from_at": [
+     48.18487,
+     16.378452
+    ],
+    "to_at": [
+     48.290200000000006,
+     14.291998999999999
+    ],
+    "km": 155
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0,
+     1
+    ],
+    "operator": "ÖBB",
+    "price_eur": 47.8,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 47.8,
+  "price_kind": "operator",
+  "confirmed_eur": 47.8
+ }
+}

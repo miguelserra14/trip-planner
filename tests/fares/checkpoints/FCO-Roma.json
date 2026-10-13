@@ -1,0 +1,51 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "FCO",
+  "date": "2026-10-29",
+  "arrival_airport": "FCO",
+  "arrival_time": "11:00"
+ },
+ "km": 22,
+ "estimate_eur": 4.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "11:53",
+    "arrive": "12:25",
+    "line": "RV",
+    "agency": "TRENITALIA",
+    "from": "FIUMICINO AEROPORTO",
+    "to": "ROMA TERMINI",
+    "rail": true,
+    "coach": false,
+    "from_id": "it-trenitalia_08412",
+    "to_id": "it-trenitalia_08409",
+    "from_at": [
+     41.79357200000001,
+     12.251733
+    ],
+    "to_at": [
+     41.900503,
+     12.502027
+    ],
+    "km": 24
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0
+    ],
+    "operator": "Trenitalia",
+    "price_eur": 14.0,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 14.0,
+  "price_kind": "operator",
+  "confirmed_eur": 14.0
+ }
+}

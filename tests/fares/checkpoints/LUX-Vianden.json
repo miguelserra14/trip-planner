@@ -1,0 +1,95 @@
+{
+ "recorded": "2026-10-13",
+ "flight": {
+  "id": "LUX",
+  "date": "2026-10-29",
+  "arrival_airport": "LUX",
+  "arrival_time": "11:00"
+ },
+ "km": 35,
+ "estimate_eur": 8.0,
+ "leg": {
+  "kind": "timetable",
+  "service_day": "2026-10-15",
+  "steps": [
+   {
+    "time": "12:16",
+    "arrive": "12:27",
+    "line": "223",
+    "agency": "Régime Général des Transports Routiers",
+    "from": "Senningerberg, Lou Hemmer",
+    "to": "Luxembourg, Gare Rocade",
+    "rail": false,
+    "coach": false,
+    "from_id": "lu-administration-des-transports-publics_000200508012",
+    "to_id": "lu-administration-des-transports-publics_000200405046",
+    "from_at": [
+     49.63301500000001,
+     6.2104610000000005
+    ],
+    "to_at": [
+     49.60051300000001,
+     6.136658000000001
+    ],
+    "km": 6
+   },
+   {
+    "time": "12:44",
+    "arrive": "13:13",
+    "line": "RE",
+    "agency": "Chemins de Fer Luxembourgeois",
+    "from": "Luxembourg, Gare Centrale",
+    "to": "Ettelbruck, Gare",
+    "rail": true,
+    "coach": false,
+    "from_id": "lu-administration-des-transports-publics_000200405060",
+    "to_id": "lu-administration-des-transports-publics_000140701022",
+    "from_at": [
+     49.599968000000004,
+     6.13424
+    ],
+    "to_at": [
+     49.84797,
+     6.107724999999999
+    ],
+    "km": 28
+   },
+   {
+    "time": "13:23",
+    "arrive": "13:52",
+    "line": "181",
+    "agency": "Régime Général des Transports Routiers",
+    "from": "Ettelbruck, Gare routière",
+    "to": "Vianden, Aale Moart",
+    "rail": false,
+    "coach": false,
+    "from_id": "lu-administration-des-transports-publics_000140701053",
+    "to_id": "lu-administration-des-transports-publics_000130301002",
+    "from_at": [
+     49.84723699999999,
+     6.106127
+    ],
+    "to_at": [
+     49.937946,
+     6.203913999999999
+    ],
+    "km": 12
+   }
+  ],
+  "tickets": [
+   {
+    "positions": [
+     0,
+     1,
+     2
+    ],
+    "operator": "Luxembourg (free public transport)",
+    "price_eur": 0.0,
+    "travel_day": true
+   }
+  ],
+  "price_eur": 0.0,
+  "price_kind": "operator",
+  "confirmed_eur": 0.0
+ }
+}

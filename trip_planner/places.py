@@ -1,5 +1,6 @@
 """Places and airports. Code only, no model. The cities are located with OpenStreetMap, so they can be written in
-any language, and the airports come from the OurAirports database, chosen by distance."""
+any language, and the airports come from the OurAirports database, chosen by distance: the straight line first,
+then the hours by road, which leave out the airports across a sea."""
 import csv
 import io
 import json
@@ -10,9 +11,10 @@ from typing import Any
 
 import httpx
 
+from trip_planner import current
 from trip_planner.config import ROOT, TripSettings, USER_AGENT
 from trip_planner.texts import tr
-from trip_planner.utils import plain, say
+from trip_planner.utils import as_duration, plain, say
 
 AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"   # OurAirports, public domain
 AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused
@@ -23,6 +25,7 @@ RUNWAYS_URL = "https://davidmegginson.github.io/ourairports-data/runways.csv"
 ROUTES_URL = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat"   # OpenFlights: airline routes up to 2014
 AIRFIELDS_FILE = ROOT / "resources" / "airfields.json"  # worked out once from the two files above, then reused
 AIRLINER_RUNWAY_FT = 5900                               # about 1800 m: below this, no ordinary airliner
+ROADS_URL = "https://router.project-osrm.org/table/v1/driving/"   # OSRM's public server: road routes on OpenStreetMap, ferries included
 
 @dataclass
 class Place:
@@ -43,15 +46,22 @@ class Place:
 PLACES: dict[str, Place] = {}
 SETTLEMENTS = {"city", "town", "village", "municipality", "hamlet", "suburb", "borough"}
 SAME_NAME_IMPORTANCE = 0.15   # a city this close in importance to the region or country of its name is what is meant
+MUNICIPALITY_KM = 30          # the town a municipality is named after is this close to the middle of its territory
 
 def settlement(results: list[dict[str, Any]]) -> dict[str, Any]:
     """The place a traveller means by a name. The first result may be the province or the country of that name
     ("Pavia", "Luxembourg"), whose middle is kilometres from any station: then the city of the same name."""
     first = results[0]
+    close = lambda result: result.get("importance", 0) >= first.get("importance", 0) - SAME_NAME_IMPORTANCE
+    if first.get("addresstype") == "municipality":
+        # A municipality is located in the middle of its territory, which in the mountains is kilometres from the
+        # town it is named after ("Bovec": 5 km, on a slope with no stop). The town itself, when it is also found.
+        inside = lambda result: distance_km(float(first["lat"]), float(first["lon"]), float(result["lat"]), float(result["lon"])) <= MUNICIPALITY_KM
+        return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS - {"municipality"}
+                     and close(result) and inside(result)), first)
     if first.get("addresstype") in SETTLEMENTS:
         return first
-    return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS
-                 and result.get("importance", 0) >= first.get("importance", 0) - SAME_NAME_IMPORTANCE), first)
+    return next((result for result in results[1:] if result.get("addresstype") in SETTLEMENTS and close(result)), first)
 
 def search_places(name: str) -> list[dict[str, Any]]:
     """What OpenStreetMap's Nominatim finds for a name, most important first."""
@@ -158,6 +168,33 @@ def airports_near(place: Place, radius_km: float, airlines_only: bool = False) -
     near = [airport_from(place, code) for code in load_airports() if code not in skipped]
     return sorted((airport for airport in near if airport["km"] <= radius_km), key=lambda airport: airport["km"])
 
+def read_road_hours(airports: list[dict[str, Any]], table: dict[str, Any]) -> dict[str, float]:
+    """The hours by road to each airport, from OSRM's answer. Infinite when no road or ferry reaches it.
+    An airport whose road is shorter than the straight line is left out of the answer: the service placed it
+    somewhere else, so nothing is known about it."""
+    hours = {}
+    for airport, seconds, metres in zip(airports, table["durations"][0][1:], table["distances"][0][1:]):
+        if seconds is None:
+            hours[airport["code"]] = math.inf
+        elif metres >= airport["km"] * 900:   # 10% under the straight line: the km are rounded and the road starts near the point
+            hours[airport["code"]] = seconds / 3600
+    return hours
+
+def road_hours(place: Place, airports: list[dict[str, Any]]) -> dict[str, float]:
+    """Hours by road, ferries included, from a city to each of these airports: one request to OSRM for them all.
+    Empty when the service does not answer: the airports are then chosen by the straight line alone."""
+    if not airports:
+        return {}
+    points = [(place.latitude, place.longitude)] + [(airport["latitude"], airport["longitude"]) for airport in airports]
+    try:
+        response = httpx.get(ROADS_URL + ";".join(f"{longitude},{latitude}" for latitude, longitude in points),
+                             params={"sources": 0, "annotations": "duration,distance"}, headers={"User-Agent": USER_AGENT}, timeout=15)
+        response.raise_for_status()
+        return read_road_hours(airports, response.json())
+    except Exception as e:
+        say(f"[airports] {type(e).__name__}: could not check the airports by road, they are chosen by the straight line alone")
+        return {}
+
 def find_airports(entry: str, place: Place) -> list[str]:
     """Turn what the traveller wrote into airport codes. entry is a code ("BRU"), an airport name ("Charleroi")
     or a city ("Paris"). Names are only looked for within 1500 km of place, so that "Paris" is not Paris, Texas."""
@@ -192,6 +229,7 @@ class TripPlaces:
     arrival: list[dict[str, Any]]      # arrival airports
     dropped: list[str] = field(default_factory=list)    # airports removed by the settings or by the traveller, for the report
     unknown: list[str] = field(default_factory=list)    # entries of the settings that matched no airport
+    too_far: dict[str, float] = field(default_factory=dict)   # airports left out for being close on the map but far by road: their hours
 
     @property
     def departure(self) -> list[dict[str, Any]]:
@@ -232,10 +270,23 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
     # Each side on the scale chosen for it: how far to look and how many airports to keep
     departure_km, departure_limit, departure_setting = settings.scale(settings.departure_scale)
     arrival_km, arrival_limit, arrival_setting = settings.scale(settings.arrival_scale)
-    # The automatic choice leaves the airfields out. An airfield the traveller names in the settings is still used.
-    primary = resolve(settings.primary_airports, origin) if settings.primary_airports else airports_near(origin, min(settings.primary_radius_km, departure_km), True)
-    fallback = resolve(settings.fallback_airports, origin) if settings.fallback_airports else airports_near(origin, departure_km, True)
-    arrival = resolve(settings.arrival_airports, destination) if settings.arrival_airports else airports_near(destination, arrival_km, True)
+    # Close on the map is not close by land: Dubrovnik is 198 km from Bari and 18 hours away, across the Adriatic.
+    too_far: dict[str, float] = {}
+
+    def by_road(place: Place, airports: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """The airports that are no more than max_road_hours from the city. The others are noted in too_far."""
+        hours = road_hours(place, airports)
+        far = {a["code"]: hours[a["code"]] for a in airports if hours.get(a["code"], 0) > settings.max_road_hours}
+        too_far.update(far)
+        return [a for a in airports if a["code"] not in far]
+
+    # The automatic choice leaves out the airfields and the airports too far by road. One the traveller names in
+    # the settings is still used.
+    automatic = not (settings.primary_airports and settings.fallback_airports)
+    around_origin = by_road(origin, airports_near(origin, departure_km, True)) if automatic else []
+    primary = resolve(settings.primary_airports, origin) if settings.primary_airports else [a for a in around_origin if a["km"] <= settings.primary_radius_km]
+    fallback = resolve(settings.fallback_airports, origin) if settings.fallback_airports else around_origin
+    arrival = resolve(settings.arrival_airports, destination) if settings.arrival_airports else by_road(destination, airports_near(destination, arrival_km, True))
 
     # Airports to add go to the side they are closer to, and are never cut by the limits
     wanted: set = set()
@@ -271,11 +322,14 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
     arrival = tidy(arrival, {a["code"] for a in primary + fallback}, arrival_limit)
     if not primary and fallback:
         primary, fallback = fallback[:1], fallback[1:]   # the closest airport is the reference for the others
+    used = {a["code"] for a in primary + fallback + arrival}   # an airport too far by road that the traveller added is used
+    too_far = {code: hours for code, hours in too_far.items() if code not in used}
+    reason = "no_airports_by_road" if too_far else "no_airports_near"
     if not primary:
-        raise ValueError(tr("no_airports_near", km=departure_km, city=settings.origin, setting=departure_setting))
+        raise ValueError(tr(reason, km=departure_km, city=settings.origin, setting=departure_setting, hours=f"{settings.max_road_hours:g}"))
     if not arrival:
-        raise ValueError(tr("no_airports_near", km=arrival_km, city=settings.destination, setting=arrival_setting))
-    return TripPlaces(origin, destination, primary, fallback, arrival, dropped=sorted(excluded), unknown=unknown)
+        raise ValueError(tr(reason, km=arrival_km, city=settings.destination, setting=arrival_setting, hours=f"{settings.max_road_hours:g}"))
+    return TripPlaces(origin, destination, primary, fallback, arrival, dropped=sorted(excluded), unknown=unknown, too_far=too_far)
 
 def remove_airports(places: TripPlaces, removed: list[str]) -> TripPlaces:
     """Drop airports from the trip. Raises ValueError if no departure or no arrival airport is left."""
@@ -293,6 +347,13 @@ def airport_groups(places: TripPlaces) -> list[tuple]:
     """The three groups of airports with their title in the traveller's language."""
     return [(tr("group_primary"), places.primary), (tr("group_fallback"), places.fallback), (tr("group_arrival"), places.arrival)]
 
+def too_far_notice(places: TripPlaces) -> str:
+    """The airports left out for being too far by road, in words. Empty when there are none."""
+    if not places.too_far:
+        return ""
+    airports = ", ".join(code if hours == math.inf else f"{code} ({as_duration(round(hours * 60))})" for code, hours in places.too_far.items())
+    return tr("too_far_airports", hours=f"{current.SETTINGS.max_road_hours:g}", airports=airports)
+
 def show_airports(places: TripPlaces) -> None:
     say(f"{tr('origin')}: {places.origin.written} -> {places.origin.label}")
     say(f"{tr('destination')}: {places.destination.written} -> {places.destination.label}")
@@ -304,6 +365,8 @@ def show_airports(places: TripPlaces) -> None:
             say(f"  ({tr('none')})")
     if places.unknown:
         say("\n" + tr("unknown_airports", entries=", ".join(places.unknown)))
+    if places.too_far:
+        say("\n" + too_far_notice(places))
 
 def ask_airports(places: TripPlaces) -> TripPlaces:
     """Text version of the airport choice, for when checkboxes are not available: type what to drop."""

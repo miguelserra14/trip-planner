@@ -25,12 +25,12 @@ def test_3_airport_has_stops(record):
     check_stops(*record)
 
 def test_4_connections_in_time_for_the_flight(record):
-    """Real connections leave and arrive the same day, and reach the terminal before the flight closes."""
+    """Real connections reach the terminal before the flight closes. They leave that day, or on the evening before."""
     case, found = record
     answer = check_covered(case, found)
     take_off = to_minutes(found["flight"]["departure_time"])
     for option in answer["options"]:
-        assert 0 <= option["leave"] < option["arrive"] <= take_off - timetables.MIN_AIRPORT_FLOOR
+        assert -timetables.NIGHT_MINUTES <= option["leave"] < option["arrive"] <= take_off - timetables.MIN_AIRPORT_FLOOR
         assert option["steps"] and option["grade"] in "AB"
     at_terminal = take_off - current.SETTINGS.min_airport_minutes
     assert any(option["arrive"] <= at_terminal for option in answer["options"]), "none leaves the time asked for at the airport"

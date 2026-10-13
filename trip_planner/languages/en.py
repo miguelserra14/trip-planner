@@ -117,8 +117,12 @@ TEXTS = {
     # ---- progress
     "progress_start": "{origin} → {destination}. Departure: {departure}. Arrival: {arrival}.",
     "progress_flights": "Flights: {flights} found, {searched} of {routes} routes searched ({retries} calls refused by Kiwi and tried again).",
+    "progress_round": 'Flights looked up: {checked}, of which {itineraries} make an itinerary.',
     "progress_ground": "Ground transport of the {flights} cheapest flights: real timetables cover {covered} of {legs} legs ({requests} timetable requests).",
+    "progress_no_web": "The web search does not answer: the timetables and the operators' prices are used on their own. The transport specialists are only asked about the {count} airport(s) no timetable covers, and answer without searching.",
     "progress_resume": "Interrupted by an error ({error}) after {done} of {steps} steps. The finished steps are kept: continuing in {seconds} s.",
+    "progress_no_model": "The model that writes the recommendation did not answer ({error}). The result above is complete without it.",
+    "recommendation_by_rules": "## {heading}\n\nBy your preferences, the rules recommend option {option}. The model that explains the choice in words did not answer; the comparison above shows what the choice was made on.",
     "followup_prompt": "Question about this trip (Enter to finish):",
     "followup_no_trip": "No trip has been planned yet in this session.",
     "followup_note": "Answer written by a model from the report above, without a new search. If it disagrees with the report, the report is right.",
@@ -132,7 +136,7 @@ TEXTS = {
     "arrival_between": "between {earliest} and {latest}",
     "arrival_from": "from {earliest}",
     "arrival_until": "by {latest}",
-    "arrival_same_day": "the same day, by the last connection",
+    "arrival_same_day": "by the last connection of the day",
     # ---- why a flight is rejected
     "unverified_basis": "[based on unverified data from a model]",
     "model_timetable": "the model's timetable",
@@ -152,6 +156,7 @@ TEXTS = {
     # ---- warnings
     "warnings": "Warnings",
     "warn_below_minimum": "No itinerary reaches reliability {minimum}. The options below are NOT VERIFIED: confirm every connection before buying anything.",
+    "note_flights_beaten": 'Ground transport was looked up for {checked} flights. The other {skipped} were left out because none could beat the recommended option: its ticket, with the cheapest transport seen for its airports, already costs more.',
     "warn_flights_not_checked": "Ground transport was looked up for the {checked} cheapest flights only; {skipped} more expensive flights were not evaluated.",
     "warn_flight_gaps": "The flight list may be incomplete in {count} place(s), see the full report.",
     "warn_recommendation_differs": "Integrity warning: this text, written by a model, names option {model}, but the rules computed in code recommend option {rules}. Trust the table.",

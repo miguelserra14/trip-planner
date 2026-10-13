@@ -15,12 +15,12 @@ def in_terminal(check: bool) -> int:
     from trip_planner import current
     from trip_planner.check import check_setup
     from trip_planner.planner import ask_to_keep, follow_up, plan_all, responses, show_timings
-    from trip_planner.sources import kiwi
+    from trip_planner.sources import flight_search
 
     async def plan() -> int:
         # The trip in SETTINGS first, then the ones in EXTRA_TRIPS
         trips = [SETTINGS, *EXTRA_TRIPS]
-        await kiwi.connect_kiwi()
+        await flight_search.connect()
         await plan_all(trips)
         show_timings()
         if len(responses) < len(trips):

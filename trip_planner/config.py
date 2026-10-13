@@ -31,6 +31,10 @@ MAX_DAYS_AHEAD = 360         # airlines do not sell further ahead than about thi
 FAR_DAYS_AHEAD = 300         # ... and beyond this few flights are on sale yet
 CONFIRMED_DAYS_AHEAD = 8     # timetables for the travel date itself (grade A) are only read this close to it
 TIGHT_DAY_MINUTES = 90       # time left for all the travel, below which the leave and arrival limits hardly fit
+# A connection may cross midnight by this much. After a late landing, the last trains reach the destination in the
+# first hours of the next day. Before an early flight, when nothing runs at night, the last connection of the
+# evening before is the only one there is: it is kept for the closest alternatives (the traveller leaves a day early).
+NIGHT_MINUTES = 240
 NARROW_LEAVE_MINUTES = 60    # a window to leave in shorter than this rarely contains a connection
 
 class SettingError(ValueError):
@@ -79,9 +83,11 @@ class TripSettings:
     ideal_airport_minutes: int = 120      # time at the airport aimed for when no real timetable is available
     min_landing_minutes: int = 45         # minimum time between landing and leaving the arrival airport
     earliest_arrival: str = ""            # earliest time arriving at the destination. Empty or 00:00 = any time
-    latest_arrival: str = ""              # latest time arriving at the destination. Empty or 00:00 = whatever the last connection of the day allows
+    latest_arrival: str = ""              # latest time arriving at the destination. Empty or 00:00 = whatever the last connection of the day allows,
+                                          # which may reach the destination in the first hours after midnight
     max_stopovers: int = 0                # 0 = direct flights only
-    next_day_arrivals: bool = True        # accept flights that land on a later day than they leave (night and long flights).
+    next_day_arrivals: bool = True        # accept flights that land on a later day than they leave (night and long flights),
+                                          # and connections from the airport that reach the destination after midnight.
                                           # The arrival times above are then read on the clock of the day of arrival
 
     # Data integrity
@@ -243,7 +249,10 @@ class TripSettings:
 
     @property
     def latest_arrival_minutes(self) -> int:
-        return to_minutes(self.latest_arrival) if self.latest_arrival else 24 * 60 - 1
+        """On the clock of the day the flight lands. Past 24 hours it is in the night after that day."""
+        if self.latest_arrival:
+            return to_minutes(self.latest_arrival)
+        return 24 * 60 - 1 + (NIGHT_MINUTES if self.next_day_arrivals else 0)
 
     def scale(self, name: str) -> tuple:
         """What a scale means: (radius in km, most airports kept, the setting that holds the radius)."""
@@ -265,6 +274,8 @@ class TripSettings:
             return f"at {self.earliest_arrival} or later, and before midnight"
         if self.latest_arrival:
             return f"at {self.latest_arrival} at the latest"
+        if self.next_day_arrivals:
+            return "by the last connection of the day the flight lands, which may reach the destination shortly after midnight"
         return "on the same day the flight lands, so the last connection of the day is the limit"
 
     def extra_hours_cost(self, first_hour_eur: float, hours: float) -> float:

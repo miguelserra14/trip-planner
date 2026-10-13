@@ -1,5 +1,6 @@
 """Combine a flight with its ground legs into a door-to-door itinerary, check every hard constraint, add up the
 cost and rank the itineraries by the traveller's preferences."""
+from datetime import date, timedelta
 from typing import Any
 
 from trip_planner import current
@@ -22,11 +23,16 @@ from trip_planner.utils import as_duration, to_minutes, to_time
 # The dates, the allowed airports and what the real timetables say are never given up.
 REQUIREMENTS = ("arrival", "airport", "stopovers", "leave")
 
+def day_after(day: str, days: int) -> str:
+    return (date.fromisoformat(day) + timedelta(days=days)).isoformat()
+
 def breaches(itinerary: dict[str, Any]) -> list[dict[str, Any]]:
     """The requirements an itinerary does not respect, in the order of REQUIREMENTS. Each one says by how much
     (amount), what the itinerary does (value), what was asked (limit) and the setting that asks it."""
     settings, flight, found = current.SETTINGS, itinerary["flight"], []
-    arrive, leave = to_minutes(itinerary["arrival_time"]), to_minutes(itinerary["leave_time"])
+    # In minutes of the day the traveller is there, not on the clock: 00:20 in the night after the landing is later
+    # than 23:00, and 23:30 on the evening before the flight is earlier than 06:00
+    arrive, leave = itinerary["from"]["arrive"], itinerary["to"]["leave"]
     if arrive > settings.latest_arrival_minutes:
         found.append({"kind": "arrival", "side": "after", "amount": arrive - settings.latest_arrival_minutes,
                       "value": itinerary["arrival_time"], "limit": settings.latest_arrival, "setting": "latest_arrival"})
@@ -62,8 +68,8 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
         raise ValueError(tr("reject_stopovers", stops=flight["stops"], maximum=current.SETTINGS.max_stopovers))
     if flight["arrival_airport"] not in {airport["code"] for airport in current.TRIP.arrival}:
         raise ValueError(tr("reject_arrival_airport", airport=flight["arrival_airport"]))
-    to_leg = to_airport_leg(flight, ground, transfer, closest)
-    from_leg = from_airport_leg(flight, ground, route, closest)
+    to_leg = to_airport_leg(flight, ground, transfer, closest, priced=True)
+    from_leg = from_airport_leg(flight, ground, route, closest, priced=True)
     # Where each leg runs, for the vehicles no operator prices (price_with_tickets)
     to_leg["country"], from_leg["country"] = country_of(flight["departure_airport"]), country_of(flight["arrival_airport"])
     itinerary = {
@@ -72,6 +78,10 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
         "from": from_leg,
         "notes": to_leg.get("notes", []) + from_leg.get("notes", []),
         "leave_time": to_time(to_leg["leave"]),
+        # The days the traveller leaves and arrives on. They are the day of the flight and the day it lands, unless
+        # a ground leg crosses midnight: the evening before an early flight, the night after a late landing.
+        "leave_date": day_after(flight["date"], to_leg["leave"] // (24 * 60)),
+        "arrival_date": day_after(landing_day(flight), from_leg["arrive"] // (24 * 60)),
         "at_airport_time": to_time(to_leg["arrive"]),
         "airport_wait": to_minutes(flight["departure_time"]) - to_leg["arrive"],
         "wait_after_landing": from_leg["leave"] - to_minutes(flight["arrival_time"]),
@@ -90,6 +100,8 @@ def price_itinerary(itinerary: dict[str, Any]) -> None:
     flight = itinerary["flight"]
     price_with_tickets(itinerary["to"], flight["date"], current.SETTINGS.free_trains_at_origin)
     price_with_tickets(itinerary["from"], landing_day(flight), current.SETTINGS.free_trains_at_destination)
+    # An operator that sells the very departure of a leg confirms its timetable for the day (price_with_tickets)
+    itinerary["schedule_grade"] = max(itinerary["to"]["grade"], itinerary["from"]["grade"])
     booking = airlines.verify_with_airline(flight)   # the traveller books on the airline's site: that price counts when it is known
     itinerary["booking"] = booking
     itinerary["flight_price"] = booking["price_eur"]

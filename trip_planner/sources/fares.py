@@ -6,7 +6,10 @@ of arrival. Otherwise there is no price from here, and the leg keeps its estimat
 
 FARE_SOURCES lists the operators. None of these is an official service for programs: they are the ones the
 operators' own sites use, and they can change without notice. To support another operator, write a function
-like oebb_fare and add it there."""
+like oebb_fare and add it there.
+
+RIDE_SOURCES lists the operators that can also say everything they run between a city and an airport on one day:
+rides the timetables may not have, each with its price and confirmed for that day (grade A)."""
 import threading
 import xml.etree.ElementTree as ElementTree
 from collections.abc import Callable
@@ -17,7 +20,7 @@ from typing import Any
 import httpx
 
 from trip_planner.config import USER_AGENT
-from trip_planner.places import distance_km
+from trip_planner.places import distance_km, Place
 from trip_planner.utils import plain, to_minutes
 
 TIMEOUT = 20
@@ -63,17 +66,66 @@ def in_eur(amount: float, currency: str) -> float | None:
     return round(amount / RATES[currency], 2) if currency in RATES else None
 
 # ---------------------------------------------------------------- the operators
+FLIXBUS = "https://global.api.flixbus.com/search"
+FLIXBUS_PLACES: dict[str, str | None] = {}
+
+def flixbus_search(start: str, end: str, day: str, by: str) -> tuple:
+    """What FlixBus sells between two of its stations, or two of its cities (by), on one day (yyyy-mm-dd).
+    Returns (the rides that can be bought, the names of the stations by their id)."""
+    found = http.get(f"{FLIXBUS}/service/v4/search", params={
+        f"from_{by}_id": start, f"to_{by}_id": end, "search_by": "stations" if by == "station" else "cities",
+        "departure_date": f"{day[8:10]}.{day[5:7]}.{day[0:4]}", "products": '{"adult":1}', "currency": "EUR", "locale": "en",
+        "include_after_midnight_rides": "0",
+    }).raise_for_status().json()
+    rides = [ride for trip in found.get("trips") or [] for ride in (trip.get("results") or {}).values() if ride.get("status") == "available"]
+    return rides, {identity: station.get("name", "") for identity, station in (found.get("stations") or {}).items()}
+
+def flixbus_price(ride: dict[str, Any]) -> float:
+    return float(ride["price"].get("total_with_platform_fee") or ride["price"]["total"])
+
 def flixbus_fare(trip: Trip) -> float | None:
     """FlixBus, anywhere: the timetable's stop ids are FlixBus's own."""
-    ride_date = f"{trip.day[8:10]}.{trip.day[5:7]}.{trip.day[0:4]}"
-    found = http.get("https://global.api.flixbus.com/search/service/v4/search", params={
-        "from_station_id": trip.start_id.split("_", 1)[1], "to_station_id": trip.end_id.split("_", 1)[1], "search_by": "stations",
-        "departure_date": ride_date, "products": '{"adult":1}', "currency": "EUR", "locale": "en", "include_after_midnight_rides": "0",
-    }).raise_for_status().json()
-    for ride in (ride for found_trip in found.get("trips") or [] for ride in (found_trip.get("results") or {}).values()):
-        if ride.get("status") == "available" and trip.matches(ride["departure"]["date"], ride["arrival"]["date"]):
-            return float(ride["price"].get("total_with_platform_fee") or ride["price"]["total"])
-    return None
+    rides, stations = flixbus_search(trip.start_id.split("_", 1)[1], trip.end_id.split("_", 1)[1], trip.day, "station")
+    return next((flixbus_price(ride) for ride in rides if trip.matches(ride["departure"]["date"], ride["arrival"]["date"])), None)
+
+def flixbus_city(query: str, latitude: float, longitude: float, max_km: float) -> str | None:
+    """The id FlixBus gives to a city or an airport, found by name and checked by position."""
+    key = f"{plain(query)}|{max_km}"
+    if key not in FLIXBUS_PLACES:
+        found = http.get(f"{FLIXBUS}/autocomplete/cities", params={"q": query, "lang": "en", "flixbus_cities_only": "false", "stations": "true"}).raise_for_status().json()
+        near = [(distance_km(latitude, longitude, city["location"]["lat"], city["location"]["lon"]), city["id"]) for city in found if city.get("location")]
+        near = [candidate for candidate in near if candidate[0] <= max_km]
+        FLIXBUS_PLACES[key] = min(near)[1] if near else None
+    return FLIXBUS_PLACES[key]
+
+def flixbus_rides(city: Place, airport: dict[str, Any], day: str, to_airport: bool = True) -> list[dict[str, Any]] | None:
+    """Every FlixBus ride between a city and an airport on one day (yyyy-mm-dd), with its real price: towards the
+    airport, or from it. Returns None when FlixBus has no stop in one of the two, so there is nothing to check."""
+    city_id = flixbus_city(city.english_name, city.latitude, city.longitude, 25)
+    airport_id = (flixbus_city(f"{airport['city']} Airport", airport["latitude"], airport["longitude"], 6)
+                  or flixbus_city(airport["name"], airport["latitude"], airport["longitude"], 6))
+    if not city_id or not airport_id:
+        return None
+    start, end = (city_id, airport_id) if to_airport else (airport_id, city_id)
+    found, stations = flixbus_search(start, end, day, "city")
+    rides = []
+    for ride in found:
+        departure, arrival = ride["departure"]["date"], ride["arrival"]["date"]
+        if departure[:10] != day or arrival[:10] != day:
+            continue
+        rides.append({
+            "grade": "A", "source": "FlixBus", "service_day": day,
+            "leave": to_minutes(departure[11:16]), "arrive": to_minutes(arrival[11:16]), "price_eur": flixbus_price(ride),
+            "steps": [{"time": departure[11:16], "arrive": arrival[11:16], "line": "FlixBus", "agency": "FlixBus",
+                       "from": stations.get(ride["departure"]["station_id"], ""), "to": stations.get(ride["arrival"]["station_id"], ""),
+                       "rail": False, "coach": True, "km": airport["km"]}],
+            "urls": [f"https://shop.flixbus.pt/search?departureCity={start}&arrivalCity={end}&rideDate={day[8:10]}.{day[5:7]}.{day[0:4]}&adult=1"],
+        })
+    return sorted(rides, key=lambda ride: ride["leave"])
+
+# Operators that can list everything they run between a city and an airport on one day.
+# To support another operator, write a function like flixbus_rides and add it here.
+RIDE_SOURCES = {"FlixBus": flixbus_rides}
 
 OEBB = "https://shop.oebbtickets.at/api"
 OEBB_PASSENGER = {"type": "ADULT", "id": 1, "me": False, "remembered": False, "relations": [], "cards": [], "isSelected": False,
@@ -221,6 +273,7 @@ class FareSource:
     fare: Callable[[Trip], float | None]
     through: bool = False                  # one ticket covers several of its vehicles in a row
     checked: str = ""                      # a published tariff, not a booking system: the day it was read (yyyy-mm-dd)
+    confirms: bool = False                 # its price is only given for a departure it sells: finding one confirms the timetable
 
     @property
     def tariff(self) -> bool:
@@ -279,12 +332,12 @@ TARIFFS = [
 FARE_SOURCES = [
     FareSource("Luxembourg (free public transport)", "LU",
                lambda step: all((step.get(end) or "").startswith(LUXEMBOURG_STOPS) for end in ("from_id", "to_id")), luxembourg_fare, through=True),
-    FareSource("FlixBus", "EU", lambda step: all((step.get(end) or "").startswith("eu-flixbus_") for end in ("from_id", "to_id")), flixbus_fare),
-    FareSource("RegioJet", "EU", lambda step: agency(step).startswith(("regiojet", "student agency")), regiojet_fare),   # Student Agency runs its coaches
-    FareSource("ÖBB", "AT", lambda step: step["rail"] and agency(step).startswith(("oebb", "obb")), oebb_fare, through=True),
-    FareSource("Trenitalia", "IT", lambda step: step["rail"] and agency(step) in ("trenitalia", "trenord"), trenitalia_fare, through=True),
-    FareSource("MÁV", "HU", lambda step: step["rail"] and (step.get("from_id") or "").startswith("hu-mav_"), mav_fare, through=True),
-    FareSource("Elron", "EE", lambda step: step["rail"] and "elron" in agency(step), elron_fare),
+    FareSource("FlixBus", "EU", lambda step: all((step.get(end) or "").startswith("eu-flixbus_") for end in ("from_id", "to_id")), flixbus_fare, confirms=True),
+    FareSource("RegioJet", "EU", lambda step: agency(step).startswith(("regiojet", "student agency")), regiojet_fare, confirms=True),   # Student Agency runs its coaches
+    FareSource("ÖBB", "AT", lambda step: step["rail"] and agency(step).startswith(("oebb", "obb")), oebb_fare, through=True, confirms=True),
+    FareSource("Trenitalia", "IT", lambda step: step["rail"] and agency(step) in ("trenitalia", "trenord"), trenitalia_fare, through=True, confirms=True),
+    FareSource("MÁV", "HU", lambda step: step["rail"] and (step.get("from_id") or "").startswith("hu-mav_"), mav_fare, through=True, confirms=True),
+    FareSource("Elron", "EE", lambda step: step["rail"] and "elron" in agency(step), elron_fare, confirms=True),
     *TARIFFS,
 ]
 
@@ -323,10 +376,11 @@ def fare(source: FareSource, trip: Trip) -> float | None:
     return price
 
 def tickets(steps: list[dict[str, Any]], travel_day: str, service_day: str | None, skip: Callable[[dict[str, Any]], bool] = lambda step: False) -> list[dict[str, Any]]:
-    """The tickets found for the vehicles of a connection: {"positions", "operator", "price_eur", "travel_day", "tariff"}.
+    """The tickets found for the vehicles of a connection: {"positions", "operator", "price_eur", "travel_day", "tariff", "confirms"}.
     Each is asked for the travel date. When the operator does not sell that date yet, for the day the timetable
     was read on, and travel_day is then False. tariff says the price is a published one and not a booking system's
-    answer for that departure. skip leaves out vehicles that cost this traveller nothing."""
+    answer for that departure. confirms says the operator only answers for a departure it sells, at those very
+    times. skip leaves out vehicles that cost this traveller nothing."""
     found = []
     for source, positions in runs(steps):
         first, last = steps[positions[0]], steps[positions[-1]]
@@ -340,6 +394,6 @@ def tickets(steps: list[dict[str, Any]], travel_day: str, service_day: str | Non
                                       str(first.get("line") or "")))
             if price is not None:
                 found.append({"positions": positions, "operator": source.name, "price_eur": price, "travel_day": day == travel_day,
-                              "tariff": source.tariff})
+                              "tariff": source.tariff, "confirms": source.confirms})
                 break
     return found

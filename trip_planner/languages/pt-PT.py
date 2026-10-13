@@ -117,8 +117,12 @@ TEXTS = {
     # ---- progress
     "progress_start": "{origin} → {destination}. Partida: {departure}. Chegada: {arrival}.",
     "progress_flights": "Voos: {flights} encontrados, {searched} de {routes} rotas pesquisadas ({retries} pedidos recusados pela Kiwi e repetidos).",
+    "progress_round": 'Voos consultados: {checked}, dos quais {itineraries} dão um itinerário.',
     "progress_ground": "Transporte terrestre dos {flights} voos mais baratos: os horários reais cobrem {covered} de {legs} troços ({requests} pedidos de horários).",
+    "progress_no_web": "A pesquisa web não responde: são usados só os horários e os preços dos operadores. Os especialistas de transporte só são consultados para os {count} aeroporto(s) que nenhum horário cobre, e respondem sem pesquisar.",
     "progress_resume": "Interrompido por um erro ({error}) após {done} de {steps} passos. Os passos concluídos ficam guardados: a continuar dentro de {seconds} s.",
+    "progress_no_model": "O modelo que escreve a recomendação não respondeu ({error}). O resultado acima está completo sem ele.",
+    "recommendation_by_rules": "## {heading}\n\nPelas tuas preferências, as regras recomendam a opção {option}. O modelo que explica a escolha por palavras não respondeu; a comparação acima mostra em que se baseou a escolha.",
     "followup_prompt": "Pergunta sobre esta viagem (Enter para terminar):",
     "followup_no_trip": "Ainda não foi planeada nenhuma viagem nesta sessão.",
     "followup_note": "Resposta escrita por um modelo a partir do relatório acima, sem nova pesquisa. Se divergir do relatório, vale o relatório.",
@@ -132,7 +136,7 @@ TEXTS = {
     "arrival_between": "entre as {earliest} e as {latest}",
     "arrival_from": "a partir das {earliest}",
     "arrival_until": "até às {latest}",
-    "arrival_same_day": "no próprio dia, até à última ligação",
+    "arrival_same_day": "até à última ligação do dia",
     # ---- why a flight is rejected
     "unverified_basis": "[com base em dados não verificados de um modelo]",
     "model_timetable": "horário do modelo",
@@ -152,6 +156,7 @@ TEXTS = {
     # ---- warnings
     "warnings": "Avisos",
     "warn_below_minimum": "Nenhum itinerário atinge a fiabilidade {minimum}. As opções abaixo NÃO ESTÃO VERIFICADAS: confirma todas as ligações antes de comprar o que quer que seja.",
+    "note_flights_beaten": 'O transporte terrestre foi consultado para {checked} voos. Os outros {skipped} ficaram de fora porque nenhum podia bater a opção recomendada: o bilhete, com o transporte mais barato visto para os seus aeroportos, já custa mais.',
     "warn_flights_not_checked": "O transporte terrestre só foi consultado para os {checked} voos mais baratos; {skipped} voos mais caros não foram avaliados.",
     "warn_flight_gaps": "A lista de voos pode estar incompleta em {count} ponto(s), ver o relatório completo.",
     "warn_recommendation_differs": "Aviso de integridade: este texto, escrito por um modelo, refere a opção {model}, mas as regras calculadas em código recomendam a opção {rules}. Confia na tabela.",

@@ -18,7 +18,7 @@ The trip is described in `settings.py` and the program is the `trip_planner/` pa
 4. Ask about the trip in the box at the bottom. Questions are answered without searching again.
 
 The first time, `TripPlanner.bat` creates the environment (a few minutes, Python 3.12 must be installed) and opens
-`env/.env` for you to paste the two free API keys, `GOOGLE_API_KEY` and `TAVILY_API_KEY`. The links to get them are in that file.
+`env/.env` for you to paste the free API keys: `GOOGLE_API_KEY`, which is required, and `TAVILY_API_KEY` and `MISTRAL_API_KEY`, which are optional. The links to get them are in that file.
 
 **Check the services** in the window makes one small request to every service the program depends on and says
 which ones answer. Use it whenever a search fails.
@@ -124,22 +124,23 @@ trip_planner/
 ├── utils.py           times, text, progress lines, timings
 ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
 ├── sources/           where the data comes from, one module per outside service
-│   ├── kiwi.py            flights
-│   ├── google_flights.py  flights when Kiwi does not answer (plan B)
+│   ├── flight_search.py   the flight search: every route, on Kiwi first, then on Google Flights
+│   ├── kiwi.py            flights from Kiwi
+│   ├── google_flights.py  flights from Google Flights, when Kiwi does not answer
 │   ├── timetables.py      published timetables (Transitous) and airport terminals
-│   ├── operators.py       rides and prices from operators' booking systems (FlixBus)
 │   ├── fares.py           ticket prices of the vehicles found in the timetables, asked of each operator
 │   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
 │   └── web.py             web search for the subagents (Tavily), cleaning of what models write
 ├── agents/            the models
 │   ├── subagents.py       airport transfer agent, destination transport agent, their prompts and limits
-│   ├── steps.py           the three steps of a trip, as tools of the coordinator
-│   ├── coordinator.py     the coordinator, its prompt and its fallback between models
+│   ├── steps.py           the three steps of a trip, run in order by code
+│   ├── coordinator.py     the model that writes the recommendation, its prompt and its fallback between models
 │   ├── schemas.py         the structured answers of the subagents
 │   └── state.py           what each agent keeps between steps
 ├── itineraries/       code that decides the result
 │   ├── legs.py            ground legs: real connection or checked estimate
-│   └── ranking.py         hard constraints, cost, ranking
+│   ├── ranking.py         hard constraints, cost, ranking
+│   └── selection.py       which flights get their ground transport looked up: the ones that can still win
 ├── report/            the Markdown reports
 │   ├── summary.py         the result shown to the traveller
 │   ├── full.py            the full report saved to reports/
@@ -149,8 +150,9 @@ trip_planner/
 └── check.py           the --check of every outside service
 ```
 
-A trip goes through them in this order: `main.py` → `gui.py` (or the terminal) → `planner.py` → the coordinator (`agents/`) runs the three
-steps → each step reads `sources/` → `itineraries/` checks and ranks → `report/` writes the result.
+A trip goes through them in this order: `main.py` → `gui.py` (or the terminal) → `planner.py` runs the three steps (`agents/steps.py`) →
+each step reads `sources/` → `itineraries/` checks and ranks → `report/` writes the result, shown at once → the coordinator
+(`agents/coordinator.py`) is asked once for the recommendation in words. Without a model the result is still shown.
 
 ## Tests
 
@@ -196,7 +198,8 @@ The program depends on these services. None of them is under the project's contr
 | Service | Used for | Key |
 | :-- | :-- | :-- |
 | Google Gemini | Coordinator and the two subagents | `GOOGLE_API_KEY` |
-| Tavily | Web search of the subagents | `TAVILY_API_KEY` |
+| Mistral | Optional plan B for the models: answers when the Gemini models fail or have no quota left | `MISTRAL_API_KEY` |
+| Tavily | Web search of the subagents. When it does not answer, the timetables and the operators' prices are used on their own | `TAVILY_API_KEY` |
 | Kiwi (MCP server) | Flights | none |
 | Google Flights, through the `fast-flights` library | Flights when Kiwi does not answer. Not an official service: it reads the page a browser gets, so it can stop working or be refused without notice | none |
 | Transitous | Published timetables of trains, coaches and local transport | none |

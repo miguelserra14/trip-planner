@@ -79,7 +79,7 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         *table([tr("col_airport"), tr("col_date"), tr("col_rides")],
                [[code, day, "; ".join(f"{ride['source']} {to_time(ride['leave'])} → {to_time(ride['arrive'])}, {ride['price_eur']:.2f} EUR"
                                       for ride in rides) or tr("none")]
-                for code, days in (ground.get("operators") or {}).items() for day, rides in days.items()]),
+                for side in ("operators", "operators_from") for code, days in (ground.get(side) or {}).items() for day, rides in days.items()]),
         "",
         tr("model_transfers_title"),
         "",

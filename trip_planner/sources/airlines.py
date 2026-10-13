@@ -42,7 +42,7 @@ def searched_site(airline: str) -> str:
     names.append("".join(word[0] for word in words))                   # initials, such as "ana"
     best, best_score = "", 0
     for query in (f"{airline} official site", f"{airline} airline official website book flights"):
-        for result in web.tavily_client.search(query, max_results=5)["results"]:
+        for result in web.search(query, max_results=5)["results"]:
             domain = urlparse(result["url"]).netloc.lower()
             if domain.split(".")[0] in NOT_THE_BOOKING_SITE:
                 domain = domain.split(".", 1)[1]   # press.brusselsairlines.com -> brusselsairlines.com
@@ -107,9 +107,16 @@ PRICE_CHECKERS = {
     "FR": ryanair_fare,
 }
 
+CHECKED: dict[str, dict[str, Any]] = {}   # what each airline answered in this search, by flight: a flight is priced more than once
+
 def verify_with_airline(flight: dict[str, Any]) -> dict[str, Any]:
     """Check a flight on the airline's own site.
     Returns {"verified", "price_eur", "url"}. url is empty unless the airline confirmed the flight. Never raises."""
+    if flight["id"] not in CHECKED:
+        CHECKED[flight["id"]] = ask_airline(flight)
+    return dict(CHECKED[flight["id"]])
+
+def ask_airline(flight: dict[str, Any]) -> dict[str, Any]:
     booking = {"verified": False, "price_eur": flight["price_eur"], "url": ""}
     checker = PRICE_CHECKERS.get(flight.get("carrier", ""))
     if checker is None or flight["stops"] != 0:

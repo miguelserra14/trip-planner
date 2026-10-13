@@ -1,6 +1,7 @@
 """Web search for the subagents (Tavily), and the protections for what models bring back from the web."""
 import json
 import re
+import time
 from urllib.parse import urlparse
 
 from langchain.messages import ToolMessage
@@ -8,7 +9,29 @@ from langchain.tools import tool, ToolRuntime
 from langgraph.types import Command
 from tavily import TavilyClient
 
-tavily_client = TavilyClient()
+tavily_client: TavilyClient | None = None   # made at the first search: without its key the program still starts
+
+def search(query: str, **options) -> dict:
+    """One web search on Tavily. Raises when its key is missing or the service does not answer."""
+    global tavily_client
+    if tavily_client is None:
+        tavily_client = TavilyClient()
+    return tavily_client.search(query, **options)
+
+AVAILABLE_FOR_SECONDS = 600
+last_check = (0.0, False)   # when the web search was last tried, and whether it answered
+
+def available() -> bool:
+    """Whether the web search answers: one small search, remembered for ten minutes. When it does not, the
+    program goes on without it (see search_ground_transport)."""
+    global last_check
+    if time.time() - last_check[0] > AVAILABLE_FOR_SECONDS:
+        try:
+            search("train timetable", max_results=1)
+            last_check = (time.time(), True)
+        except Exception:
+            last_check = (time.time(), False)
+    return last_check[1]
 
 # Web pages are untrusted text. Two protections for what the models bring back from them:
 # - a link written by a model is only shown if its site really appeared in a search result (SEEN_DOMAINS)
@@ -65,7 +88,7 @@ def web_search(query: str, runtime: ToolRuntime) -> Command:
     else:
         searched = 1   # a failed search counts too, or a failing service would be asked forever
         try:
-            results = tavily_client.search(query).get("results", [])
+            results = search(query).get("results", [])
             SEEN_DOMAINS.update(domain_of(result.get("url", "")) for result in results)
             answer = {"query": query, "results": [
                 {"title": result.get("title", ""), "url": result.get("url", ""), "content": result.get("content", "")}

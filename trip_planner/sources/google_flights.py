@@ -1,5 +1,5 @@
 """Flights from Google Flights, read with the fast-flights library. Plan B: only asked when Kiwi does not answer
-(see kiwi.kiwi_flights). Google has no public service for this: the library reads the page a browser would get,
+(see flight_search.search). Google has no public service for this: the library reads the page a browser would get,
 so it stops working whenever Google changes that page, and Google may refuse it.
 
 One request per departure airport, arrival airport and date. Each flight is returned in the shape Kiwi uses, so

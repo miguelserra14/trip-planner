@@ -1,49 +1,41 @@
-"""The coordinator: the model that supervises the steps and writes the recommendation.
-It is only offered the tool of the next step (next_step_only, dynamic tools), so the steps always run in order.
-Its state is saved after every step (a checkpointer, one thread per trip): a run that fails continues from its
-last finished step, and follow-up questions are answered without searching again."""
-import warnings
+"""The coordinator: the model that writes the recommendation, and answers the questions about a trip.
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import dynamic_prompt, ModelRequest, wrap_model_call
+It decides nothing about the search. The three steps run in code (steps.run_steps) and the report they produce
+is shown to the traveller as it is. The coordinator is then called once, with the request and the results in
+front of it, to say in words which option to take and why. When no model answers, the trip is not lost: the
+report is already on the screen, and the planner says which option the rules recommend (planner.recommend)."""
+import warnings
+from typing import Any
+
 from langchain.chat_models import init_chat_model
-from langgraph.checkpoint.memory import InMemorySaver
+from langchain.messages import SystemMessage
 
 from trip_planner import current
-from trip_planner.agents import subagents
-from trip_planner.agents.state import TripState
-from trip_planner.agents.steps import build_itineraries, search_flights, search_ground_transport, STEPS
+from trip_planner.agents import models, subagents
 from trip_planner.config import LANGUAGES, LIGHTS
 from trip_planner.texts import tr
+from trip_planner.utils import message_text
 
 # The Google client leaves this warning behind when a model answers with an error. The error itself is handled
-# by best_available_model, so the warning only adds noise.
+# by write, so the warning only adds noise.
 warnings.filterwarnings("ignore", message="coroutine 'ClientResponse.json' was never awaited")
 
-# Coordinator models, best first. The free tier gives the better models very few requests per day
-# (20 for gemini-3.8-flash), so the coordinator uses the best one that still has quota
-# and only falls back to flash-lite when the others are exhausted.
-COORDINATOR_MODELS = [
-    #"google_genai:gemini-3.1-pro-preview",    this one is too slow
-    "google_genai:gemini-3.8-flash",
-    "google_genai:gemini-3.1-flash-lite",
-]
+# The models the coordinator tries, best first (models.py): the Gemini models, then plan B when it has a key.
+COORDINATOR_MODELS = models.coordinator_models()
 
 # Coordinator model: the best model that still has quota today.
-coordinator_models = {
-    # Only the last model retries: the others must fail fast, so that the next one takes over.
-    name: init_chat_model(name, max_retries=6 if name == COORDINATOR_MODELS[-1] else 1)
-    for name in COORDINATOR_MODELS
-}
+coordinator_models = {name: init_chat_model(name, max_retries=models.retries(name, COORDINATOR_MODELS)) for name in COORDINATOR_MODELS}
 EXHAUSTED_MODELS: set = set()   # models out of daily quota, skipped for the rest of this session
 
-@wrap_model_call
-async def best_available_model(request: ModelRequest, handler):
+async def write(messages: list[Any]) -> str:
+    """What the coordinator answers to a conversation about the trip being planned: the best model that answers.
+    Raises when none does."""
+    conversation = [SystemMessage(content=coordinator_prompt()), *messages]
     for name in COORDINATOR_MODELS:
         if name in EXHAUSTED_MODELS:
             continue
         try:
-            return await handler(request.override(model=coordinator_models[name]))
+            return message_text(await coordinator_models[name].ainvoke(conversation, config={"tags": ["TP"]}))   # the tag finds the traces in LangSmith
         except Exception as error:
             if name == COORDINATOR_MODELS[-1]:
                 raise
@@ -51,36 +43,23 @@ async def best_available_model(request: ModelRequest, handler):
                 EXHAUSTED_MODELS.add(name)   # the daily quota only comes back tomorrow
     raise RuntimeError("No coordinator model is available.")
 
-@wrap_model_call
-async def next_step_only(request: ModelRequest, handler):
-    """Dynamic tools: the coordinator is only offered the tool of the next step, read from the state.
-    The order of the steps is then guaranteed, whichever model is coordinating. When every step is done
-    no tool is left: the coordinator can only write, the recommendation or the answer to a follow-up question."""
-    done = request.state.get("step") or 0
-    offered = STEPS[done] if done < len(STEPS) else ""
-    return await handler(request.override(tools=[t for t in request.tools if getattr(t, "name", "") == offered]))
-
-@dynamic_prompt
-def coordinator_prompt(request: ModelRequest) -> str:
+def coordinator_prompt() -> str:
     s = current.SETTINGS
     return f"""
-    You are a trip coordinator supervising a flight search and two ground transport specialists.
-    The cities, the airports and the dates of the trip are already in the state, confirmed by the traveller.
-    Follow these steps in order, one tool call at a time. Only the tool of the next step is available to you:
-    1. Call search_flights. It searches every route.
-    2. Call search_ground_transport. It reads the real timetables and asks the two transport specialists.
-    3. Call build_itineraries. It checks the hard constraints, grades how reliable each itinerary is, computes the
-       totals and ranks the itineraries.
-    If search_flights finds no flight that fits, it says which of the traveller's limits the existing flights break,
-    counted by code. When it kept flights that break those limits, go on with the next steps as usual.
-    If build_itineraries finds no itinerary that respects every requirement, it returns the closest ones instead,
-    ordered by how little they break, with what speaks for and against each. Do not call the tools again. Say
-    plainly that nothing respects every requirement, then, in 3 or 4 sentences: which option is the closest and
-    what it breaks, how it compares with the next one, and the setting and value that make it valid. Use only
-    what the report says, never suggest a cause it does not mention, and do not use the heading below.
-    If it returns no option at all, tell the traveller which single setting to relax, from the reasons it lists.
+    You are a trip coordinator. The search is already done, by code, in three steps: every route was searched for
+    flights, the real timetables and the operators' prices of the ground transport were read, and the itineraries
+    were checked against the hard constraints, priced and ranked. The traveller's request and what each step found
+    are in the first message. You cannot search or call any tool: you write.
+    If no flight fits, the first step says which of the traveller's limits the existing flights break, counted by
+    code. When it kept flights that break those limits, the other steps went on as usual.
+    If no itinerary respects every requirement, the last step gives the closest ones instead, ordered by how little
+    they break, with what speaks for and against each. Say plainly that nothing respects every requirement, then,
+    in 3 or 4 sentences: which option is the closest and what it breaks, how it compares with the next one, and
+    the setting and value that make it valid. Use only what the report says, never suggest a cause it does not
+    mention, and do not use the heading below.
+    If it gives no option at all, tell the traveller which single setting to relax, from the reasons it lists.
 
-    The hard constraints of this trip, enforced by build_itineraries:
+    The hard constraints of this trip, enforced by code:
     - {subagents.stopovers_rule(s)}
     - The traveller leaves {s.origin} between {s.earliest_leave} and {s.latest_leave}.
     - The traveller is at the airport at least {s.min_airport_minutes} minutes before the flight departs.
@@ -96,11 +75,11 @@ def coordinator_prompt(request: ModelRequest) -> str:
     2. Shortest total door-to-door duration. Extra hours of travel cost the traveller more and more:
        {s.extra_hours_table(s.tiebreak_eur_per_hour)}. An itinerary is preferred when its price plus the cost of the
        hours it takes beyond the fastest itinerary is the lowest.
-    build_itineraries already applies both rules and tells you which option they recommend. Recommend that same option.
+    The code already applied both rules and says which option they recommend. Recommend that same option.
 
-    The report from build_itineraries is shown to the traveller automatically, right above your answer.
+    The report of the last step is shown to the traveller automatically, right above your answer.
     Do not repeat its tables or its steps, and never restate a time or a price differently from the report.
-    Your final answer is in {LANGUAGES[s.language]}, formatted as Markdown, with only:
+    Your first answer is in {LANGUAGES[s.language]}, formatted as Markdown, with only:
     - a level 2 heading "{tr('recommendation')}"
     - which option you recommend and why, in 2 to 4 short sentences, referring to the options by their number
     - how reliable that option is: say which of its parts are {LIGHTS['B']} or {LIGHTS['C']} and must be confirmed before booking.
@@ -108,19 +87,9 @@ def coordinator_prompt(request: ModelRequest) -> str:
     - the main trade-off against the other options, in 1 or 2 sentences
     Do not use any other emojis.
 
-    After that answer the traveller may ask follow-up questions about the trip. No tool is available then:
-    answer in a few sentences, only from the report and the tool results above, without the heading. Never state
+    After that answer the traveller may ask follow-up questions about the trip:
+    answer in a few sentences, only from the report and the results above, without the heading. Never state
     a time or a price that is not in them. You cannot search again, so never offer to. If the question needs a new
     search (other dates, airports or limits), name the setting in settings.py to change, such as `dates` or
     `latest_leave`, and say that the traveller must run the search again.
     """
-
-coordinator = create_agent(
-    model=coordinator_models[COORDINATOR_MODELS[-1]],
-    tools=[search_flights, search_ground_transport, build_itineraries],
-    state_schema=TripState,
-    middleware=[best_available_model, next_step_only, coordinator_prompt],
-    # The state is saved after every step, one thread per trip: a run that fails continues from its last
-    # finished step (see run_coordinator), and the traveller can ask follow-up questions (see ask).
-    checkpointer=InMemorySaver(),
-)

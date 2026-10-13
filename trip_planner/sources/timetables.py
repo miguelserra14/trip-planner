@@ -2,8 +2,8 @@
 actually leaves at the right time on the travel date. So the ground transport of every flight is looked up
 by code in two kinds of sources, and what a model says is only used where neither covers the route.
 
-1. OPERATOR_CHECKERS (operators.py): an operator's own booking system. Real rides and real prices for the
-   travel date (grade A).
+1. RIDE_SOURCES (fares.py): an operator's own booking system. Real rides and real prices for the day of
+   the trip (grade A), to the departure airport and from the arrival airport.
 2. Transitous: a free journey planner built on the timetables that operators publish, worldwide. Trains,
    metros, buses, coaches and airport shuttles of every operator that publishes one. No prices. Timetables are
    usually published only a few weeks ahead, so a far travel date is looked up on the same weekday of a nearer
@@ -22,13 +22,13 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from trip_planner import current
-from trip_planner.config import ROOT, USER_AGENT
+from trip_planner.config import NIGHT_MINUTES, ROOT, USER_AGENT
 from trip_planner.places import distance_km
-from trip_planner.sources import operators, web
+from trip_planner.sources import fares, web
 from trip_planner.utils import plain, say, to_minutes, to_time
 
 TRANSITOUS_API = "https://api.transitous.org/api/v1"
-TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ", ".join(operators.OPERATOR_CHECKERS)
+TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ", ".join(fares.RIDE_SOURCES)
 # Transitous is a free community service. It answers about one request every 1.4 seconds per user, however fast
 # it is asked, so the time this step takes is the number of requests. Requests are shared wherever one answer
 # serves several flights (see Timetables.onward).
@@ -266,6 +266,9 @@ class Timetables:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
         on the clock of the end point when arrive_by, otherwise of the start point. modes limits the kinds of
         vehicle, empty for everything on the ground.
+        The times returned are minutes since the midnight that day starts with. Up to NIGHT_MINUTES across a
+        midnight are accepted: below 0 a connection to the airport leaves the evening before, and above 24 hours
+        one from the airport arrives in the night after (only if the traveller accepts arriving on a later day).
         One end is the city and the other the airport terminal (to_airport says which way). On the city side the
         time returned is that of the vehicle, on the airport side it includes the walk to or from the terminal.
         The airport end (start, or end when to_airport) may be a stop of the airport instead of a point (see
@@ -294,13 +297,17 @@ class Timetables:
             last = itinerary["endTime"] if (terminal_known or to_stop) and to_airport else legs[-1]["endTime"]
             start_day, leave = utc_to_local(first, zones[0])
             end_day, arrive = utc_to_local(last, zones[1])
+            leave += (date.fromisoformat(start_day) - date.fromisoformat(day)).days * 24 * 60
+            arrive += (date.fromisoformat(end_day) - date.fromisoformat(day)).days * 24 * 60
             if from_stop:
                 leave -= stop_walk
             elif to_stop:
                 arrive += stop_walk
             elif not terminal_known:
                 leave, arrive = (leave, arrive + AIRFIELD_WALK_MINUTES) if to_airport else (leave - AIRFIELD_WALK_MINUTES, arrive)
-            if start_day != day or end_day != day or not 0 <= leave < arrive < 24 * 60:
+            first_leave = -NIGHT_MINUTES if to_airport else 0
+            last_arrive = 24 * 60 + (NIGHT_MINUTES if not to_airport and current.SETTINGS.next_day_arrivals else 0)
+            if not first_leave <= leave < arrive < last_arrive or leave >= 24 * 60:
                 continue
             connections.append({
                 "leave": leave, "arrive": arrive,
@@ -505,20 +512,21 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
         in_landing_order = sorted(flights, key=lambda flight: (flight["arrival_airport"], landing_day(flight), flight["arrival_time"]))
         ground: dict[str, Any] = dict(await asyncio.gather(*(one(flight) for flight in in_landing_order)))
 
-        # Operators with their own booking system: real rides and prices for the travel date
-        async def rides(name: str, checker, code: str, day: str) -> tuple:
+        # Operators with their own booking system: real rides and prices for the day, on both sides of the flight
+        async def rides(name: str, source, code: str, day: str, to_airport: bool) -> tuple:
+            city = current.TRIP.origin if to_airport else current.TRIP.destination
             try:
-                return code, day, await asyncio.to_thread(checker, current.TRIP.origin, airports[code], day)
+                return to_airport, code, day, await asyncio.to_thread(source, city, airports[code], day, to_airport)
             except Exception as e:
                 say(f"[timetables] {name} {code} {day}: {type(e).__name__}")
-                return code, day, None
-        wanted = sorted({(flight["departure_airport"], flight["date"]) for flight in flights})
-        found = await asyncio.gather(*(rides(name, checker, code, day) for name, checker in operators.OPERATOR_CHECKERS.items() for code, day in wanted))
-        operator_rides: dict[str, Any] = {}
-        for code, day, rides_found in found:
+                return to_airport, code, day, None
+        wanted = sorted({(flight["departure_airport"], flight["date"], True) for flight in flights}
+                        | {(flight["arrival_airport"], landing_day(flight), False) for flight in flights})
+        found = await asyncio.gather(*(rides(name, source, *asked) for name, source in fares.RIDE_SOURCES.items() for asked in wanted))
+        ground["operators"], ground["operators_from"] = {}, {}
+        for to_airport, code, day, rides_found in found:
             if rides_found is not None:
-                operator_rides.setdefault(code, {}).setdefault(day, []).extend(rides_found)
-        ground["operators"] = operator_rides
+                ground["operators" if to_airport else "operators_from"].setdefault(code, {}).setdefault(day, []).extend(rides_found)
         ground["requests"] = timetables.requests
         return ground
     finally:

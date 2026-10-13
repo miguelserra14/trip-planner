@@ -1,5 +1,7 @@
 """The ground legs of an itinerary, to the departure airport and from the arrival airport: a real connection when
 one is published, otherwise a model's estimate, checked against the distance."""
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from trip_planner import current
@@ -73,12 +75,31 @@ def real_options_text(options: list[dict[str, Any]]) -> str:
     shown = sorted({(option["leave"], option["arrive"]) for option in options})[:5]
     return ", ".join(f"{to_time(leave)} -> {to_time(arrive)}" for leave, arrive in shown) or tr("none")
 
+# The choice between the connections of a leg is made on real prices. An estimate from the distance cannot tell
+# a cheap coach from a dear train, so the tickets of the connections most likely to win are read first.
+MAX_PRICED = 3       # connections of a leg whose tickets are read in one round
+PRICING_ROUNDS = 2   # a second round when the real prices put a connection that was not read ahead
+KNOWN_PRICES = ("operator", "free", "tariff", "operator_typical")   # kinds of price that are not a guess
+
+def best_on_real_prices(candidates: list[dict[str, Any]], key: Callable, day: str, free_trains: bool) -> dict[str, Any]:
+    """The best of the connections of a leg by key, once the tickets of the ones in front were read for day."""
+    read: list[int] = []
+    for _ in range(PRICING_ROUNDS):
+        front = [candidate for candidate in sorted(candidates, key=key)[:MAX_PRICED] if id(candidate) not in read]
+        if not front:
+            break
+        with ThreadPoolExecutor(len(front)) as pool:
+            list(pool.map(lambda candidate: price_with_tickets(candidate, day, free_trains), front))
+        read += [id(candidate) for candidate in front]
+    return min(candidates, key=key)
+
 def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
-                   closest: bool = False) -> dict[str, Any]:
+                   closest: bool = False, priced: bool = False) -> dict[str, Any]:
     """How the traveller gets to the departure airport: a real connection when one is published, otherwise the
     model's estimate. Raises ValueError with the reason when the flight cannot be caught.
     closest=True also accepts a real connection outside the times the traveller leaves at, or one that leaves less
-    than the time asked for at the airport: the one that breaks the least, for the closest alternatives."""
+    than the time asked for at the airport: the one that breaks the least, for the closest alternatives.
+    priced=True reads the operators' tickets before choosing between connections (best_on_real_prices)."""
     airport, day = flight["departure_airport"], flight["date"]
     km = current.TRIP.km(airport)
     at_terminal = to_minutes(flight["departure_time"]) - current.SETTINGS.min_airport_minutes
@@ -92,15 +113,15 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         for option in timetable["options"]:
             price = sum(step_price(step, True, country_of(airport)) for step in option["steps"])
             if current.SETTINGS.allow_estimated_prices or price <= SMALL_ESTIMATE_EUR:
-                real.append({**option, "kind": "timetable", "price_eur": price, "price_kind": "estimate" if price else "free"})
+                real.append({**option, "kind": "timetable", "country": country_of(airport), "price_eur": price, "price_kind": "estimate" if price else "free"})
     elif timetable["options"]:
         # A timetable has no prices: the model's price if it found a believable one, otherwise an estimate
         found = transfer is not None and transfer["reachable"]
         price, price_kind = model_price(transfer["price_eur"] if found else 0, found and transfer["price_known"], km, country_of(airport))
-        real += [{**option, "kind": "timetable", "price_eur": price, "price_kind": price_kind} for option in timetable["options"]]
+        real += [{**option, "kind": "timetable", "country": country_of(airport), "price_eur": price, "price_kind": price_kind} for option in timetable["options"]]
     # A connection with a known price (an operator's, or a free train) comes before one whose price is a guess:
     # an unverified price must not beat a real one. Then the cheapest, then the one that leaves last.
-    preference = lambda o: (o["price_kind"] not in ("operator", "free"), o["price_eur"], -o["leave"])
+    preference = lambda o: (o["price_kind"] not in KNOWN_PRICES, o["price_eur"], -o["leave"])
     suitable = [o for o in real if earliest <= o["leave"] <= latest and o["leave"] < o["arrive"] <= at_terminal]
     if suitable:
         # Leaving hours before it is needed is not free: every hour spent waiting at the airport, compared with the
@@ -108,8 +129,9 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         # guess counts UNVERIFIED_PRICE_FACTOR times, so that it only beats a real one when it clearly would.
         last = max(o["leave"] for o in suitable)
         waiting = lambda o: current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, (last - o["leave"]) / 60)
-        weighed = lambda o: o["price_eur"] * (1 if o["price_kind"] in ("operator", "free") else UNVERIFIED_PRICE_FACTOR)
-        return min(suitable, key=lambda o: (weighed(o) + waiting(o), *preference(o)))
+        weighed = lambda o: o["price_eur"] * (1 if o["price_kind"] in KNOWN_PRICES else UNVERIFIED_PRICE_FACTOR)
+        value = lambda o: (weighed(o) + waiting(o), *preference(o))
+        return best_on_real_prices(suitable, value, day, current.SETTINGS.free_trains_at_origin) if priced else min(suitable, key=value)
     if closest:
         # Whatever real connection still reaches the airport: first the one that cuts the least of the time at the
         # airport, then the one that leaves closest to the window (see REQUIREMENTS in ranking.py)
@@ -182,18 +204,32 @@ def price_with_tickets(leg: dict[str, Any], day: str, free_trains: bool) -> None
     leg["confirmed_eur"] = sum(ticket["price_eur"] for ticket in found if ticket["travel_day"] and not ticket.get("tariff"))
     leg["price_kind"] = ("partly" if rest else "operator_typical" if not all(ticket["travel_day"] for ticket in found)
                          else "tariff" if any(ticket.get("tariff") for ticket in found) else "operator")
+    # A timetable read for another week is only typical. When the operator of every vehicle sells that very
+    # departure on the day of the trip, the connection is confirmed for that day, on either side of the flight.
+    if len(priced) == len(steps) and all(ticket["travel_day"] and ticket.get("confirms") for ticket in found):
+        leg["grade"] = "A"
+        leg["confirmed_by"] = list(dict.fromkeys(ticket["operator"] for ticket in found))
 
 def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict[str, Any] | None,
-                     closest: bool = False) -> dict[str, Any]:
+                     closest: bool = False, priced: bool = False) -> dict[str, Any]:
     """How the traveller gets from the arrival airport to the destination. Same rules as to_airport_leg.
-    closest=True also accepts a real connection that arrives outside the window asked for: the nearest to it."""
+    closest=True also accepts a real connection that arrives outside the window asked for: the nearest to it.
+    priced=True reads the operators' tickets before choosing between connections (best_on_real_prices)."""
     airport = flight["arrival_airport"]
     landing = to_minutes(flight["arrival_time"])
     in_window = lambda minutes: current.SETTINGS.earliest_arrival_minutes <= minutes <= current.SETTINGS.latest_arrival_minutes
     timetable = (ground.get(flight["id"]) or {}).get("from_airport") or timetables.NOT_COVERED
+    # The rides an operator sells that day, as towards the airport: the ones the traveller can still catch
+    ready = landing + current.SETTINGS.min_landing_minutes + timetables.MIN_STOP_WALK_MINUTES
+    rides = [{**ride, "kind": "operator", "price_kind": "operator", "country": country_of(airport)}
+             for ride in ((ground.get("operators_from") or {}).get(airport) or {}).get(timetables.landing_day(flight)) or []
+             if ready <= ride["leave"] < ride["arrive"]]
 
-    if timetable["covered"]:
-        options = [{**o, "kind": "timetable", "price_eur": sum(step_price(step, current.SETTINGS.free_trains_at_destination, country_of(airport)) for step in o["steps"])} for o in timetable["options"]]
+    if timetable["covered"] or rides:
+        options = rides + [{**o, "kind": "timetable", "country": country_of(airport),
+                    "price_eur": sum(step_price(step, current.SETTINGS.free_trains_at_destination, country_of(airport)) for step in o["steps"])} for o in timetable["options"]]
+        for option in options:
+            option.setdefault("price_kind", "estimate" if option["price_eur"] else "free")
         suitable = [o for o in options if in_window(o["arrive"])]
         if not suitable and closest and options:
             outside = lambda o: max(current.SETTINGS.earliest_arrival_minutes - o["arrive"], o["arrive"] - current.SETTINGS.latest_arrival_minutes)
@@ -204,16 +240,21 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
         # The price plus what arriving later is worth to the traveller: a coach that saves a few EUR and arrives
         # hours after the first train is not the better way
         first = min(o["arrive"] for o in suitable)
-        value = lambda o: (o["price_eur"] + current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, (o["arrive"] - first) / 60),
+        # As towards the airport, a price that is a guess counts UNVERIFIED_PRICE_FACTOR times next to a real one:
+        # it only wins when it clearly would. Among guesses alone nothing changes.
+        some_real = lambda: any(o["price_kind"] in KNOWN_PRICES for o in suitable)
+        weighed = lambda o: o["price_eur"] * (UNVERIFIED_PRICE_FACTOR if o["price_kind"] not in KNOWN_PRICES and some_real() else 1)
+        value = lambda o: (weighed(o) + current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, (o["arrive"] - first) / 60),
                            o["arrive"])
-        best = min(suitable, key=value)
-        if not current.SETTINGS.allow_estimated_prices and best["price_eur"] > SMALL_ESTIMATE_EUR:
+        best = (best_on_real_prices(suitable, value, timetables.landing_day(flight), current.SETTINGS.free_trains_at_destination)
+                if priced else min(suitable, key=value))
+        if not current.SETTINGS.allow_estimated_prices and best["price_kind"] not in KNOWN_PRICES and best["price_eur"] > SMALL_ESTIMATE_EUR:
             raise ValueError(tr("reject_price_unknown"))
         later = sorted({o["leave"] for o in suitable if o["leave"] > best["leave"]})
         # The best of the other kind is shown next to it: by coach when the best goes by train, and the reverse
         by_coach = lambda o: any(step.get("coach") for step in o["steps"])
         others = [o for o in suitable if by_coach(o) != by_coach(best)]
-        return {**best, "price_kind": "free" if best["price_eur"] == 0 else "estimate", "notes": [],
+        return {**best, "notes": [],
                 "later": [to_time(minutes) for minutes in later[:3]],
                 "other": min(others, key=value) if others else None,
                 "other_by_coach": not by_coach(best)}

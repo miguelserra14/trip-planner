@@ -1,27 +1,25 @@
-"""Plan a trip: `plan_trip` runs the coordinator for one trip, shows the result and saves the report.
+"""Plan a trip: `plan_trip` runs the steps of one trip in code, shows the report as soon as it exists, then asks
+the coordinator, once, for the recommendation in words, and saves the report.
 
-The state of every trip planned in a run is saved (the coordinator has a checkpointer), so `ask` answers
-follow-up questions about a result without searching again. The answer is written by a model from the report:
-the report stays the reference."""
+The conversation of every trip planned in a run is kept, so `ask` answers follow-up questions about a result
+without searching again. The answer is written by a model from the report: the report stays the reference."""
 import asyncio
 import re
 import time
 import traceback
-import uuid
 from typing import Any
 
-from langchain.messages import HumanMessage
+from langchain.messages import AIMessage, HumanMessage
 
 from trip_planner import current
-from trip_planner.agents import subagents
-from trip_planner.agents.coordinator import coordinator
-from trip_planner.agents.steps import STEPS
+from trip_planner.agents import coordinator, subagents
+from trip_planner.agents.steps import run_steps, STEPS
 from trip_planner.config import TripSettings
 from trip_planner.places import ask_airports, choose_airports, codes, show_airports, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS, save_report
 from trip_planner.sources import web
 from trip_planner.texts import any_of, tr
-from trip_planner.utils import message_text, plain, say, show, TIMINGS
+from trip_planner.utils import plain, say, show, TIMINGS
 
 def build_request(settings: TripSettings, places: TripPlaces) -> str:
     """The traveller's request to the coordinator, written from the settings and the confirmed airports."""
@@ -51,24 +49,38 @@ def check_recommendation(text: str, recommended: int) -> str:
         return text + "\n\n> " + tr("warn_recommendation_differs", model=named[1], rules=recommended)
     return text
 
-RESUME_ATTEMPTS = 2        # times a failed run is continued from its last finished step
+RESUME_ATTEMPTS = 2        # times a failed run is continued from the step that failed
 RESUME_WAIT_SECONDS = 20   # pause before continuing: what fails is usually a service that is briefly unavailable
 
-async def run_coordinator(request: dict[str, Any] | None, config: dict[str, Any]) -> dict[str, Any]:
-    """Run the coordinator on the thread in config. If it fails, the finished steps are not lost: the
-    checkpointer saved the state after each one, and the run continues from there."""
+async def run_search(state: dict[str, Any]) -> dict[str, Any]:
+    """Run the steps of a trip. If one fails, the finished steps are not lost: the state keeps what they found,
+    and the run continues from the step that failed."""
     for attempt in range(RESUME_ATTEMPTS + 1):
         try:
-            return await coordinator.ainvoke(request, config=config)
+            return await run_steps(state)
         except Exception as error:
             if attempt == RESUME_ATTEMPTS:
                 raise
-            saved = await coordinator.aget_state(config)
-            done = saved.values.get("step") or 0
-            say(tr("progress_resume", error=type(error).__name__, done=done, steps=len(STEPS), seconds=RESUME_WAIT_SECONDS))
+            say(tr("progress_resume", error=type(error).__name__, done=state.get("step") or 0, steps=len(STEPS), seconds=RESUME_WAIT_SECONDS))
             await asyncio.sleep(RESUME_WAIT_SECONDS)
-            if saved.next:
-                request = None   # no new input: continue the thread from what was saved
+
+def results_for_model(request: str, state: dict[str, Any]) -> str:
+    """The first message the coordinator reads: the traveller's request, then what each step found."""
+    names = ("flight search", "ground transport", "itineraries")
+    found = [f"Step {number}, {name}:\n{note}" for number, (name, note) in enumerate(zip(names, state.get("notes") or []), start=1)]
+    return "\n\n".join([request, "What the search found, step by step:", *found])
+
+async def recommend(state: dict[str, Any], messages: list[Any]) -> str:
+    """The recommendation in words, written by the coordinator from the results in messages. When no model answers,
+    a line of fixed text names the option the rules chose: the report above it is complete without a model."""
+    recommended, report = state.get("recommended") or 0, state.get("report") or ""
+    try:
+        text = await coordinator.write(messages)
+    except Exception as error:
+        say(tr("progress_no_model", error=type(error).__name__))
+        return tr("recommendation_by_rules", heading=tr("recommendation"), option=recommended) if recommended else ""
+    messages.append(AIMessage(content=text))
+    return web.only_known_links(check_recommendation(text, recommended), report)
 
 async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) -> dict[str, Any]:
     """Plan one trip, show the result and save the report. places are the airports already chosen for it;
@@ -87,28 +99,24 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
         say(f"{tr('advice')}: {advice}")
     say(tr("progress_start", origin=settings.origin, destination=settings.destination,
            departure=codes(current.TRIP.departure), arrival=codes(current.TRIP.arrival)))
-    # One thread per run: the saved state of a trip is never mixed with another one
-    config = {"configurable": {"thread_id": str(uuid.uuid4())}, "tags": ["TP"], "recursion_limit": 30}  #tag traces to make them easy to find in Langsmith
-    PLANNED.append({"settings": settings, "places": current.TRIP, "config": config})
-    response = await run_coordinator(
-        {
-            "messages": [HumanMessage(content=build_request(settings, current.TRIP))],
-            "origin": settings.origin,
-            "final_destination": settings.destination,
-            "primary_airports": codes(current.TRIP.primary),
-            "fallback_airports": codes(current.TRIP.fallback),
-            "arrival_airports": codes(current.TRIP.arrival),
-            "travel_dates": ",".join(settings.dates),
-        },
-        config,
-    )
-    total = time.time() - started
-    steps = sum(seconds for step, seconds in TIMINGS.items() if step[0] in "123" and step[1] == " ")
-    TIMINGS["4 coordinator model (thinking between the steps and writing the recommendation)"] = max(0.0, total - steps)
-    TIMINGS["total"] = total
-    recommendation = check_recommendation(message_text(response["messages"][-1]), response.get("recommended") or 0)
-    recommendation = web.only_known_links(recommendation, response.get("report") or "")
-    show((response.get("report") or "") + "\n\n" + recommendation)
+    response = await run_search({
+        "origin": settings.origin,
+        "final_destination": settings.destination,
+        "primary_airports": codes(current.TRIP.primary),
+        "fallback_airports": codes(current.TRIP.fallback),
+        "arrival_airports": codes(current.TRIP.arrival),
+        "travel_dates": ",".join(settings.dates),
+    })
+    # The result is the traveller's as soon as the code has it. What the model adds comes after, if it comes.
+    show(response.get("report") or "")
+    messages = [HumanMessage(content=results_for_model(build_request(settings, current.TRIP), response))]
+    PLANNED.append({"settings": settings, "places": current.TRIP, "messages": messages, "state": response})
+    writing = time.time()
+    recommendation = await recommend(response, messages)
+    TIMINGS["4 coordinator model (writing the recommendation)"] = time.time() - writing
+    total = TIMINGS["total"] = time.time() - started
+    if recommendation:
+        show(recommendation)
     PLANNED[-1]["report"] = save_report(response, recommendation).resolve()
     say(tr("progress_done", seconds=round(total), path=PLANNED[-1]["report"]))
     return response
@@ -121,14 +129,21 @@ async def ask(question: str, trip: int = -1) -> None:
         return
     planned = PLANNED[trip]
     current.SETTINGS, current.TRIP = planned["settings"], planned["places"]
-    response = await coordinator.ainvoke({"messages": [HumanMessage(content=question)]}, config=planned["config"])
+    planned["messages"].append(HumanMessage(content=question))
+    try:
+        answer = await coordinator.write(planned["messages"])
+    except Exception as error:
+        planned["messages"].pop()
+        say(tr("progress_no_model", error=type(error).__name__))
+        return
+    planned["messages"].append(AIMessage(content=answer))
     # The answer is written by a model: it is shown as such, and the report stays the reference
-    answer = web.only_known_links(message_text(response["messages"][-1]), response.get("report") or "")
+    answer = web.only_known_links(answer, planned["state"].get("report") or "")
     markdown = (f"**{web.clean_text(question)}**\n\n{answer}\n\n> {tr('followup_note')}")
     show(markdown)
 
 responses: list[dict[str, Any]] = []
-PLANNED: list[dict[str, Any]] = []   # every trip run in this session, with the thread its state is saved under
+PLANNED: list[dict[str, Any]] = []   # every trip run in this session, with what was found and the conversation about it
 
 async def plan_all(trips: list[TripSettings]) -> None:
     """Plan every trip, one after the other."""
@@ -139,12 +154,9 @@ async def plan_all(trips: list[TripSettings]) -> None:
         say(traceback.format_exc())
 
 def show_timings() -> None:
-    """What the coordinator called, and where the time of the last trip went."""
+    """The trips planned, and where the time of the last one went."""
     for trip in responses:
         print(f"{trip.get('origin')} -> {trip.get('final_destination')}")
-        for message in trip["messages"]:
-            for tool_call in getattr(message, "tool_calls", None) or []:
-                print(f"  -> {tool_call['name']}")
     for step, seconds in sorted(TIMINGS.items()):
         print(f"{seconds:6.0f} s  {step}")
 

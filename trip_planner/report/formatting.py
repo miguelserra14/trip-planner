@@ -20,6 +20,19 @@ def at_destination(time: str, flight: dict[str, Any]) -> str:
         return time
     return f"{time} ({date.fromisoformat(flight['arrival_date']).strftime('%d/%m')})"
 
+def with_day(time: str, day: str, usual: str) -> str:
+    """A time, with its date when that is not the day the reader takes it to be."""
+    return time if day == usual else f"{time} ({date.fromisoformat(day).strftime('%d/%m')})"
+
+def leaving(itinerary: dict[str, Any]) -> str:
+    """When the traveller leaves home. With the date when that is the evening before the flight."""
+    return with_day(itinerary["leave_time"], itinerary["leave_date"], itinerary["flight"]["date"])
+
+def arriving(itinerary: dict[str, Any]) -> str:
+    """When the traveller arrives. With the date when that is a later day than the flight leaves on: a flight that
+    lands the next day, or a connection that reaches the destination after midnight."""
+    return with_day(itinerary["arrival_time"], itinerary["arrival_date"], itinerary["flight"]["date"])
+
 def day_text(day: str) -> str:
     return date.fromisoformat(day).strftime("%d/%m/%Y")
 
@@ -35,6 +48,8 @@ def leg_source(leg: dict[str, Any]) -> str:
     """Where the times of a ground leg come from."""
     if leg["kind"] == "operator":
         return tr("source_operator", operator=leg["source"])
+    if leg.get("confirmed_by"):   # read in a timetable, then found on sale for the day at the same times
+        return tr("source_operator", operator=", ".join(leg["confirmed_by"]))
     if leg["kind"] == "timetable":
         return tr("source_timetable")
     return tr("source_model")

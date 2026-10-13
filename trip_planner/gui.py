@@ -23,7 +23,7 @@ from trip_planner.config import GRADES, LANGUAGES, LIGHTS, MAX_DATES, MAX_DAYS_A
 from trip_planner.dates import read_dates
 from trip_planner.places import airport_groups, choose_airports, remove_airports, too_far_notice, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS
-from trip_planner.sources import kiwi
+from trip_planner.sources import flight_search
 from trip_planner.texts import REFERENCE, TEXTS, tr
 
 FONT = "Segoe UI"
@@ -284,8 +284,7 @@ class TripWindow:
         settings, places = self.settings, self.places
 
         async def work() -> None:
-            if kiwi.kiwi_search is None:
-                await kiwi.connect_kiwi()
+            await flight_search.connect()
             await planner.plan_trip(settings, places)
             self.events.put(("planned", None))
         self.clear()

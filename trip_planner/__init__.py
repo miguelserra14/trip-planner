@@ -10,13 +10,14 @@ Who does what, and where:
 - Places and airports (code, places.py): the cities are located with OpenStreetMap, whatever language they are
   written in, and the airports are found by distance: the straight line, then the hours by road (OSRM), so that
   an airport across a sea is left out.
-- Flight search (code, sources/kiwi.py): every departure airport against every arrival airport on every date, on
+- Flight search (code, sources/flight_search.py): every departure airport against every arrival airport on every date, on
   Kiwi. Nothing is retyped by a model.
-- Real timetables (code, sources/timetables.py and sources/operators.py): the ground transport of every flight is
+- Real timetables (code, sources/timetables.py and sources/fares.py): the ground transport of every flight is
   looked up in published timetables.
 - Airport transfer agent and destination transport agent (models, agents/subagents.py): they search the web for
   prices, and for the transport that no timetable covers.
-- Coordinator (model, agents/coordinator.py): supervises the steps (agents/steps.py) and writes the recommendation.
+- Coordinator (model, agents/coordinator.py): called once, after the steps ran in code (agents/steps.py), to write the
+  recommendation in words. The result is shown before it answers, and without it if it does not.
   The ranking itself is computed in code (itineraries/).
 - Report (code, report/): the result shown to the traveller and the full report saved to reports/.
 

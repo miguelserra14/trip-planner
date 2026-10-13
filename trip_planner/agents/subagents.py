@@ -16,13 +16,13 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain.messages import ToolMessage
 
 from trip_planner import current
+from trip_planner.agents import models
+from trip_planner.agents.models import SUBAGENT_MODEL
 from trip_planner.agents.schemas import FlightShortlist, TrainPlan, TransferPlan
 from trip_planner.agents.state import SearchState
 from trip_planner.config import LANGUAGES, TripSettings
-from trip_planner.sources import kiwi, web
+from trip_planner.sources import flight_search, web
 from trip_planner.utils import to_time
-
-SUBAGENT_MODEL = "google_genai:gemini-3.1-flash-lite"
 
 # Limits used in the prompts of the agents
 SHORTLIST_SIZE = 10                 # flights the flight agent may shortlist, when it is used
@@ -67,9 +67,9 @@ def flight_prompt(request: ModelRequest) -> str:
 
 flight_agent = create_agent(
     model=SUBAGENT_MODEL,
-    tools=[kiwi.search_route],
+    tools=[flight_search.search_route],
     response_format=ToolStrategy(FlightShortlist),
-    middleware=[flight_prompt],
+    middleware=[*models.subagent_fallback(), flight_prompt],
 )
 
 # Two middlewares shared by the agents that search the web
@@ -157,7 +157,7 @@ airport_transfer_agent = create_agent(
     tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TransferPlan),
-    middleware=[airport_transfer_prompt, enforce_search_limit, shorten_old_results],
+    middleware=[*models.subagent_fallback(), airport_transfer_prompt, enforce_search_limit, shorten_old_results],
 )
 
 # Destination transport agent
@@ -208,5 +208,5 @@ destination_transport_agent = create_agent(
     tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TrainPlan),
-    middleware=[destination_transport_prompt, enforce_search_limit, shorten_old_results],
+    middleware=[*models.subagent_fallback(), destination_transport_prompt, enforce_search_limit, shorten_old_results],
 )

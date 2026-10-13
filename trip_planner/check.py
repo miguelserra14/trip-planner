@@ -8,11 +8,11 @@ from urllib.parse import urlparse
 import httpx
 from langchain.chat_models import init_chat_model
 
-from trip_planner.agents import subagents
+from trip_planner.agents import models, subagents
 from trip_planner.agents.coordinator import COORDINATOR_MODELS
 from trip_planner.config import ROOT, USER_AGENT
 from trip_planner.places import airport_from, geocode, load_airports, Place, road_hours
-from trip_planner.sources import airlines, fares, google_flights, kiwi, operators, timetables, web
+from trip_planner.sources import airlines, fares, google_flights, kiwi, timetables, web
 from trip_planner.utils import message_text
 
 async def check_setup() -> int:
@@ -21,10 +21,10 @@ async def check_setup() -> int:
     antwerp = Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.2211, 4.3997)
 
     def keys() -> str:
-        missing = [name for name in ("GOOGLE_API_KEY", "TAVILY_API_KEY") if not os.environ.get(name)]
-        if missing:
-            raise RuntimeError(f"{', '.join(missing)} missing in {ROOT / 'env' / '.env'}")
-        return "both keys are set"
+        if not os.environ.get("GOOGLE_API_KEY"):
+            raise RuntimeError(f"GOOGLE_API_KEY missing in {ROOT / 'env' / '.env'}")
+        optional = {name: bool(os.environ.get(name)) for name in ("TAVILY_API_KEY", models.BACKUP_KEY)}
+        return "GOOGLE_API_KEY is set; " + ", ".join(f"{name} {'is set' if there else 'is not set'}" for name, there in optional.items())
 
     def nominatim() -> str:
         return geocode("Lisboa").label
@@ -81,7 +81,7 @@ async def check_setup() -> int:
             await transit.close()
 
     def flixbus() -> str:
-        city = operators.flixbus_city(antwerp.english_name, antwerp.latitude, antwerp.longitude, 25)
+        city = fares.flixbus_city(antwerp.english_name, antwerp.latitude, antwerp.longitude, 25)
         if not city:
             raise RuntimeError("Antwerp was not found")
         return "Antwerp found"
@@ -119,17 +119,29 @@ async def check_setup() -> int:
         return airlines.wikidata_site("FR", "Ryanair") or "no site recorded"
 
     def tavily() -> str:
-        return f"{len(web.tavily_client.search('Ryanair official site', max_results=3)['results'])} results"
+        return f"{len(web.search('Ryanair official site', max_results=3)['results'])} results"
 
     def model(name: str):
         async def ask_model() -> str:
             answer = await init_chat_model(name, max_retries=1).ainvoke("Answer with the single word: ready")
+            answering.append(name)
             return web.clean_text(message_text(answer), 40) or "answered"
         return ask_model
 
+    answering: list[str] = []
+    def any_model() -> str:
+        if not answering:
+            raise RuntimeError("no model answered")
+        return "from " + answering[0].split(":")[1]
+
+    def used_for(name: str) -> str:
+        if name == subagents.SUBAGENT_MODEL:
+            return "subagents, and coordinator when the better model has no quota"
+        return "plan B, when the Gemini models do not answer" if name == models.BACKUP_MODEL else "coordinator"
+
     # (service, what it is used for, the check, required). Without an optional service the program still runs.
     checks = [
-        ("API keys", "Gemini and Tavily", keys, True),
+        ("API keys", "Gemini; Tavily and Mistral are optional", keys, True),
         ("Nominatim", "locating the cities", nominatim, True),
         ("OurAirports", "airport database", ourairports, True),
         ("OSRM", "hours by road to the airports", roads, False),
@@ -142,9 +154,9 @@ async def check_setup() -> int:
         ("Rail and coach operators", "ticket prices of ground transport", operator_prices, False),
         ("Overpass", "airport terminals", overpass, False),
         ("Wikidata", "airline sites", wikidata, False),
-        ("Tavily", "web search of the subagents", tavily, True),
-        (subagents.SUBAGENT_MODEL.split(":")[1], "subagents, and coordinator when the better model has no quota", model(subagents.SUBAGENT_MODEL), True),
-        *((name.split(":")[1], "coordinator", model(name), False) for name in COORDINATOR_MODELS if name != subagents.SUBAGENT_MODEL),
+        ("Tavily", "web search of the subagents; without it only the timetables are used", tavily, False),
+        *((name.split(":")[1], used_for(name), model(name), False) for name in dict.fromkeys([subagents.SUBAGENT_MODEL, *COORDINATOR_MODELS])),
+        ("A model", "one of the above", any_model, True),
     ]
     failed = 0
     for service, used_for, check, required in checks:

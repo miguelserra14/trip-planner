@@ -11,6 +11,7 @@ from tests.cases import CASES
 from tests.conftest import check_city, check_covered, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
 from trip_planner import current
 from trip_planner.itineraries.legs import from_airport_leg
+from trip_planner.sources import timetables
 from trip_planner.utils import to_minutes
 
 @pytest.fixture(scope="module", params=CASES, ids=lambda case: case.name)
@@ -27,12 +28,13 @@ def test_3_airport_has_stops(record):
     check_stops(*record)
 
 def test_4_connections_after_landing(record):
-    """Real connections leave after the traveller is out of the terminal and arrive the same day."""
+    """Real connections leave after the traveller is out of the terminal, the same day, and arrive that day or
+    in the first hours of the night after it."""
     case, found = record
     answer = check_covered(case, found)
     ready = to_minutes(found["flight"]["arrival_time"]) + current.SETTINGS.min_landing_minutes
     for option in answer["options"]:
-        assert ready <= option["leave"] < option["arrive"] < 24 * 60
+        assert ready <= option["leave"] < 24 * 60 and option["leave"] < option["arrive"] < 24 * 60 + timetables.NIGHT_MINUTES
         assert option["steps"] and option["grade"] in "AB"
 
 def test_5_leg_of_the_itinerary(record):

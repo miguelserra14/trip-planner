@@ -64,8 +64,8 @@ def test_the_travel_date_is_asked_first_then_the_day_of_the_timetable(sells):
     sells[("Coach", SERVICE, "12:00")] = 7.0
     steps = [step("Rail"), step("Coach", rail=False, time="12:00", arrive="13:00")]
     found = fares.tickets(steps, TRAVEL, SERVICE)
-    assert found == [{"positions": [0], "operator": "Rail", "price_eur": 20.0, "travel_day": True, "tariff": False},
-                     {"positions": [1], "operator": "Coach", "price_eur": 7.0, "travel_day": False, "tariff": False}]
+    assert found == [{"positions": [0], "operator": "Rail", "price_eur": 20.0, "travel_day": True, "tariff": False, "confirms": False},
+                     {"positions": [1], "operator": "Coach", "price_eur": 7.0, "travel_day": False, "tariff": False, "confirms": False}]
     assert ("Rail", SERVICE, "10:00", "11:00") not in sells["asked"]   # found for the travel date: not asked again
 
 def test_an_operator_is_asked_once_for_the_same_ticket(sells):

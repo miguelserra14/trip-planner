@@ -18,7 +18,9 @@ GEMINI_COORDINATOR_MODELS = [
     "google_genai:gemini-3.8-flash",
     "google_genai:gemini-3.1-flash-lite",
 ]
-BACKUP_MODEL = "mistralai:mistral-small-latest"   # free tier: https://console.mistral.ai
+# Free tier: https://console.mistral.ai. Of the models that tier serves (read on 2026-10-14: the small, medium and
+# large ones answer "rate limit 0" or "not in your tier"), the most capable one that calls tools.
+BACKUP_MODEL = "mistralai:ministral-14b-latest"
 BACKUP_KEY = "MISTRAL_API_KEY"
 
 def backup_models() -> list[str]:
@@ -29,14 +31,6 @@ def coordinator_models() -> list[str]:
     """The models the coordinator tries, in order."""
     return [*GEMINI_COORDINATOR_MODELS, *backup_models()]
 
-def retries(name: str, names: list[str]) -> int:
-    """How often a model of a list is tried again before the next one takes over. Only the last one insists:
-    the others must fail fast. The last Gemini model, when a plan B follows it, insists a little: it is often
-    just busy for a moment."""
-    if name == names[-1]:
-        return 6
-    return 3 if name == GEMINI_COORDINATOR_MODELS[-1] else 1
-
 def subagent_fallback() -> list:
     """The middleware that hands a subagent's call to plan B when its own model fails. Empty without plan B."""
-    return [ModelFallbackMiddleware(*(init_chat_model(name, max_retries=4) for name in backup_models()))] if backup_models() else []
+    return [ModelFallbackMiddleware(*(init_chat_model(name, max_retries=2) for name in backup_models()))] if backup_models() else []

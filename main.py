@@ -4,6 +4,7 @@ Check every service the program depends on:       python main.py --check
 The languages there are:                          python main.py --languages
 Add a language, translated by a model:            python main.py --add-language it
 Remove a language:                                python main.py --remove-language it
+Locate the terminal of every airport again:       python main.py --terminals all   (once a year is plenty)
 
 In the window the trip is typed in a form that starts with what is in settings.py. In the terminal each trip lists
 its airports and asks which ones to drop, and after the result it takes follow-up questions, until an empty line."""
@@ -66,4 +67,7 @@ if __name__ == "__main__":
     arguments = sys.argv[1:]
     if {"--languages", "--add-language", "--remove-language"} & set(arguments):
         sys.exit(languages(arguments))
+    if "--terminals" in arguments:
+        from trip_planner.sources import timetables
+        sys.exit(1 if timetables.fill_terminals(again="all" in arguments) else 0)
     sys.exit(in_terminal("--check" in arguments) if {"--check", "--terminal"} & set(arguments) else in_window())

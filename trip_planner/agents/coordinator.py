@@ -4,6 +4,7 @@ It decides nothing about the search. The three steps run in code (steps.run_step
 is shown to the traveller as it is. The coordinator is then called once, with the request and the results in
 front of it, to say in words which option to take and why. When no model answers, the trip is not lost: the
 report is already on the screen, and the planner says which option the rules recommend (planner.recommend)."""
+import asyncio
 import warnings
 from typing import Any
 
@@ -23,25 +24,33 @@ warnings.filterwarnings("ignore", message="coroutine 'ClientResponse.json' was n
 # The models the coordinator tries, best first (models.py): the Gemini models, then plan B when it has a key.
 COORDINATOR_MODELS = models.coordinator_models()
 
-# Coordinator model: the best model that still has quota today.
-coordinator_models = {name: init_chat_model(name, max_retries=models.retries(name, COORDINATOR_MODELS)) for name in COORDINATOR_MODELS}
+# A model that fails is not insisted with: the next one is asked at once, and the list is gone through again
+# after a short pause. Insisting on one busy model cost over a minute; the others answer in a second or two.
+coordinator_models = {name: init_chat_model(name, max_retries=0) for name in COORDINATOR_MODELS}
 EXHAUSTED_MODELS: set = set()   # models out of daily quota, skipped for the rest of this session
+ANSWER_SECONDS = 30             # a model that has not answered by then is given up, for this round
+ROUNDS = 2                      # times the list of models is gone through
+ROUND_WAIT_SECONDS = 3          # pause before the second round: what fails is usually busy for a moment
 
 async def write(messages: list[Any]) -> str:
     """What the coordinator answers to a conversation about the trip being planned: the best model that answers.
     Raises when none does."""
     conversation = [SystemMessage(content=coordinator_prompt()), *messages]
-    for name in COORDINATOR_MODELS:
-        if name in EXHAUSTED_MODELS:
-            continue
-        try:
-            return message_text(await coordinator_models[name].ainvoke(conversation, config={"tags": ["TP"]}))   # the tag finds the traces in LangSmith
-        except Exception as error:
-            if name == COORDINATOR_MODELS[-1]:
-                raise
-            if "PerDay" in str(error):
-                EXHAUSTED_MODELS.add(name)   # the daily quota only comes back tomorrow
-    raise RuntimeError("No coordinator model is available.")
+    failure: Exception = RuntimeError("No coordinator model is available.")
+    for attempt in range(ROUNDS):
+        for name in COORDINATOR_MODELS:
+            if name in EXHAUSTED_MODELS:
+                continue
+            try:
+                answer = coordinator_models[name].ainvoke(conversation, config={"tags": ["TP"]})   # the tag finds the traces in LangSmith
+                return message_text(await asyncio.wait_for(answer, ANSWER_SECONDS))
+            except Exception as error:
+                failure = error
+                if "PerDay" in str(error):
+                    EXHAUSTED_MODELS.add(name)   # the daily quota only comes back tomorrow
+        if attempt < ROUNDS - 1:
+            await asyncio.sleep(ROUND_WAIT_SECONDS)
+    raise failure
 
 def coordinator_prompt() -> str:
     s = current.SETTINGS

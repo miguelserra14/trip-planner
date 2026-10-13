@@ -86,16 +86,19 @@ def utc_to_local(moment: str, zone: str) -> tuple:
     local = datetime.fromisoformat(moment.replace("Z", "+00:00")).astimezone(ZoneInfo(zone))
     return local.date().isoformat(), local.hour * 60 + local.minute
 
-TERMINALS_FILE = ROOT / "resources" / "terminals.json"   # found once per airport, then reused
+# Where the passenger terminal of each airport is, or null where OpenStreetMap has none. Worked out once for every
+# airport (python main.py --terminals) and kept in the repository: a search only asks for an airport that is not here.
+TERMINALS_FILE = ROOT / "resources" / "terminals.json"
+TERMINALS_BATCH = 25             # airports asked about in one request when the whole file is worked out
 OVERPASS_SERVERS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
                     "https://overpass.private.coffee/api/interpreter")
-TERMINALS: dict[str, list[float]] = json.loads(TERMINALS_FILE.read_text(encoding="utf-8")) if TERMINALS_FILE.exists() else {}
+TERMINALS: dict[str, list[float] | None] = json.loads(TERMINALS_FILE.read_text(encoding="utf-8")) if TERMINALS_FILE.exists() else {}
 NOT_A_PASSENGER_TERMINAL = ("general aviation", "executive", "gat", "cargo", "private", "vip", "pier", "connector", "freight")
 
 OVERPASS_ROUNDS = 3              # times the servers are gone through: a busy one answers a moment later
 SILENT_SERVERS: set[str] = set() # mirrors that did not answer in time. Not asked again in this run: each silence costs the whole wait
 
-def ask_overpass(query: str) -> list[dict[str, Any]] | None:
+def ask_overpass(query: str, seconds: int = 25) -> list[dict[str, Any]] | None:
     """The elements OpenStreetMap has for a query, or None when no server answers. These public servers are often
     busy: the main one refuses for a few seconds and then answers, the mirrors can be silent for days."""
     for attempt in range(OVERPASS_ROUNDS):
@@ -103,7 +106,7 @@ def ask_overpass(query: str) -> list[dict[str, Any]] | None:
             if server in SILENT_SERVERS:
                 continue
             try:
-                response = httpx.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=25)
+                response = httpx.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=seconds)
                 response.raise_for_status()
                 return response.json()["elements"]
             except httpx.TimeoutException:
@@ -120,35 +123,76 @@ def find_terminals(airports: list[dict[str, Any]]) -> dict[str, Any]:
     One request for all the airports."""
     missing = [airport for airport in airports if airport["code"] not in TERMINALS]
     if missing:
-        query = "[out:json][timeout:25];(" + "".join(
-            f"nwr[aeroway=terminal](around:3500,{airport['latitude']},{airport['longitude']});" for airport in missing
-        ) + ");out center tags;"
-        elements = ask_overpass(query)
-        if elements is None:
+        if not ask_terminals(missing):
             say("[timetables] OpenStreetMap did not answer: using the middle of each airfield instead of the terminal")
-            return {airport["code"]: TERMINALS.get(airport["code"]) for airport in airports}
-        best: dict[str, tuple] = {}
-        for element in elements:
-            point = element.get("center") or element
-            name = plain((element.get("tags") or {}).get("name", ""))
-            airport = min(missing, key=lambda a: distance_km(a["latitude"], a["longitude"], point["lat"], point["lon"]))
-            if distance_km(airport["latitude"], airport["longitude"], point["lat"], point["lon"]) > 3.5:
-                continue
-            # Passenger terminals first, then the ones called "terminal 1" or "main", then named ones
-            score = (
-                not any(word in name.split() or word in name for word in NOT_A_PASSENGER_TERMINAL),
-                "terminal 1" in name or "main" in name or name == plain(airport["name"]),
-                bool(name),
-                element["type"] == "relation",
-            )
-            if airport["code"] not in best or score > best[airport["code"]][0]:
-                best[airport["code"]] = (score, (point["lat"], point["lon"]))
-        for airport in missing:
-            if airport["code"] in best:
-                TERMINALS[airport["code"]] = list(best[airport["code"]][1])
-        TERMINALS_FILE.parent.mkdir(exist_ok=True)
-        TERMINALS_FILE.write_text(json.dumps(TERMINALS), encoding="utf-8")
+        save_terminals()
     return {airport["code"]: TERMINALS.get(airport["code"]) for airport in airports}
+
+def ask_terminals(missing: list[dict[str, Any]], seconds: int = 25) -> bool:
+    """Ask OpenStreetMap for the terminals of some airports and put them in TERMINALS, with None for the airports
+    it has no terminal for. False, and nothing changed, when it did not answer."""
+    query = f"[out:json][timeout:{seconds}];(" + "".join(
+        f"nwr[aeroway=terminal](around:3500,{airport['latitude']},{airport['longitude']});" for airport in missing
+    ) + ");out center tags;"
+    elements = ask_overpass(query, seconds + 5)
+    if elements is None:
+        return False
+    best: dict[str, tuple] = {}
+    for element in elements:
+        point = element.get("center") or element
+        name = plain((element.get("tags") or {}).get("name", ""))
+        airport = min(missing, key=lambda a: distance_km(a["latitude"], a["longitude"], point["lat"], point["lon"]))
+        if distance_km(airport["latitude"], airport["longitude"], point["lat"], point["lon"]) > 3.5:
+            continue
+        # Passenger terminals first, then the ones called "terminal 1" or "main", then named ones
+        score = (
+            not any(word in name.split() or word in name for word in NOT_A_PASSENGER_TERMINAL),
+            "terminal 1" in name or "main" in name or name == plain(airport["name"]),
+            bool(name),
+            element["type"] == "relation",
+        )
+        if airport["code"] not in best or score > best[airport["code"]][0]:
+            best[airport["code"]] = (score, (point["lat"], point["lon"]))
+    for airport in missing:
+        found = best.get(airport["code"])
+        TERMINALS[airport["code"]] = [round(found[1][0], 5), round(found[1][1], 5)] if found else None
+    return True
+
+def save_terminals() -> None:
+    """One airport per line, in order: a change shows as the line of its airport."""
+    lines = [f"{json.dumps(code)}: {json.dumps(TERMINALS[code])}" for code in sorted(TERMINALS)]
+    TERMINALS_FILE.parent.mkdir(exist_ok=True)
+    TERMINALS_FILE.write_text("{\n" + ",\n".join(lines) + "\n}\n", encoding="utf-8", newline="\n")
+
+def fill_terminals(again: bool = False) -> int:
+    """Work out the terminal of every airport airlines fly from, a few airports per request, and save them.
+    Only the airports not yet in the file, unless again: once a year is enough, terminals do not move.
+    Returns how many airports could not be asked about."""
+    from trip_planner.places import airfields, load_airports
+    skipped = airfields()
+    airports = [{"code": code, **airport} for code, airport in load_airports().items()
+                if code not in skipped and (again or code not in TERMINALS)]
+    print(f"{len(airports)} airports to ask about, {TERMINALS_BATCH} per request. {len(TERMINALS)} are already known.", flush=True)
+    batches = [airports[start:start + TERMINALS_BATCH] for start in range(0, len(airports), TERMINALS_BATCH)]
+    failed: list[list[dict[str, Any]]] = []
+    for attempt in range(2):   # the requests that got no answer are made once more at the end
+        for number, batch in enumerate(batches, start=1):
+            if ask_terminals(batch, seconds=60):
+                save_terminals()
+            else:
+                failed.append(batch)
+            with_terminal = sum(1 for airport in batch if TERMINALS.get(airport["code"]))
+            print(f"  {number}/{len(batches)}: " + (f"{with_terminal} of {len(batch)} have a terminal on the map"
+                                                    if batch not in failed else "no answer, asked again at the end"), flush=True)
+            time.sleep(2)   # these servers are shared: leave room for others
+        batches, failed = failed, []
+        if not batches:
+            break
+    left = sum(len(batch) for batch in batches)
+    known = sum(1 for place in TERMINALS.values() if place)
+    print(f"{len(TERMINALS)} airports in {TERMINALS_FILE}: {known} with a terminal, {len(TERMINALS) - known} without one on the map."
+          + (f" {left} could not be asked about: run it again." if left else ""), flush=True)
+    return left
 
 def airport_stop_candidates(stops: list[dict[str, Any]], airport: dict[str, Any], terminal: list[float] | None) -> list[dict[str, Any]]:
     """The stops around an airport that can be the airport's own: next to its terminal, or named after it."""

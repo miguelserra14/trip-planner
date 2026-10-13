@@ -107,7 +107,8 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 | `env/.env`, `env/.venv/` | Your keys and your environment. Created by you, not in the repository |
 | `resources/airports.csv` | The airports with scheduled flights of the OurAirports database (snapshot of 8 October 2026). Delete it to download the current one |
 | `resources/airfields.json` | Airports left out of the automatic choice because no airline flies from them (Viseu, Cascais...). Worked out once from OurAirports runways and OpenFlights routes. Delete it to work it out again |
-| `resources/terminals.json`, `resources/timezones.json` | Caches of terminal coordinates and time zones, filled as trips are planned |
+| `resources/terminals.json` | Where the passenger terminal of every airport is, from OpenStreetMap, worked out once so that a search does not depend on it. `python main.py --terminals all` works it out again |
+| `resources/timezones.json` | Cache of time zones, filled as trips are planned |
 | `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted |
 | `reports/saved/` | The reports you chose to keep, with **Keep this report** in the window. Never deleted |
 

@@ -19,14 +19,11 @@ def test_without_its_key_plan_b_changes_nothing(monkeypatch):
     monkeypatch.delenv(models.BACKUP_KEY, raising=False)
     assert models.backup_models() == [] and models.subagent_fallback() == []
     assert models.coordinator_models() == models.GEMINI_COORDINATOR_MODELS
-    last = models.GEMINI_COORDINATOR_MODELS[-1]
-    assert models.retries(last, models.coordinator_models()) == 6   # the last model is the one that insists
 
 def test_with_its_key_mistral_is_tried_last(monkeypatch):
     monkeypatch.setenv(models.BACKUP_KEY, "a key")
     names = models.coordinator_models()
     assert names == [*models.GEMINI_COORDINATOR_MODELS, models.BACKUP_MODEL]
-    assert [models.retries(name, names) for name in names] == [1] * (len(names) - 2) + [3, 6]
     assert len(models.subagent_fallback()) == 1
 
 def test_a_subagent_that_fails_is_answered_by_plan_b():

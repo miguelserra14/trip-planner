@@ -48,13 +48,15 @@ def test_a_step_that_ends_the_trip_skips_the_others(monkeypatch):
 
 # ---------------------------------------------------------------- the model
 class Model:
-    def __init__(self, answer: str | None):
-        self.answer, self.asked = answer, []
+    """A model that answers with a text, fails (None), or fails a number of times before answering."""
+    def __init__(self, answer: str | None, failures: int = 0, seconds: float = 0):
+        self.answer, self.failures, self.seconds, self.asked = answer, failures, seconds, []
 
     async def ainvoke(self, conversation, config=None):
         self.asked.append(conversation)
-        if self.answer is None:
-            raise RuntimeError("429 quota exceeded")
+        await asyncio.sleep(self.seconds)
+        if self.answer is None or len(self.asked) <= self.failures:
+            raise RuntimeError("503 UNAVAILABLE")
         return HumanMessage(content=self.answer)
 
 @pytest.fixture
@@ -64,8 +66,32 @@ def two_models(monkeypatch):
         monkeypatch.setattr(coordinator, "COORDINATOR_MODELS", list(found))
         monkeypatch.setattr(coordinator, "coordinator_models", found)
         monkeypatch.setattr(coordinator, "EXHAUSTED_MODELS", set())
+        monkeypatch.setattr(coordinator, "ROUND_WAIT_SECONDS", 0)
         return found["first"], found["second"]
     return use
+
+def test_a_busy_model_is_not_insisted_with(two_models):
+    """Each model is asked once, then the next: the second round only comes after every model failed."""
+    first, second = two_models(None, None)
+    first.failures, first.answer = 1, "## Recommendation\n\nOption 1."
+    assert asyncio.run(coordinator.write([HumanMessage(content="the results")])).endswith("Option 1.")
+    assert len(first.asked) == 2 and len(second.asked) == 1
+
+def test_a_model_that_does_not_answer_in_time_is_given_up(two_models, monkeypatch):
+    first, second = two_models("too late", "## Recommendation\n\nOption 2.")
+    first.seconds = 5
+    monkeypatch.setattr(coordinator, "ANSWER_SECONDS", 0.05)
+    assert asyncio.run(coordinator.write([HumanMessage(content="the results")])).endswith("Option 2.")
+
+def test_a_model_out_of_its_daily_quota_is_left_alone(two_models):
+    first, second = two_models(None, "## Recommendation\n\nOption 2.")
+    async def out_of_quota(conversation, config=None):
+        first.asked.append(conversation)
+        raise RuntimeError("429 RESOURCE_EXHAUSTED GenerateRequestsPerDayPerProjectPerModel")
+    first.ainvoke = out_of_quota
+    for _ in range(2):
+        asyncio.run(coordinator.write([HumanMessage(content="the results")]))
+    assert len(first.asked) == 1 and len(second.asked) == 2
 
 def test_the_next_model_answers_when_the_first_fails(two_models):
     first, second = two_models(None, "## Recommendation\n\nOption 2.")

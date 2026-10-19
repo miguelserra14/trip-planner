@@ -11,8 +11,8 @@ SETTINGS = TripSettings(
     # Airports are found by distance. Uncomment to adjust the choice with codes, airport names or cities.
     # include_airports=["Paris"],
     # exclude_airports=["Londres", "LUX"],
-    earliest_leave="06:30",
-    latest_leave="17:00",
+    earliest_leave="",          # empty = from midnight
+    latest_leave="",            # empty = until the end of the day
     earliest_arrival="",        # empty = any time
     latest_arrival="",          # empty = up to the last connection of the day
     max_stopovers=0,
@@ -22,7 +22,7 @@ SETTINGS = TripSettings(
     extra_hour_growth=1.5,              # each further hour costs 1.5 times the previous one
     options_shown=5,
     free_trains_at_origin=False,
-    free_trains_at_destination=True,
+    free_trains_at_destination=False,
 )
 
 # More trips to plan in the same run, each with its own settings. Leave the list empty to plan only the trip above.

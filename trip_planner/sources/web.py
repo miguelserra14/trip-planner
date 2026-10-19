@@ -9,6 +9,8 @@ from langchain.tools import tool, ToolRuntime
 from langgraph.types import Command
 from tavily import TavilyClient
 
+from trip_planner.utils import logged
+
 tavily_client: TavilyClient | None = None   # made at the first search: without its key the program still starts
 
 def search(query: str, **options) -> dict:
@@ -16,7 +18,8 @@ def search(query: str, **options) -> dict:
     global tavily_client
     if tavily_client is None:
         tavily_client = TavilyClient()
-    return tavily_client.search(query, **options)
+    with logged("Tavily", query[:120]):
+        return tavily_client.search(query, **options)
 
 AVAILABLE_FOR_SECONDS = 600
 last_check = (0.0, False)   # when the web search was last tried, and whether it answered

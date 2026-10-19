@@ -44,6 +44,28 @@ def timed(step: str):
     finally:
         TIMINGS[step] = TIMINGS.get(step, 0.0) + time.time() - started
 
+# The log of the run: every request to a service, with how long it took and how it ended. It is saved next to the
+# report (report/full.py), so a slow or failed search can be read afterwards instead of being measured again.
+REQUESTS: list[dict] = []
+
+@contextmanager
+def logged(service: str, what: str):
+    """One request to a service, kept in the log of the run. The request may change entry["result"]: it stays
+    "ok" (or starts with it) when the service answered, and becomes the error when the request raises."""
+    entry = {"at": time.strftime("%H:%M:%S"), "service": service, "what": what, "seconds": 0.0, "result": "ok"}
+    started = time.time()
+    try:
+        yield entry
+    except BaseException as error:   # a request given up on (cancelled) is not an Exception
+        entry["result"] = f"{type(error).__name__}: {error}".strip(": ")[:300]
+        raise
+    finally:
+        entry["seconds"] = time.time() - started
+        REQUESTS.append(entry)
+
+def failed(entry: dict) -> bool:
+    return not entry["result"].startswith("ok")
+
 def message_text(message) -> str:
     """Return the text of a message, whether its content is a string or a list of content blocks."""
     if isinstance(message.content, str):

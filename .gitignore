@@ -4,6 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 # The recent reports come and go. Only the ones kept on purpose, in reports/saved/, belong in the repository
 /reports/*.md
+/reports/*.log
 # Crash dumps of command-line tools
 *.stackdump
 # Languages added by a model are made again with one click (Languages... in the window), so only the two

@@ -15,7 +15,7 @@ from trip_planner import current
 from trip_planner.agents import coordinator, subagents
 from trip_planner.agents.steps import run_steps, STEPS
 from trip_planner.config import TripSettings
-from trip_planner.places import ask_airports, choose_airports, codes, show_airports, TripPlaces
+from trip_planner.places import ask_airports, ask_places, choose_airports, codes, show_airports, TripPlaces
 from trip_planner.report.full import keep_report, RECENT_REPORTS, save_report
 from trip_planner.sources import web
 from trip_planner.texts import any_of, tr
@@ -87,6 +87,8 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     without them the airports are chosen here and, if the settings ask for it, confirmed as text."""
     current.SETTINGS = settings   # the tools, the checks and the texts read the trip from here
     if places is None:
+        if settings.confirm_airports:
+            ask_places(settings)   # which Nazaré, when the name is that of several places
         places = choose_airports(settings)
         if settings.confirm_airports:
             ask_airports(places)

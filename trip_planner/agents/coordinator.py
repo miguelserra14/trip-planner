@@ -15,7 +15,7 @@ from trip_planner import current
 from trip_planner.agents import models, subagents
 from trip_planner.config import LANGUAGES, LIGHTS
 from trip_planner.texts import tr
-from trip_planner.utils import message_text
+from trip_planner.utils import logged, message_text
 
 # The Google client leaves this warning behind when a model answers with an error. The error itself is handled
 # by write, so the warning only adds noise.
@@ -42,8 +42,9 @@ async def write(messages: list[Any]) -> str:
             if name in EXHAUSTED_MODELS:
                 continue
             try:
-                answer = coordinator_models[name].ainvoke(conversation, config={"tags": ["TP"]})   # the tag finds the traces in LangSmith
-                return message_text(await asyncio.wait_for(answer, ANSWER_SECONDS))
+                with logged("model", f"coordinator, {name}"):
+                    answer = coordinator_models[name].ainvoke(conversation, config={"tags": ["TP"]})   # the tag finds the traces in LangSmith
+                    return message_text(await asyncio.wait_for(answer, ANSWER_SECONDS))
             except Exception as error:
                 failure = error
                 if "PerDay" in str(error):

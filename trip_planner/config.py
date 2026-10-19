@@ -65,7 +65,7 @@ class TripSettings:
     # The two scales above can be swapped: "wide" is fallback_radius_km and max_departure_airports,
     # "near" is arrival_radius_km and max_arrival_airports, whichever side it is used on.
     departure_scale: str = "wide"         # around the origin: worth going far when the traveller lives there
-    arrival_scale: str = "near"           # around the destination
+    arrival_scale: str = "wide"           # around the destination
     # Adjust the automatic choice. Each entry is an airport code ("BRU"), an airport name ("Charleroi")
     # or a city ("Paris" means every airport of Paris).
     include_airports: list[str] = field(default_factory=list)    # airports to add
@@ -77,8 +77,8 @@ class TripSettings:
     confirm_airports: bool = True         # list the airports with checkboxes to drop some, before searching
 
     # Hard constraints, enforced in code by build_itineraries
-    earliest_leave: str = "06:30"         # earliest time leaving the origin city. Empty = from midnight
-    latest_leave: str = "17:00"           # latest time leaving the origin city. Empty or 00:00 = until the end of the day
+    earliest_leave: str = ""              # earliest time leaving the origin city. Empty = from midnight
+    latest_leave: str = ""                # latest time leaving the origin city. Empty or 00:00 = until the end of the day
     min_airport_minutes: int = 90         # minimum time at the airport before the flight departs
     ideal_airport_minutes: int = 120      # time at the airport aimed for when no real timetable is available
     min_landing_minutes: int = 45         # minimum time between landing and leaving the arrival airport

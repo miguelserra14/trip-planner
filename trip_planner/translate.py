@@ -37,7 +37,6 @@ NOTES = {
     "date_and_words": "the words between two separate dates, as in '17 and 18 December' or '17 or 18 December'",
     "date_ignored_words": ("small words that appear in written dates and carry no date: articles, 'of', 'next', 'day', and the word "
                            "that opens a range, 'from', in all its forms (Italian: da,dal; French: de,du)"),
-    "ui_dates_hint": "examples of dates as a traveller would type them in the target language",
 }
 
 class UnknownLanguage(ValueError):

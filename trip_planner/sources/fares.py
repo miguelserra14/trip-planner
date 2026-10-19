@@ -21,7 +21,7 @@ import httpx
 
 from trip_planner.config import USER_AGENT
 from trip_planner.places import distance_km, Place
-from trip_planner.utils import plain, to_minutes
+from trip_planner.utils import logged, plain, to_minutes
 
 TIMEOUT = 20
 SAME_MINUTES = 2          # an operator's departure is the timetable's when it leaves within this of it...
@@ -368,7 +368,12 @@ def fare(source: FareSource, trip: Trip) -> float | None:
         if key in CACHE:
             return CACHE[key]
     try:
-        price = source.fare(trip)
+        if source.tariff:
+            price = source.fare(trip)   # a published tariff is worked out here: nothing is asked of anyone
+        else:
+            with logged(source.name, f"fare {trip.start} -> {trip.end}, {trip.day} {trip.leave}") as entry:
+                price = source.fare(trip)
+                entry["result"] = "ok: no price" if price is None else f"ok: {price:.2f} EUR"
     except Exception:
         price = None   # an operator that fails only leaves the estimate in place
     with LOCK:

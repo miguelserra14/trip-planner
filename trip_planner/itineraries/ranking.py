@@ -6,7 +6,7 @@ from typing import Any
 from trip_planner import current
 from concurrent.futures import ThreadPoolExecutor
 
-from trip_planner.itineraries.legs import country_of, from_airport_leg, price_with_tickets, to_airport_leg
+from trip_planner.itineraries.legs import country_of, from_airport_leg, price_with_tickets, Rejected, to_airport_leg
 from trip_planner.sources import airlines
 from trip_planner.sources.timetables import landing_day
 from trip_planner.texts import tr
@@ -62,12 +62,12 @@ def closeness(itinerary: dict[str, Any]) -> tuple:
 def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
                     route: dict[str, Any] | None, closest: bool = False) -> dict[str, Any]:
     """Combine a flight with its ground transport and check every hard constraint.
-    Returns the itinerary, or raises ValueError with the reason it is rejected.
+    Returns the itinerary, or raises Rejected with the reason it is rejected.
     closest=True lets the requirements of REQUIREMENTS give way and lists the ones that did under "breaches"."""
     if flight["stops"] > current.SETTINGS.max_stopovers and not closest:
-        raise ValueError(tr("reject_stopovers", stops=flight["stops"], maximum=current.SETTINGS.max_stopovers))
+        raise Rejected(tr("reject_stopovers", stops=flight["stops"], maximum=current.SETTINGS.max_stopovers))
     if flight["arrival_airport"] not in {airport["code"] for airport in current.TRIP.arrival}:
-        raise ValueError(tr("reject_arrival_airport", airport=flight["arrival_airport"]))
+        raise Rejected(tr("reject_arrival_airport", airport=flight["arrival_airport"]))
     to_leg = to_airport_leg(flight, ground, transfer, closest, priced=True)
     from_leg = from_airport_leg(flight, ground, route, closest, priced=True)
     # Where each leg runs, for the vehicles no operator prices (price_with_tickets)

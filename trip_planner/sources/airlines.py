@@ -7,7 +7,7 @@ import httpx
 
 from trip_planner.config import USER_AGENT
 from trip_planner.sources import web
-from trip_planner.utils import plain
+from trip_planner.utils import logged, plain
 
 # Kiwi is a reseller. The traveller books on the airline's own site, so the report links there.
 # The site of an airline is looked up the first time it is needed, for any airline in the world.
@@ -122,7 +122,9 @@ def ask_airline(flight: dict[str, Any]) -> dict[str, Any]:
     if checker is None or flight["stops"] != 0:
         return booking
     try:
-        fare = checker(flight)
+        with logged(flight["airline"], f"price of {flight['id']}") as entry:
+            fare = checker(flight)
+            entry["result"] = "ok: not sold" if fare is None else f"ok: {fare['price_eur']:.2f} EUR"
     except Exception:
         fare = None
     if fare is None:

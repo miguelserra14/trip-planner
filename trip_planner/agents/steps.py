@@ -3,6 +3,7 @@ Each step is a function that reads the state of the trip and returns what it add
 the one before. run_steps runs them in order, in code: no model decides what comes next."""
 import asyncio
 import re
+import traceback
 from datetime import date
 from typing import Any
 
@@ -12,12 +13,13 @@ from trip_planner import current
 from trip_planner.agents import subagents
 from trip_planner.config import LIGHTS
 from trip_planner.itineraries import selection
+from trip_planner.itineraries.legs import Rejected
 from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itineraries, price_itinerary, rank_itineraries
 from trip_planner.places import describe_airport
 from trip_planner.report.summary import render_closest, render_report
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web
 from trip_planner.texts import tr
-from trip_planner.utils import say, timed
+from trip_planner.utils import logged, REQUESTS, say, timed
 
 def iata(text: str) -> str:
     """The first IATA code in a text. The model sometimes writes junk after the airport code."""
@@ -35,6 +37,7 @@ async def search_flights(state: dict[str, Any]) -> dict[str, Any]:
         flight_search.FLIGHTS.clear()
         flight_search.SEARCHED.clear()
         flight_search.FLIGHT_GAPS.clear()
+        FAULTS.clear()
         kiwi.kiwi_retries.retries = 0
         google_flights.requests = 0
         if current.SETTINGS.use_flight_agent:
@@ -101,8 +104,9 @@ async def ask_transfer_agent(flights: list[dict[str, Any]], only: set | None = N
             + "\n".join(f"- {describe_airport(airport)}" for airport in airports)
         )
         try:
-            response = await subagents.airport_transfer_agent.ainvoke(
-                {"messages": [HumanMessage(content=query)], "search_limit": searches}, config={"recursion_limit": 40})
+            with logged("model", f"airport transfer agent, {len(airports)} airports, {searches} web searches allowed"):
+                response = await subagents.airport_transfer_agent.ainvoke(
+                    {"messages": [HumanMessage(content=query)], "search_limit": searches}, config={"recursion_limit": 40})
             plan = response.get("structured_response")
         except Exception as e:
             say(f"[airport transfer agent] {type(e).__name__}: no answer, prices are estimated from the distance")
@@ -130,8 +134,9 @@ async def ask_destination_agent(flights: list[dict[str, Any]], only: set | None 
             + "\n".join(f"- {describe_airport(airport)}" for airport in airports)
         )
         try:
-            response = await subagents.destination_transport_agent.ainvoke(
-                {"messages": [HumanMessage(content=query)], "search_limit": searches}, config={"recursion_limit": 40})
+            with logged("model", f"destination transport agent, {len(airports)} airports, {searches} web searches allowed"):
+                response = await subagents.destination_transport_agent.ainvoke(
+                    {"messages": [HumanMessage(content=query)], "search_limit": searches}, config={"recursion_limit": 40})
             plan = response.get("structured_response")
         except Exception as e:
             say(f"[destination transport agent] {type(e).__name__}: no answer")
@@ -163,6 +168,28 @@ async def ground_transport(checked: list[dict[str, Any]], asked: set = frozenset
     transfers, trains = await asyncio.gather(ask_transfer_agent(checked, leaving, 0), ask_destination_agent(checked, landing, 0))
     return ground, transfers, trains
 
+# The flights the program failed on while working out their itinerary: {flight id: the error}. Such a flight is
+# left out like a rejected one, so that one mistake does not lose the whole search, but it is never passed off as
+# one: it is said at once, kept in the log of the run with where it happened, and counted in the report.
+FAULTS: dict[str, str] = {}
+
+def itinerary_or_reason(flight: dict[str, Any], ground: dict[str, Any], transfers: dict[str, Any], routes: dict[str, Any],
+                        closest: bool = False) -> tuple:
+    """(the itinerary of a flight, "") or (None, why it cannot make one). transfers and routes are what the
+    specialists found, by airport."""
+    try:
+        return check_itinerary(flight, ground, transfers.get(flight["departure_airport"]), routes.get(flight["arrival_airport"]), closest), ""
+    except Rejected as reason:
+        return None, str(reason)
+    except Exception as error:
+        fault = f"{type(error).__name__}: {error}"
+        if flight["id"] not in FAULTS:
+            FAULTS[flight["id"]] = fault
+            say(f"[itineraries] {flight['id']}: the program failed on this flight, it is left out. {fault}")
+            where = " | ".join(line.strip() for line in traceback.format_exc().splitlines()[-7:])
+            REQUESTS.append({"at": "", "service": "program", "what": f"itinerary of {flight['id']}: {where}", "seconds": 0.0, "result": fault})
+        return None, tr("reject_program_error", error=fault)
+
 def itineraries_of(flights: list[dict[str, Any]], ground: dict[str, Any], transfers: list[dict[str, Any]],
                    trains: list[dict[str, Any]]) -> dict[str, dict[str, Any] | None]:
     """The priced itinerary of each flight, or None when the flight cannot make one."""
@@ -170,10 +197,7 @@ def itineraries_of(flights: list[dict[str, Any]], ground: dict[str, Any], transf
     route_of = {route["airport"]: route for route in trains}
     made: dict[str, dict[str, Any] | None] = {}
     for flight in flights:
-        try:
-            made[flight["id"]] = check_itinerary(flight, ground, transfer_of.get(flight["departure_airport"]), route_of.get(flight["arrival_airport"]))
-        except (ValueError, KeyError, TypeError):
-            made[flight["id"]] = None
+        made[flight["id"]] = itinerary_or_reason(flight, ground, transfer_of, route_of)[0]
     price_itineraries([itinerary for itinerary in made.values() if itinerary])
     return made
 
@@ -243,9 +267,8 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
         for flight in sorted(state["flights"], key=lambda flight: flight["price_eur"]):
             if flight["id"] not in checked:
                 continue
-            try:
-                itinerary = check_itinerary(flight, ground, transfers.get(flight["departure_airport"]), routes.get(flight["arrival_airport"]))
-            except (ValueError, KeyError, TypeError) as reason:
+            itinerary, reason = itinerary_or_reason(flight, ground, transfers, routes)
+            if itinerary is None:
                 rejected.append(f"{flight['id']} ({flight['price_eur']:.0f} EUR): {reason}")
                 continue
             itineraries.append(itinerary)
@@ -267,6 +290,8 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
             warnings.append(tr("warn_flights_not_checked", skipped=skipped, checked=len(checked)))
         if state.get("flight_gaps"):
             warnings.append(tr("warn_flight_gaps", count=len(state["flight_gaps"])))
+        if FAULTS:
+            warnings.append(tr("warn_program_errors", count=len(FAULTS)))
 
         if not itineraries:
             # Nothing respects every requirement. The same flights again, letting give way the requirements that
@@ -275,10 +300,8 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
             near = []
             for flight in state["flights"]:
                 if flight["id"] in checked:
-                    try:
-                        itinerary = check_itinerary(flight, ground, transfers.get(flight["departure_airport"]),
-                                                    routes.get(flight["arrival_airport"]), closest=True)
-                    except (ValueError, KeyError, TypeError):
+                    itinerary, _ = itinerary_or_reason(flight, ground, transfers, routes, closest=True)
+                    if itinerary is None:
                         continue   # no real connection at all: it is already among the rejected, with the reason
                     if itinerary["breaches"]:
                         price_itinerary(itinerary)

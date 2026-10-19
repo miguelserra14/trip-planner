@@ -14,7 +14,7 @@ from langchain.tools import tool
 from trip_planner import current
 from trip_planner.sources import google_flights, kiwi
 from trip_planner.texts import tr
-from trip_planner.utils import say, to_minutes, to_time
+from trip_planner.utils import logged, say, to_minutes, to_time
 
 async def connect() -> None:
     """Connect to Kiwi if that was not done yet. Without it the flights come from Google Flights."""
@@ -95,11 +95,19 @@ async def search(fly_from: str, fly_to: str, first_day: str, last_day: str,
     Giving stopovers asks for what exists at any time of the day with at most that many stopovers, instead of
     what fits the traveller's limits.
     Kiwi is asked first. If it is not available or does not answer, the same is asked of Google Flights."""
-    found = await kiwi.ask_kiwi(fly_from, fly_to, first_day, last_day, stopovers) if kiwi.kiwi_search is not None else None
+    route = f"{fly_from} -> {fly_to}, {first_day}" + (f" to {last_day}" if last_day != first_day else "")
+    answer = lambda found: "no answer" if found is None else f"ok: {len(found)} flights"
+    found = None
+    if kiwi.kiwi_search is not None:
+        with logged(kiwi.NAME, route) as entry:
+            found = await kiwi.ask_kiwi(fly_from, fly_to, first_day, last_day, stopovers)
+            entry["result"] = answer(found)
     if found is None:
         days = [day for day in current.SETTINGS.iso_dates if first_day <= day <= last_day] or [first_day]
-        found = await google_flights.flights(fly_from, fly_to.split(","), days,
-                                             current.SETTINGS.max_stopovers if stopovers is None else stopovers)
+        with logged(google_flights.NAME, route) as entry:
+            found = await google_flights.flights(fly_from, fly_to.split(","), days,
+                                                 current.SETTINGS.max_stopovers if stopovers is None else stopovers)
+            entry["result"] = answer(found)
     return found
 
 async def search_airport_flights(departure: str, arrivals: list[str], days: list[str]) -> None:

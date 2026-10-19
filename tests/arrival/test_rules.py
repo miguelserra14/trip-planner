@@ -68,7 +68,9 @@ def test_hours_by_road_are_read_from_the_answer():
     assert "FEZ" not in hours, "a road of 1 km to an airport 239 km away says nothing about it"
 
 def bari_trip(monkeypatch, hours_to_dubrovnik: float | None, **settings) -> places.TripPlaces:
-    """The airports of a trip from Antwerp to Bari, with made-up hours by road: Dubrovnik is 198 km from Bari."""
+    """The airports of a trip from Antwerp to Bari, with made-up hours by road: Dubrovnik is 198 km from Bari.
+    The near scale at the destination: its three airports are the ones the tests expect."""
+    settings.setdefault("arrival_scale", "near")
     monkeypatch.setitem(places.PLACES, "antwerp", Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.2211, 4.3997))
     monkeypatch.setitem(places.PLACES, "bari", Place("Bari", "Bari", "Bari", "Italy", 41.1258, 16.8621))
     known = lambda airport: 1.0 if airport["code"] != "DBV" else hours_to_dubrovnik
@@ -108,3 +110,34 @@ def test_without_a_terminal_the_stops_named_after_the_airport_are_used():
 def test_the_walk_to_a_stop_grows_with_the_distance():
     near, far = choose_airport_stops([stop("Station", ["REGIONAL_RAIL"], 0.05), stop("Bus", ["BUS"], 0.65)], AIRPORT, TERMINAL)
     assert near[1] == timetables.MIN_STOP_WALK_MINUTES and far[1] > near[1]
+
+def result(addresstype: str, importance: float, lat: float, lon: float, display_name: str) -> dict:
+    return {"addresstype": addresstype, "importance": importance, "lat": str(lat), "lon": str(lon), "category": "place",
+            "name": display_name.split(",")[0], "display_name": display_name, "address": {"country": display_name.split(", ")[-1]}}
+
+NAZARE = [result("municipality", 0.522, -13.03, -39.01, "Nazaré, Bahia, Northeast Region, 44400-000, Brazil"),
+          result("town", 0.484, 39.60, -9.07, "Nazaré, Leiria, Portugal"),
+          result("village", 0.449, -6.37, -47.66, "Nazaré, Tocantins, North Region, 77895-000, Brazil"),
+          result("village", 0.147, 2.65, 11.0, "Nazare, Mvangan, Mvila, South, Cameroon")]
+
+def test_places_of_the_same_name_and_about_as_important_are_all_offered(monkeypatch):
+    monkeypatch.setitem(places.SEARCHES, "nazare", NAZARE)
+    labels = [label for label, place in places.meanings("Nazaré")]
+    assert labels == ["Nazaré, Bahia, Brazil", "Nazaré, Leiria, Portugal", "Nazaré, Tocantins, Brazil"], "not Cameroon: far less important"
+
+def test_the_place_chosen_is_the_one_the_name_means_from_then_on(monkeypatch):
+    monkeypatch.setitem(places.SEARCHES, "nazare", NAZARE)
+    monkeypatch.setattr(places, "PLACES", {})
+    label, leiria = places.meanings("Nazaré")[1]
+    places.choose_place(label, leiria)
+    assert places.geocode(label).country == "Portugal" and len(places.meanings(label)) == 1
+
+def test_a_name_far_more_important_in_one_place_is_not_asked_about(monkeypatch):
+    paris = [result("city", 0.88, 48.85, 2.35, "Paris, Ile-de-France, France"), result("city", 0.55, 33.66, -95.55, "Paris, Lamar County, Texas, United States")]
+    monkeypatch.setitem(places.SEARCHES, "paris", paris)
+    assert len(places.meanings("Paris")) == 1
+
+def test_the_town_inside_a_municipality_of_its_name_is_not_another_place(monkeypatch):
+    bovec = [result("municipality", 0.53, 46.356, 13.614, "Bovec, Slovenia"), result("town", 0.50, 46.338, 13.552, "Bovec, 5230, Slovenia")]
+    monkeypatch.setitem(places.SEARCHES, "bovec", bovec)
+    assert [label for label, place in places.meanings("Bovec")] == ["Bovec, Slovenia"]

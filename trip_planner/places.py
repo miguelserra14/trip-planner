@@ -6,6 +6,7 @@ import io
 import json
 import math
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -14,7 +15,7 @@ import httpx
 from trip_planner import current
 from trip_planner.config import ROOT, TripSettings, USER_AGENT
 from trip_planner.texts import tr
-from trip_planner.utils import as_duration, plain, say
+from trip_planner.utils import as_duration, logged, plain, say
 
 AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"   # OurAirports, public domain
 AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused. Only the airports with_flights are kept
@@ -81,22 +82,56 @@ def settlement(results: list[dict[str, Any]], written: str = "") -> dict[str, An
                  and any(name in other for name in names(first) for other in names(town))),   # "San Marino" and "City of San Marino"
                 next((result for result in others if result.get("addresstype") in SETTLEMENTS and close(result)), first))
 
+def ask_nominatim(asked: dict[str, str]) -> list[dict[str, Any]]:
+    with logged("Nominatim", " ".join(asked.values())):
+        response = httpx.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={**asked, "format": "jsonv2", "limit": 5, "namedetails": 1, "addressdetails": 1, "accept-language": "en"},
+            headers={"User-Agent": USER_AGENT},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return response.json()
+
 def search_places(name: str) -> list[dict[str, Any]]:
-    """What OpenStreetMap's Nominatim finds for a name, most important first."""
-    response = httpx.get(
-        "https://nominatim.openstreetmap.org/search",
-        params={"q": name, "format": "jsonv2", "limit": 5, "namedetails": 1, "addressdetails": 1, "accept-language": "en"},
-        headers={"User-Agent": USER_AGENT},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
+    """What OpenStreetMap's Nominatim finds for a name, most important first. The place meant by the name is put
+    where its town is (move_to_centre)."""
+    results = ask_nominatim({"q": name})
+    if results:
+        move_to_centre(settlement(results, name))
+    return results
+
+CENTRE_KM = 1.0   # a town's own point this close to where it was found changes nothing
+
+def move_to_centre(found: dict[str, Any]) -> None:
+    """A town can be found as its boundary, and is then placed in the middle of its territory: for Siracusa that
+    is 7 km from the city, among fields where two buses a day stop. OpenStreetMap also has the point of the town
+    itself. A search by name hides it behind the boundary, a search for a city of that name gives both: the place
+    takes that point. One more request, only for a place found as a boundary."""
+    if found.get("category") != "boundary" or found.get("addresstype") not in TOWNS or not found.get("name"):
+        return
+    time.sleep(1.1)   # Nominatim asks for one request a second at most
+    try:
+        towns = ask_nominatim({"city": found["name"], "countrycodes": (found.get("address") or {}).get("country_code", "")})
+    except Exception:
+        return   # the place stays where it was found
+    # The names in the language of the place: in English the two can differ ("Siracusa" the boundary, "Syracuse" the city)
+    local = lambda result: plain((result.get("namedetails") or {}).get("name") or result.get("name") or "")
+    for town in towns:
+        if town.get("category") == "place" and town.get("addresstype") in TOWNS and local(town) == local(found):
+            km = distance_km(float(found["lat"]), float(found["lon"]), float(town["lat"]), float(town["lon"]))
+            if CENTRE_KM < km <= MUNICIPALITY_KM:
+                found["lat"], found["lon"] = town["lat"], town["lon"]
+            return
 
 def as_place(name: str, results: list[dict[str, Any]]) -> Place:
     """The place meant by a name, among what Nominatim found for it. Raises ValueError if it found nothing."""
     if not results:
         raise ValueError(tr("place_not_found", name=name))
-    found = settlement(results, name)
+    return place_of(name, settlement(results, name))
+
+def place_of(name: str, found: dict[str, Any]) -> Place:
+    """One result of Nominatim as a place, written by the traveller as name."""
     names = found.get("namedetails") or {}
     return Place(
         written=name,
@@ -108,11 +143,79 @@ def as_place(name: str, results: list[dict[str, Any]]) -> Place:
     )
 
 def geocode(name: str) -> Place:
-    """Locate a city written in any language, with OpenStreetMap's Nominatim."""
+    """Locate a city written in any language, with OpenStreetMap's Nominatim. The one chosen by the traveller when
+    the name is that of several places (see meanings)."""
     key = plain(name)
     if key not in PLACES:
-        PLACES[key] = as_place(name, search_places(name))
+        PLACES[key] = as_place(name, searched(name))
     return PLACES[key]
+
+# Places of the same name whose importance differs by less than this could each be the one the traveller means:
+# "Nazaré" is a town in Bahia (0.52) and one in Leiria (0.48). Then the traveller chooses.
+AMBIGUOUS_IMPORTANCE = 0.2
+SEARCHES: dict[str, list[dict[str, Any]]] = {}   # what Nominatim found for each name, in this session
+
+def searched(name: str) -> list[dict[str, Any]]:
+    """search_places, asked once per name."""
+    key = plain(name)
+    if key not in SEARCHES:
+        SEARCHES[key] = search_places(name)
+    return SEARCHES[key]
+
+def choice_label(found: dict[str, Any]) -> str:
+    """How a place is told apart from the others of its name: its name, its region and its country
+    ("Nazaré, Leiria, Portugal"), without the postcode and the levels in between."""
+    parts = [part.strip() for part in found.get("display_name", "").split(",") if part.strip() and not part.strip()[:1].isdigit()]
+    return ", ".join(dict.fromkeys(parts[:2] + parts[-1:])) if len(parts) > 2 else ", ".join(parts)
+
+def meanings(name: str) -> list[tuple[str, Place]]:
+    """The places a name may mean, as (label, place): the one that would be chosen first, then the other towns of
+    that name that are about as important, and far from it (not the town inside a municipality of its name).
+    One when the name is clear, or was chosen already. Empty when nothing was found."""
+    key = plain(name)
+    if key in PLACES:
+        return [(name, PLACES[key])]
+    results = searched(name)
+    if not results:
+        return []
+    chosen = settlement(results, name)
+    importance = lambda result: result.get("importance", 0)
+    far = lambda one, other: distance_km(float(one["lat"]), float(one["lon"]), float(other["lat"]), float(other["lon"])) > SAME_NAME_KM
+    options = [chosen]
+    for result in results:
+        if (result is not chosen and result.get("addresstype") in SETTLEMENTS
+                and abs(importance(result) - importance(chosen)) < AMBIGUOUS_IMPORTANCE and all(far(result, other) for other in options)):
+            options.append(result)
+    for other in options[1:]:
+        move_to_centre(other)   # as the first one was, in search_places
+    return [(choice_label(found), place_of(name, found)) for found in options]
+
+def unclear_places(settings: TripSettings) -> list[tuple[str, str, list[tuple[str, Place]]]]:
+    """The origin and the destination when their name is that of several places: (setting, name, meanings)."""
+    found = []
+    for setting in ("origin", "destination"):
+        options = meanings(getattr(settings, setting))
+        if len(options) > 1:
+            found.append((setting, getattr(settings, setting), options))
+    return found
+
+def choose_place(name: str, place: Place) -> None:
+    """The place the traveller chose for a name: it is the one that name means from now on."""
+    PLACES[plain(name)] = place
+
+def ask_places(settings: TripSettings) -> None:
+    """Text version of the choice between places of the same name, for when the window is not used."""
+    for setting, name, options in unclear_places(settings):
+        say("\n" + tr("place_several", name=name))
+        for number, (label, place) in enumerate(options, start=1):
+            say(f"  {number}. {label}")
+        try:
+            answer = input(tr("place_which") + " ").strip()
+        except Exception:
+            answer = ""
+            say(tr("place_kept", place=options[0][0]))
+        number = int(answer) if answer.isdigit() and 1 <= int(answer) <= len(options) else 1
+        choose_place(name, options[number - 1][1])
 
 AIRPORTS: dict[str, dict[str, Any]] = {}
 
@@ -218,10 +321,11 @@ def road_hours(place: Place, airports: list[dict[str, Any]]) -> dict[str, float]
         return {}
     points = [(place.latitude, place.longitude)] + [(airport["latitude"], airport["longitude"]) for airport in airports]
     try:
-        response = httpx.get(ROADS_URL + ";".join(f"{longitude},{latitude}" for latitude, longitude in points),
-                             params={"sources": 0, "annotations": "duration,distance"}, headers={"User-Agent": USER_AGENT}, timeout=15)
-        response.raise_for_status()
-        return read_road_hours(airports, response.json())
+        with logged("OSRM", f"roads from {place.label} to {len(airports)} airports"):
+            response = httpx.get(ROADS_URL + ";".join(f"{longitude},{latitude}" for latitude, longitude in points),
+                                 params={"sources": 0, "annotations": "duration,distance"}, headers={"User-Agent": USER_AGENT}, timeout=15)
+            response.raise_for_status()
+            return read_road_hours(airports, response.json())
     except Exception as e:
         say(f"[airports] {type(e).__name__}: could not check the airports by road, they are chosen by the straight line alone")
         return {}

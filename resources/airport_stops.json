@@ -1,0 +1,23 @@
+{
+"AMS": {"read": "2026-10-14", "terminal": [52.3065193, 4.7629773], "stops": [["fr-eurostar-gtfs-plan-de-transport-et-temps-reel_schiphol_airport_6", 5], ["nl-OpenOV_4199565", 5]]},
+"BGY": {"read": "2026-10-15", "terminal": [45.6659248, 9.6986875], "stops": [["eu-flixbus_dcc45a6f-9603-11e6-9066-549f350fcb0c", 5]]},
+"BLQ": {"read": "2026-10-15", "terminal": [44.5288763, 11.2917], "stops": [["it-Emilia-Romagna-TPER-BLQ-Airport_BLQ", 5]]},
+"BRU": {"read": "2026-10-14", "terminal": [50.8983361, 4.4839079], "stops": [["de-DELFI_000008800043", 5], ["be-sncb_8819406", 5]]},
+"CGN": {"read": "2026-10-14", "terminal": [50.8771606, 7.1227745], "stops": [["de-DELFI_de:05315:17551:7:71", 5], ["de-DELFI_de:05315:17560:2:23", 5]]},
+"CRL": {"read": "2026-10-14", "terminal": [50.4695232, 4.4705869], "stops": [["be-tec_gs:tec:Cgoairp4", 5]]},
+"DUS": {"read": "2026-10-14", "terminal": [51.2784095, 6.7661717], "stops": [["de-DELFI_de:05111:18517:98:SBg", 5], ["de-DELFI_de:05111:18517:4:4", 5]]},
+"EIN": {"read": "2026-10-14", "terminal": [51.4586442, 5.3918643], "stops": [["nl-OpenOV_3898752", 5], ["eu-flixbus_dcc2d57b-9603-11e6-9066-549f350fcb0c", 5]]},
+"FLR": {"read": "2026-10-15", "terminal": [43.8023136, 11.20124], "stops": [["it-Toscana-GEST_FM9060_103", 5], ["eu-flixbus_627f614c-a142-4bba-9b88-f098e53cec76", 11]]},
+"LIL": {"read": "2026-10-14", "terminal": [50.5718893, 3.1075003], "stops": [["fr-ilevia-localisation-des-arrets-bus-metro-et-tram-gtfs_AP2002", 5]]},
+"LIN": {"read": "2026-10-15", "terminal": [45.461345, 9.2793694], "stops": [["it-Lombardia-ATM_13314", 5], ["eu-flixbus_3bba00bd-fdf2-4a2d-a4ae-7c720a6d139a", 5]]},
+"LIS": {"read": "2026-10-14", "terminal": [38.7724921, -9.1302119], "stops": [["pt-Carris_7604", 6], ["eu-blablacar-bus_ACD", 8]]},
+"LUX": {"read": "2026-10-14", "terminal": [49.6323526, 6.2137922], "stops": [["lu-administration-des-transports-publics_000200508012", 5]]},
+"MXP": {"read": "2026-10-15", "terminal": [45.6277487, 8.7143034], "stops": [["it-Lombardia-Trenord_S01139", 5], ["it-Piemonte-Bus_ITRP-ST0120680002", 5]]},
+"NRN": {"read": "2026-10-14", "terminal": [51.5995508, 6.1503026], "stops": [["nl-OpenOV_3893310", 5]]},
+"OPO": {"read": "2026-10-14", "terminal": [41.2365025, -8.6715444], "stops": [["pt-Autna_35131", 5], ["eu-flixbus_e9e4caca-0ae6-434f-9079-610de5e00a1d", 5]]},
+"PSA": {"read": "2026-10-15", "terminal": [43.6983724, 10.3993925], "stops": [["it-Toscana-Autolinee-LineeRegionali_139004", 6]]},
+"RTM": {"read": "2026-10-14", "terminal": [51.9491345, 4.4341375], "stops": [["nl-OpenOV_3990518", 5]]},
+"SCQ": {"read": "2026-10-14", "terminal": [42.89765, -8.42007], "stops": [["es-Autobuses-Xunta-de-Galicia_SP16149", 10], ["eu-blablacar-bus_SCQ", 10]]},
+"TSF": {"read": "2026-10-15", "terminal": [45.65463, 12.20458], "stops": [["it-Veneto-Mobilita-di-Marca_006160", 5]]},
+"VCE": {"read": "2026-10-15", "terminal": [45.5048368, 12.34097], "stops": [["it-Veneto-Venezia-Bus_3626", 5], ["al-ShowMeBus_station-311", 5]]}
+}

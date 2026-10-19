@@ -11,7 +11,28 @@ from trip_planner.places import airport_groups, too_far_notice
 from trip_planner.report.formatting import at_destination, grade_text, table
 from trip_planner.sources import timetables
 from trip_planner.texts import tr
-from trip_planner.utils import plain, TIMINGS, to_time
+from trip_planner.utils import failed, plain, REQUESTS, TIMINGS, to_time
+
+def services_table() -> list[str]:
+    """What was asked of each service in this run: how many requests, how many failed, the time they took."""
+    services: dict[str, list[dict]] = {}
+    for entry in REQUESTS:
+        services.setdefault(entry["service"], []).append(entry)
+    return table([tr("col_service"), tr("col_requests"), tr("col_failed"), tr("col_seconds"), tr("col_slowest")],
+                 [[service, len(entries), sum(map(failed, entries)), f"{sum(entry['seconds'] for entry in entries):.0f}",
+                   f"{max(entry['seconds'] for entry in entries):.1f}"] for service, entries in sorted(services.items())])
+
+def render_log() -> str:
+    """The log of the run, one request per line, in the order they ended."""
+    lines = ["Every request of this run: when it was made, the seconds it took, the seconds it waited for its turn, the service, how it ended, what was asked.", ""]
+    for entry in REQUESTS:
+        waited = f"{entry['waited']:5.1f}" if "waited" in entry else "    -"
+        lines.append(f"{entry['at']:8}  {entry['seconds']:6.2f}  {waited}  {entry['service']:<16}  {entry['result']:<18}  {entry['what']}")
+    return "\n".join(lines) + "\n"
+
+def log_of(report: Path) -> Path:
+    """The file of the log that goes with a report."""
+    return report.with_suffix(".log")
 
 def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     """Everything behind the recommendation: the settings, what each step found and where it came from,
@@ -103,6 +124,10 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         "",
         *table([tr("col_step"), tr("col_seconds")], [[step, f"{seconds:.0f}"] for step, seconds in sorted(TIMINGS.items())]),
         "",
+        tr("services_explained"),
+        "",
+        *services_table(),
+        "",
         f"# {tr('final_result')}",
         "",
         response.get("report") or f"## {tr('no_itinerary')}",
@@ -117,24 +142,32 @@ SAVED_REPORTS = REPORTS / "saved"    # the reports the traveller chose to keep. 
 RECENT_REPORTS = 5
 
 def save_report(response: dict[str, Any], recommendation: str) -> Path:
-    """Save the full reasoning and the final result, one file per run, and make room: the oldest reports go."""
+    """Save the full reasoning and the final result, one file per run, and make room: the oldest reports go.
+    The log of the run is saved next to it, and the next run starts a new one."""
     slug = lambda text: re.sub(r"[^a-z0-9]+", "-", plain(text)).strip("-")
     path = REPORTS / f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}.md"
     path.parent.mkdir(exist_ok=True)
     path.write_text(render_full_report(response, recommendation), encoding="utf-8")
+    log_of(path).write_text(render_log(), encoding="utf-8")
+    REQUESTS.clear()
     remove_old_reports()
     return path
 
 def remove_old_reports() -> None:
-    """Delete the reports beyond the newest RECENT_REPORTS. The ones in saved/ are not counted and not touched."""
+    """Delete the reports beyond the newest RECENT_REPORTS, with their logs. The ones in saved/ are not counted
+    and not touched."""
     reports = sorted(REPORTS.glob("trip_*.md"), key=lambda report: report.stat().st_mtime)
     for old in reports[:-RECENT_REPORTS]:
         old.unlink(missing_ok=True)
+        log_of(old).unlink(missing_ok=True)
 
 def keep_report(path: Path, keep: bool) -> Path:
-    """Move a report to saved/ to keep it, or back among the recent ones. Returns where the report is now."""
+    """Move a report to saved/ to keep it, or back among the recent ones, with its log. Returns where the report
+    is now."""
     target = (SAVED_REPORTS if keep else REPORTS) / path.name
     if target != path and path.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         path.replace(target)
+        if log_of(path).exists():
+            log_of(path).replace(log_of(target))
     return target

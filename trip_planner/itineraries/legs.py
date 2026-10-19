@@ -20,6 +20,10 @@ MAX_PLAUSIBLE_EUR_PER_KM = 1.0    # ... or more expensive than this
 UNVERIFIED_PRICE_FACTOR = 2       # a price that is a guess is compared as this many times itself with a real price
 SMALL_ESTIMATE_EUR = 5.0          # estimates up to this (a metro ticket) are accepted even when estimates are not allowed
 
+class Rejected(ValueError):
+    """Why a flight cannot make an itinerary, written for the traveller. Any other error raised while an itinerary
+    is worked out is a mistake of the program, and is not shown as a rejection (steps.itinerary_or_reason)."""
+
 def estimated_minutes(km: float) -> int:
     return round(km * ROAD_FACTOR / ESTIMATE_SPEED_KMH * 60 + ESTIMATE_FIXED_MINUTES)
 
@@ -64,10 +68,10 @@ def model_price(price_eur: float, known: bool, km: float | None, country: str = 
     if known and price_eur > 0 and (km is None or price_eur <= 3 + km * ROAD_FACTOR * MAX_PLAUSIBLE_EUR_PER_KM):
         return float(price_eur), "model"
     if km is None:
-        raise ValueError(tr("reject_price_unknown"))
+        raise Rejected(tr("reject_price_unknown"))
     price = estimated_price(km, country)
     if not current.SETTINGS.allow_estimated_prices and price > SMALL_ESTIMATE_EUR:
-        raise ValueError(tr("reject_price_unknown"))
+        raise Rejected(tr("reject_price_unknown"))
     return price, "estimate"
 
 def real_options_text(options: list[dict[str, Any]]) -> str:
@@ -96,7 +100,7 @@ def best_on_real_prices(candidates: list[dict[str, Any]], key: Callable, day: st
 def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
                    closest: bool = False, priced: bool = False) -> dict[str, Any]:
     """How the traveller gets to the departure airport: a real connection when one is published, otherwise the
-    model's estimate. Raises ValueError with the reason when the flight cannot be caught.
+    model's estimate. Raises Rejected with the reason when the flight cannot be caught.
     closest=True also accepts a real connection outside the times the traveller leaves at, or one that leaves less
     than the time asked for at the airport: the one that breaks the least, for the closest alternatives.
     priced=True reads the operators' tickets before choosing between connections (best_on_real_prices)."""
@@ -147,15 +151,15 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         in_time = sorted((o for o in real if o["arrive"] <= at_terminal), key=lambda o: o["leave"])[-3:]
         in_window = sorted((o for o in real if earliest <= o["leave"] <= latest and o["arrive"] > at_terminal),
                            key=lambda o: o["leave"])[:2]
-        raise ValueError(tr("reject_no_real_connection", airport=airport, earliest=current.SETTINGS.earliest_leave,
-                            latest=current.SETTINGS.latest_leave, limit=to_time(at_terminal),
-                            real=real_options_text(in_time + in_window or real)))
+        raise Rejected(tr("reject_no_real_connection", airport=airport, earliest=current.SETTINGS.earliest_leave,
+                          latest=current.SETTINGS.latest_leave, limit=to_time(at_terminal),
+                          real=real_options_text(in_time + in_window or real)))
 
     # No timetable covers this airport: only the model's estimate is left (grade C)
     if transfer is None:
-        raise ValueError(tr("reject_no_transfer", airport=airport))
+        raise Rejected(tr("reject_no_transfer", airport=airport))
     if not transfer["reachable"]:
-        raise ValueError(tr("reject_unreachable", airport=airport, notes=transfer["notes"]))
+        raise Rejected(tr("reject_unreachable", airport=airport, notes=transfer["notes"]))
     notes = []
     minutes = transfer["duration_minutes"]
     if km is not None and minutes < max(10, km / MAX_PLAUSIBLE_SPEED_KMH * 60):
@@ -165,9 +169,9 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
     # Aim for the ideal time at the airport, but never leave outside the allowed window
     leave = max(earliest, min(latest, at_terminal + current.SETTINGS.min_airport_minutes - current.SETTINGS.ideal_airport_minutes - minutes))
     if leave + minutes > at_terminal:
-        raise ValueError(tr("unverified_basis") + " " + tr("reject_too_far", earliest=current.SETTINGS.earliest_leave, airport=airport,
-                                                         arrive=to_time(leave + minutes), flight=flight["departure_time"],
-                                                         minimum=current.SETTINGS.min_airport_minutes))
+        raise Rejected(tr("unverified_basis") + " " + tr("reject_too_far", earliest=current.SETTINGS.earliest_leave, airport=airport,
+                                                       arrive=to_time(leave + minutes), flight=flight["departure_time"],
+                                                       minimum=current.SETTINGS.min_airport_minutes))
     return {
         "kind": "model", "grade": "C", "service_day": None, "leave": leave, "arrive": leave + minutes,
         "price_eur": price, "price_kind": price_kind, "steps": [], "text": transfer["description"],
@@ -235,8 +239,8 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
             outside = lambda o: max(current.SETTINGS.earliest_arrival_minutes - o["arrive"], o["arrive"] - current.SETTINGS.latest_arrival_minutes)
             suitable = [o for o in options if outside(o) == min(map(outside, options))]
         if not suitable:
-            raise ValueError(tr("reject_no_connection_after_landing", airport=airport, landing=flight["arrival_time"],
-                                limits=arrival_limits(), day=timetable["service_day"], real=real_options_text(options)))
+            raise Rejected(tr("reject_no_connection_after_landing", airport=airport, landing=flight["arrival_time"],
+                              limits=arrival_limits(), day=timetable["service_day"], real=real_options_text(options)))
         # The price plus what arriving later is worth to the traveller: a coach that saves a few EUR and arrives
         # hours after the first train is not the better way
         first = min(o["arrive"] for o in suitable)
@@ -249,7 +253,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
         best = (best_on_real_prices(suitable, value, timetables.landing_day(flight), current.SETTINGS.free_trains_at_destination)
                 if priced else min(suitable, key=value))
         if not current.SETTINGS.allow_estimated_prices and best["price_kind"] not in KNOWN_PRICES and best["price_eur"] > SMALL_ESTIMATE_EUR:
-            raise ValueError(tr("reject_price_unknown"))
+            raise Rejected(tr("reject_price_unknown"))
         later = sorted({o["leave"] for o in suitable if o["leave"] > best["leave"]})
         # The best of the other kind is shown next to it: by coach when the best goes by train, and the reverse
         by_coach = lambda o: any(step.get("coach") for step in o["steps"])
@@ -262,7 +266,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
     # No timetable covers this route: only the model's timetable is left (grade C)
     unverified = tr("unverified_basis") + " "
     if route is None:
-        raise ValueError(tr("reject_no_route", airport=airport))
+        raise Rejected(tr("reject_no_route", airport=airport))
     km = current.TRIP.km(airport)
     link_minutes = min(max(route["link_minutes"], 0), 180)
     at_station = landing + current.SETTINGS.min_landing_minutes + link_minutes
@@ -272,7 +276,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
     if not route["train_needed"]:
         # The destination is the airport's own city: the airport link is the last leg
         if at_station >= 24 * 60 or not in_window(at_station):
-            raise ValueError(unverified + tr("reject_arrival_outside", arrive=to_time(at_station), limits=arrival_limits()))
+            raise Rejected(unverified + tr("reject_arrival_outside", arrive=to_time(at_station), limits=arrival_limits()))
         return {**common, "leave": landing + current.SETTINGS.min_landing_minutes, "arrive": at_station, "price_eur": link_price,
                 "price_kind": "model", "text": route["link_description"], "later": []}
     trains = []
@@ -286,12 +290,12 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
             continue
         trains.append((leave, arrive, candidate))
     if not trains:
-        raise ValueError(unverified + tr("reject_no_route", airport=airport))
+        raise Rejected(unverified + tr("reject_no_route", airport=airport))
     catchable = [t for t in trains if t[0] >= at_station and in_window(t[1])]
     if not catchable:
-        raise ValueError(unverified + tr("reject_no_connection_after_landing", airport=airport, landing=flight["arrival_time"],
-                                         limits=arrival_limits(), day=tr("model_timetable"),
-                                         real=", ".join(f"{to_time(t[0])} -> {to_time(t[1])}" for t in sorted(trains, key=lambda t: t[0])[-4:])))
+        raise Rejected(unverified + tr("reject_no_connection_after_landing", airport=airport, landing=flight["arrival_time"],
+                                       limits=arrival_limits(), day=tr("model_timetable"),
+                                       real=", ".join(f"{to_time(t[0])} -> {to_time(t[1])}" for t in sorted(trains, key=lambda t: t[0])[-4:])))
     price_of = lambda t: 0.0 if current.SETTINGS.free_trains_at_destination else model_price(t[2].get("price_eur") or 0, True, km, country_of(airport))[0]
     leave, arrive, train = min(catchable, key=lambda t: (price_of(t), t[1]))
     train_price = price_of((leave, arrive, train))

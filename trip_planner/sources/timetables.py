@@ -25,13 +25,15 @@ from trip_planner import current
 from trip_planner.config import NIGHT_MINUTES, ROOT, USER_AGENT
 from trip_planner.places import distance_km
 from trip_planner.sources import fares, web
-from trip_planner.utils import plain, say, to_minutes, to_time
+from trip_planner.utils import logged, plain, say, to_minutes, to_time
 
 TRANSITOUS_API = "https://api.transitous.org/api/v1"
 TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ", ".join(fares.RIDE_SOURCES)
 # Transitous is a free community service. It answers about one request every 1.4 seconds per user, however fast
 # it is asked, so the time this step takes is the number of requests. Requests are shared wherever one answer
 # serves several flights (see Timetables.onward).
+# Tried on 2026-10-14 with 4 and 6 requests at a time: none was refused, but each took that much longer (a route
+# of 6 seconds took 12, then 18) and the search took the same time. Only asking less makes this step faster.
 TIMETABLE_CONCURRENCY = 2
 TIMETABLE_SPACING_SECONDS = 0.5  # leave this long between two requests
 PAGE_SIZE = 8                    # connections asked for per request
@@ -106,8 +108,11 @@ def ask_overpass(query: str, seconds: int = 25) -> list[dict[str, Any]] | None:
             if server in SILENT_SERVERS:
                 continue
             try:
-                response = httpx.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=seconds)
-                response.raise_for_status()
+                with logged("Overpass", f"airport terminals, {server.split('/')[2]}"):
+                    response = httpx.post(server, data={"data": query}, headers={"User-Agent": USER_AGENT}, timeout=seconds)
+                    response.raise_for_status()
+                if response.json().get("remark"):
+                    continue   # it ran out of time or memory, and what it sends then is not the whole answer
                 return response.json()["elements"]
             except httpx.TimeoutException:
                 if server != OVERPASS_SERVERS[0]:
@@ -141,18 +146,19 @@ def ask_terminals(missing: list[dict[str, Any]], seconds: int = 25) -> bool:
     for element in elements:
         point = element.get("center") or element
         name = plain((element.get("tags") or {}).get("name", ""))
-        airport = min(missing, key=lambda a: distance_km(a["latitude"], a["longitude"], point["lat"], point["lon"]))
-        if distance_km(airport["latitude"], airport["longitude"], point["lat"], point["lon"]) > 3.5:
-            continue
-        # Passenger terminals first, then the ones called "terminal 1" or "main", then named ones
-        score = (
-            not any(word in name.split() or word in name for word in NOT_A_PASSENGER_TERMINAL),
-            "terminal 1" in name or "main" in name or name == plain(airport["name"]),
-            bool(name),
-            element["type"] == "relation",
-        )
-        if airport["code"] not in best or score > best[airport["code"]][0]:
-            best[airport["code"]] = (score, (point["lat"], point["lon"]))
+        # A terminal belongs to every airport it is at: one building can have several codes (Basel and Mulhouse)
+        for airport in missing:
+            if distance_km(airport["latitude"], airport["longitude"], point["lat"], point["lon"]) > 3.5:
+                continue
+            # Passenger terminals first, then the ones called "terminal 1" or "main", then named ones
+            score = (
+                not any(word in name.split() or word in name for word in NOT_A_PASSENGER_TERMINAL),
+                "terminal 1" in name or "main" in name or name == plain(airport["name"]),
+                bool(name),
+                element["type"] == "relation",
+            )
+            if airport["code"] not in best or score > best[airport["code"]][0]:
+                best[airport["code"]] = (score, (point["lat"], point["lon"]))
     for airport in missing:
         found = best.get(airport["code"])
         TERMINALS[airport["code"]] = [round(found[1][0], 5), round(found[1][1], 5)] if found else None
@@ -171,7 +177,7 @@ def fill_terminals(again: bool = False) -> int:
     from trip_planner.places import airfields, load_airports
     skipped = airfields()
     airports = [{"code": code, **airport} for code, airport in load_airports().items()
-                if code not in skipped and (again or code not in TERMINALS)]
+                if code not in skipped and (again or not TERMINALS.get(code))]   # the ones without a terminal are asked again
     print(f"{len(airports)} airports to ask about, {TERMINALS_BATCH} per request. {len(TERMINALS)} are already known.", flush=True)
     batches = [airports[start:start + TERMINALS_BATCH] for start in range(0, len(airports), TERMINALS_BATCH)]
     failed: list[list[dict[str, Any]]] = []
@@ -223,6 +229,28 @@ def choose_airport_stops(stops: list[dict[str, Any]], airport: dict[str, Any], t
     walk = lambda stop: AIRFIELD_WALK_MINUTES if by_name else max(MIN_STOP_WALK_MINUTES, round(km(stop) * 1.3 / WALK_KMH * 60))
     return [(stop["stopId"], walk(stop)) for stop in best[:MAX_AIRPORT_STOPS]]
 
+# The stops chosen for each airport, kept between searches: they change as rarely as the timetables' own list of
+# stops, and asking for them was a third of the requests of a search. Read again after AIRPORT_STOPS_DAYS, and
+# a stop the planner no longer knows is skipped anyway (see to_airport and from_airport).
+AIRPORT_STOPS_FILE = ROOT / "resources" / "airport_stops.json"
+AIRPORT_STOPS_DAYS = 30
+AIRPORT_STOPS: dict[str, dict[str, Any]] = json.loads(AIRPORT_STOPS_FILE.read_text(encoding="utf-8")) if AIRPORT_STOPS_FILE.exists() else {}
+
+def known_airport_stops(code: str, terminal: list[float] | None) -> list[tuple] | None:
+    """The stops kept for an airport, or None when they have to be asked for: never read, read too long ago, or
+    read for another place of its terminal."""
+    kept = AIRPORT_STOPS.get(code)
+    if not kept or kept["terminal"] != terminal or kept["read"] < (date.today() - timedelta(days=AIRPORT_STOPS_DAYS)).isoformat():
+        return None
+    return [tuple(stop) for stop in kept["stops"]]
+
+def keep_airport_stops(code: str, terminal: list[float] | None, stops: list[tuple]) -> None:
+    """One airport per line, in order, as in the file of the terminals."""
+    AIRPORT_STOPS[code] = {"read": date.today().isoformat(), "terminal": terminal, "stops": [list(stop) for stop in stops]}
+    lines = [f"{json.dumps(code)}: {json.dumps(AIRPORT_STOPS[code], ensure_ascii=False)}" for code in sorted(AIRPORT_STOPS)]
+    AIRPORT_STOPS_FILE.parent.mkdir(exist_ok=True)
+    AIRPORT_STOPS_FILE.write_text("{\n" + ",\n".join(lines) + "\n}\n", encoding="utf-8", newline="\n")
+
 def zone_of_country(country: str, latitude: float, longitude: float) -> str:
     """The time zone of a point from its country alone: of the zones of that country, the one whose city is the
     nearest (Portugal has three). From the list that comes with the time zone database. Empty when not known."""
@@ -242,6 +270,13 @@ def zone_of_country(country: str, latitude: float, longitude: float) -> str:
 
 NOT_COVERED = {"covered": False, "service_day": None, "grade": "C", "options": []}
 
+def asked(path: str, params: dict[str, Any]) -> str:
+    """A request to the timetables in a few words, for the log of the run."""
+    if path != "plan":
+        return f"{path} " + " ".join(str(value) for value in params.values())
+    return (f"plan {params['fromPlace']} -> {params['toPlace']}, {'arriving by' if params['arriveBy'] == 'true' else 'leaving from'} "
+            f"{params['time']}" + ("" if params["transitModes"] == GROUND_MODES else f", only {params['transitModes']}"))
+
 class Timetables:
     """Looks connections up in the published timetables, a few requests at a time."""
 
@@ -260,6 +295,7 @@ class Timetables:
         """One request, in its turn, tried again when the service says it is receiving too many, when it fails
         on its side (a 5xx answer) or when it does not answer in time."""
         for attempt in range(6):
+            queued = time.time()
             async with self.semaphore:
                 # Requests leave at a steady pace: a burst gets refused and costs more time than it saves
                 wait = self.next_slot - time.time()
@@ -268,7 +304,11 @@ class Timetables:
                     await asyncio.sleep(wait)
                 self.requests += 1
                 try:
-                    response = await self.http.get(f"{TRANSITOUS_API}/{path}", params=params)
+                    with logged("Transitous", asked(path, params)) as entry:
+                        entry["waited"] = time.time() - queued
+                        response = await self.http.get(f"{TRANSITOUS_API}/{path}", params=params)
+                        if response.status_code != 200:
+                            entry["result"] = str(response.status_code)
                 except httpx.TransportError:
                     if attempt == 5:
                         raise
@@ -301,8 +341,12 @@ class Timetables:
         return await self.get("map/stops", {"min": f"{centre[0] - reach},{centre[1] - wide}", "max": f"{centre[0] + reach},{centre[1] + wide}"})
 
     async def airport_stops(self, airport: dict[str, Any], terminal: list[float] | None) -> list[tuple]:
-        """The stops travellers use at an airport, see choose_airport_stops."""
-        return choose_airport_stops(await self.stops_around(airport, terminal), airport, terminal)
+        """The stops travellers use at an airport, see choose_airport_stops. Asked for once, then kept."""
+        stops = known_airport_stops(airport["code"], terminal)
+        if stops is None:
+            stops = choose_airport_stops(await self.stops_around(airport, terminal), airport, terminal)
+            keep_airport_stops(airport["code"], terminal, stops)
+        return stops
 
     async def plan(self, start: tuple | str, end: tuple | str, day: str, minutes: int, arrive_by: bool, zones: tuple,
                    to_airport: bool, terminal_known: bool, modes: str = "", stop_walk: int = 0,
@@ -560,7 +604,10 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
         async def rides(name: str, source, code: str, day: str, to_airport: bool) -> tuple:
             city = current.TRIP.origin if to_airport else current.TRIP.destination
             try:
-                return to_airport, code, day, await asyncio.to_thread(source, city, airports[code], day, to_airport)
+                with logged(name, f"rides {'to' if to_airport else 'from'} {code} on {day}") as entry:
+                    found_rides = await asyncio.to_thread(source, city, airports[code], day, to_airport)
+                    entry["result"] = "ok: no answer" if found_rides is None else f"ok: {len(found_rides)} rides"
+                return to_airport, code, day, found_rides
             except Exception as e:
                 say(f"[timetables] {name} {code} {day}: {type(e).__name__}")
                 return to_airport, code, day, None

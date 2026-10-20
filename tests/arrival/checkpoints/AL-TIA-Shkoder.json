@@ -1,13 +1,13 @@
 {
-"case": {"country": "AL", "airport": "TIA", "city": "Shkoder", "known_gap": "", "gap_in": "", "remote": false},
+"case": {"country": "AL", "airport": "TIA", "city": "Shkoder", "known_gap": "Albania's minibuses are not published: the only coaches in the timetables go round by Kosovo, seven hours for 75 km", "gap_in": "departure", "remote": true},
 "direction": "arrival",
-"recorded": "2026-10-13",
-"flight": {"id": "AL-TIA-Shkoder", "date": "2026-12-22", "arrival_airport": "TIA", "arrival_time": "11:00"},
+"recorded": "2026-10-20",
+"flight": {"id": "AL-TIA-Shkoder", "date": "2026-12-29", "arrival_airport": "TIA", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Shkoder", "display_name": "Shkoder, Shkodër Municipality, Shkodër County, 4001-4007, Albania", "addresstype": "city", "importance": 0.6051958363923308, "lat": "42.0681371", "lon": "19.5121437", "namedetails": {"name": "Shkodër", "name:en": "Shkoder"}, "address": {"country": "Albania"}}, {"name": "Shkodër County", "display_name": "Shkodër County, Albania", "addresstype": "county", "importance": 0.49535204120788756, "lat": "42.2507677", "lon": "19.5959723", "namedetails": {"name": "Qarku i Shkodrës", "name:en": "Shkodër County"}, "address": {"country": "Albania"}}],
 "airport": {"code": "TIA", "name": "Tirana International Airport Mother Teresa", "city": "Rinas", "country": "AL", "large": true, "latitude": 41.4147, "longitude": 19.7206, "km": 75},
-"terminal": null,
+"terminal": [41.41921, 19.71416],
 "stops_around": [{"name": "Tirana Airport – International Bus Stop", "stopId": "al-ShowMeBus_station-240", "lat": 41.420863999999995, "lon": 19.711267000000003, "modes": ["COACH"]}],
 "zones": ["Europe/Tirane", "Europe/Tirane"],
-"answer": {"covered": true, "service_day": "2026-10-13", "grade": "B", "options": [{"leave": 885, "arrive": 1300, "steps": [{"time": "15:00", "arrive": "17:30", "line": "Tirana to Prishtina", "agency": "Albani Tours", "from": "Tirana Airport – International Bus Stop", "to": "Prizren Bus Station", "rail": false, "coach": true, "from_id": "al-ShowMeBus_station-240", "to_id": "al-ShowMeBus_station-239", "from_at": [41.420863999999995, 19.711267000000003], "to_at": [42.213100000000004, 20.729315], "km": 122}, {"time": "18:30", "arrive": "21:40", "line": "Prishtina to Budva", "agency": "Vetoni Tourist", "from": "Prizren Bus Station", "to": "Ura e Bunës", "rail": false, "coach": true, "from_id": "al-ShowMeBus_station-239", "to_id": "al-ShowMeBus_station-425", "from_at": [42.213100000000004, 20.729315], "to_at": [42.050839999999994, 19.491217], "km": 104}], "urls": ["https://showmebus.com/en"], "grade": "B", "source": "timetable", "service_day": "2026-10-13", "price_eur": null}]}
+"answer": {"covered": true, "service_day": "2026-10-20", "grade": "B", "options": [{"leave": 895, "arrive": 1300, "steps": [{"time": "15:00", "arrive": "17:30", "line": "Tirana to Prishtina", "agency": "Albani Tours", "from": "Tirana Airport – International Bus Stop", "to": "Prizren Bus Station", "rail": false, "coach": true, "from_id": "al-ShowMeBus_station-240", "to_id": "al-ShowMeBus_station-239", "from_at": [41.420863999999995, 19.711267000000003], "to_at": [42.213100000000004, 20.729315], "km": 122}, {"time": "18:30", "arrive": "21:40", "line": "Prishtina to Budva", "agency": "Vetoni Tourist", "from": "Prizren Bus Station", "to": "Ura e Bunës", "rail": false, "coach": true, "from_id": "al-ShowMeBus_station-239", "to_id": "al-ShowMeBus_station-425", "from_at": [42.213100000000004, 20.729315], "to_at": [42.050839999999994, 19.491217], "km": 104}], "urls": ["https://showmebus.com/en"], "grade": "B", "source": "timetable", "service_day": "2026-10-20", "price_eur": null}]}
 }

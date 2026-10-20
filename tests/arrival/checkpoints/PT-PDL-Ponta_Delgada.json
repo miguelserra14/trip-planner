@@ -1,12 +1,12 @@
 {
-"case": {"country": "PT", "airport": "PDL", "city": "Ponta Delgada", "known_gap": "", "gap_in": "", "remote": false},
+"case": {"country": "PT", "airport": "PDL", "city": "Ponta Delgada", "known_gap": "the Azores are not published: the timetables know no stop on the island", "gap_in": "", "remote": false},
 "direction": "arrival",
-"recorded": "2026-10-13",
-"flight": {"id": "PT-PDL-Ponta_Delgada", "date": "2026-12-22", "arrival_airport": "PDL", "arrival_time": "11:00"},
+"recorded": "2026-10-20",
+"flight": {"id": "PT-PDL-Ponta_Delgada", "date": "2026-12-29", "arrival_airport": "PDL", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Ponta Delgada", "display_name": "Ponta Delgada, Azores, Portugal", "addresstype": "city", "importance": 0.5510407881286791, "lat": "37.7393398", "lon": "-25.6689503", "namedetails": {"name": "Ponta Delgada"}, "address": {"country": "Portugal"}}, {"name": "Ponta Delgada", "display_name": "Ponta Delgada, Ponta Delgada (São Sebastião), Ponta Delgada, Azores, Portugal", "addresstype": "census", "importance": 0.5510407881286791, "lat": "37.7476964", "lon": "-25.6726970", "namedetails": {"name": "Ponta Delgada"}, "address": {"country": "Portugal"}}, {"name": "Ponta Delgada (São José)", "display_name": "Ponta Delgada (São José), Ponta Delgada, Azores, Portugal", "addresstype": "city_district", "importance": 0.3298727163953751, "lat": "37.7437442", "lon": "-25.6786953", "namedetails": {"name": "Ponta Delgada (São José)"}, "address": {"country": "Portugal"}}, {"name": "Ponta Delgada (São Sebastião)", "display_name": "Ponta Delgada (São Sebastião), Ponta Delgada, Azores, Portugal", "addresstype": "city_district", "importance": 0.3281491818164103, "lat": "37.7545212", "lon": "-25.6711468", "namedetails": {"name": "Ponta Delgada (São Sebastião)"}, "address": {"country": "Portugal"}}, {"name": "Ponta Delgada (São Pedro)", "display_name": "Ponta Delgada (São Pedro), Ponta Delgada, Azores, Portugal", "addresstype": "city_district", "importance": 0.3250193457146212, "lat": "37.7511481", "lon": "-25.6572871", "namedetails": {"name": "Ponta Delgada (São Pedro)"}, "address": {"country": "Portugal"}}],
 "airport": {"code": "PDL", "name": "João Paulo II Airport", "city": "Ponta Delgada", "country": "PT", "large": true, "latitude": 37.7411994934, "longitude": -25.6979007721, "km": 3},
-"terminal": [37.7426167, -25.6947776],
+"terminal": [37.74262, -25.69478],
 "stops_around": [],
 "zones": ["Atlantic/Azores", "Atlantic/Azores"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}

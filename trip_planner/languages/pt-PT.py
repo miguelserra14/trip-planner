@@ -155,6 +155,8 @@ TEXTS = {
     "reject_no_connection_after_landing": "aterra em {airport} às {landing} e nenhuma ligação chega ao destino {limits} (horário de {day}; ligações depois da aterragem: {real})",
     "reject_no_route": "não foi encontrado transporte do aeroporto {airport} até ao destino",
     "reject_estimate_too_far": "nenhum horário publicado cobre os {km} km entre {airport} e a cidade, e acima de {limit} km uma estimativa de um modelo não é uma viagem em que se possa confiar",
+    "estimated_stretch": "autocarro local ou táxi, sem horário publicado (estimado)",
+    "note_estimated_stretch": "Os {km} km entre {start} e {end} não estão em nenhum horário publicado: o tempo e o preço são estimados pela distância. Confirma como os fazer antes de reservar.",
     "reject_arrival_outside": "chegaria ao destino às {arrive}, fora do intervalo pedido ({limits})",
     "reject_not_worth_it": "{total} EUR no total, parte de um aeroporto distante e não compensa: poupa {saving} EUR e demora mais {extra} do que a opção de {reference} (poupança mínima exigida: {required} EUR)",
     "reject_below_minimum": "os horários são {grade}, abaixo do mínimo {minimum} pedido",

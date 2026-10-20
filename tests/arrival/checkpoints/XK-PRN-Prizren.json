@@ -1,12 +1,12 @@
 {
-"case": {"country": "XK", "airport": "PRN", "city": "Prizren", "known_gap": "", "gap_in": "", "remote": false},
+"case": {"country": "XK", "airport": "PRN", "city": "Prizren", "known_gap": "Kosovo is not published: the timetables know no stop at Pristina airport", "gap_in": "", "remote": false},
 "direction": "arrival",
-"recorded": "2026-10-13",
-"flight": {"id": "XK-PRN-Prizren", "date": "2026-12-22", "arrival_airport": "PRN", "arrival_time": "11:00"},
+"recorded": "2026-10-20",
+"flight": {"id": "XK-PRN-Prizren", "date": "2026-12-29", "arrival_airport": "PRN", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Prizren", "display_name": "Prizren, Municipality of Prizren, District of Prizren, 20080, Kosovo", "addresstype": "city", "importance": 0.5765901246846925, "lat": "42.2130151", "lon": "20.7363339", "namedetails": {"name": "Prizren", "name:en": "Prizren"}, "address": {"country": "Kosovo"}}],
 "airport": {"code": "PRN", "name": "Priština Adem Jashari International Airport", "city": "Prishtina", "country": "XK", "large": true, "latitude": 42.5728, "longitude": 21.035801, "km": 47},
-"terminal": [42.5617587, 21.0323157],
+"terminal": [42.56176, 21.03232],
 "stops_around": [],
 "zones": ["Europe/Belgrade", "Europe/Belgrade"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}

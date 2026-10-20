@@ -155,6 +155,8 @@ TEXTS = {
     "reject_no_connection_after_landing": "lands at {airport} at {landing} and no connection reaches the destination {limits} (timetable of {day}; connections after landing: {real})",
     "reject_no_route": "no transport from airport {airport} to the destination was found",
     "reject_estimate_too_far": "no published timetable covers the {km} km between {airport} and the city, and beyond {limit} km a model's estimate is not a trip that can be relied on",
+    "estimated_stretch": "local bus or taxi, in no published timetable (estimated)",
+    "note_estimated_stretch": "The {km} km between {start} and {end} are in no published timetable: their time and price are estimated from the distance. Find out how to make them before booking.",
     "reject_arrival_outside": "would reach the destination at {arrive}, outside the window asked for ({limits})",
     "reject_not_worth_it": "{total} EUR in total, from a distant airport and not worth it: saves {saving} EUR and takes {extra} longer than the option from {reference} (minimum saving required: {required} EUR)",
     "reject_below_minimum": "its schedules are {grade}, below the minimum {minimum} asked for",

@@ -85,6 +85,7 @@ REMOTE = [
          known_gap="published, but thinly: its trains run at the weekend only and the one regional bus line on Fridays"),
     Case("SI", "LJU", "Bovec, Slovenia", remote=True),   # failed: "Bovec" was located in the middle of its municipality, 5 km from the town
     Case("ES", "SVQ", "Ronda, Spain", remote=True),
+    Case("IT", "BLQ", "Campogalliano, Italy", remote=True),   # its buses (SETA, Modena) are not published
     Case("SE", "ARN", "Mora, Sweden", remote=True),
 ]
 

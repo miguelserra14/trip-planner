@@ -1,12 +1,12 @@
 {
-"case": {"country": "GR", "airport": "CFU", "city": "Corfu, Greece", "known_gap": "", "gap_in": "", "remote": false},
+"case": {"country": "GR", "airport": "CFU", "city": "Corfu, Greece", "known_gap": "Corfu is not published: its only stop in the timetables is the ferry port", "gap_in": "", "remote": false},
 "direction": "departure",
-"recorded": "2026-10-13",
-"flight": {"id": "GR-CFU-Corfu", "date": "2026-12-22", "departure_airport": "CFU", "departure_time": "17:00"},
+"recorded": "2026-10-20",
+"flight": {"id": "GR-CFU-Corfu", "date": "2026-12-29", "departure_airport": "CFU", "departure_time": "17:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Corfu", "display_name": "Corfu, Corfu Regional Unit, Ioanian Islands, Peloponnese, Western Greece and the Ionian, Greece", "addresstype": "island", "importance": 0.6290507446596773, "lat": "39.5913370", "lon": "19.8596189", "namedetails": {"name": "Κέρκυρα", "name:en": "Corfu"}, "address": {"country": "Greece"}}, {"name": "Corfu", "display_name": "Corfu, Municipality of Central Corfu and Diapontia Islands, Corfu Regional Unit, Ioanian Islands, Peloponnese, Western Greece and the Ionian, 491 00, Greece", "addresstype": "city", "importance": 0.5518346225045071, "lat": "39.6217347", "lon": "19.9180908", "namedetails": {"name": "Κέρκυρα", "name:en": "Corfu"}, "address": {"country": "Greece"}}],
 "airport": {"code": "CFU", "name": "Corfu Ioannis Kapodistrias International Airport", "city": "Kerkyra (Corfu)", "country": "GR", "large": true, "latitude": 39.60145, "longitude": 19.912179, "km": 2},
-"terminal": [39.6067236, 19.9147283],
+"terminal": [39.60672, 19.91473],
 "stops_around": [],
 "zones": ["Europe/Athens", "Europe/Athens"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}

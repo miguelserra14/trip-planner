@@ -265,7 +265,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
         # The best of the other kind is shown next to it: by coach when the best goes by train, and the reverse
         by_coach = lambda o: any(step.get("coach") for step in o["steps"])
         others = [o for o in suitable if by_coach(o) != by_coach(best)]
-        return {**best, "notes": [],
+        return {**best, "notes": best.get("notes", []),
                 "later": [to_time(minutes) for minutes in later[:3]],
                 "other": min(others, key=value) if others else None,
                 "other_by_coach": not by_coach(best)}

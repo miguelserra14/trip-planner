@@ -1,8 +1,8 @@
 {
-"case": {"country": "TR", "airport": "IST", "city": "Bursa", "known_gap": "", "gap_in": "", "remote": false},
+"case": {"country": "TR", "airport": "IST", "city": "Bursa", "known_gap": "Turkey is not published: the timetables know no stop at Istanbul airport or in Bursa", "gap_in": "", "remote": false},
 "direction": "arrival",
-"recorded": "2026-10-13",
-"flight": {"id": "TR-IST-Bursa", "date": "2026-12-22", "arrival_airport": "IST", "arrival_time": "11:00"},
+"recorded": "2026-10-20",
+"flight": {"id": "TR-IST-Bursa", "date": "2026-12-29", "arrival_airport": "IST", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Bursa", "display_name": "Bursa, Osmangazi, Bursa, Marmara Region, 16010, Turkey", "addresstype": "city", "importance": 0.6424909434520987, "lat": "40.1825734", "lon": "29.0675039", "namedetails": {"name": "Bursa", "name:en": "Bursa"}, "address": {"country": "Turkey"}}, {"name": "Bursa", "display_name": "Bursa, Marmara Region, Turkey", "addresstype": "province", "importance": 0.5921370279579445, "lat": "39.9895878", "lon": "28.8944669", "namedetails": {"name": "Bursa", "name:en": "Bursa"}, "address": {"country": "Turkey"}}],
 "airport": {"code": "IST", "name": "İstanbul Airport", "city": "Istanbul", "country": "TR", "large": true, "latitude": 41.274874, "longitude": 28.732136, "km": 125},

@@ -6,7 +6,6 @@ from trip_planner import current
 from trip_planner.config import LIGHTS
 from trip_planner.itineraries.ranking import REQUIREMENTS
 from trip_planner.report.formatting import arriving, at_destination, day_text, leaving, grade_text, leg_source, price_source, price_text, steps_text, table
-from trip_planner.sources.timetables import MIN_AIRPORT_FLOOR
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_time
 
@@ -138,7 +137,7 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
         "",
         tr("near_intro"),
         "",
-        *(f"{number}. {tr('near_order_' + kind, floor=MIN_AIRPORT_FLOOR)}" for number, kind in enumerate(REQUIREMENTS, start=1)),
+        *(f"{number}. {tr('near_order_' + kind, floor=current.SETTINGS.airport_floor_minutes)}" for number, kind in enumerate(REQUIREMENTS, start=1)),
         "",
         tr("near_rule"),
         "",

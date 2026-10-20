@@ -20,8 +20,6 @@ from trip_planner.utils import as_duration, logged, plain, say
 AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"   # OurAirports, public domain
 AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused. Only the airports with_flights are kept
 AIRPORT_TYPES = {"large_airport", "medium_airport"}     # with scheduled service only, see load_airports
-MIN_TRIP_KM = 80                                        # cities closer than this are not a trip by plane
-CITY_AIRPORT_RADIUS_KM = 45                             # "Londres" means every airport this close to London
 RUNWAYS_URL = "https://davidmegginson.github.io/ourairports-data/runways.csv"
 ROUTES_URL = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat"   # OpenFlights: airline routes up to 2014
 AIRFIELDS_FILE = ROOT / "resources" / "airfields.json"  # worked out once from the two files above, then reused
@@ -150,9 +148,8 @@ def geocode(name: str) -> Place:
         PLACES[key] = as_place(name, searched(name))
     return PLACES[key]
 
-# Places of the same name whose importance differs by less than this could each be the one the traveller means:
-# "Nazaré" is a town in Bahia (0.52) and one in Leiria (0.48). Then the traveller chooses.
-AMBIGUOUS_IMPORTANCE = 0.2
+# Places of the same name whose importance differs by less than ambiguous_importance (a setting) could each be the one
+# the traveller means: "Nazaré" is a town in Bahia (0.52) and one in Leiria (0.48). Then the traveller chooses.
 SEARCHES: dict[str, list[dict[str, Any]]] = {}   # what Nominatim found for each name, in this session
 
 def searched(name: str) -> list[dict[str, Any]]:
@@ -184,7 +181,7 @@ def meanings(name: str) -> list[tuple[str, Place]]:
     options = [chosen]
     for result in results:
         if (result is not chosen and result.get("addresstype") in SETTLEMENTS
-                and abs(importance(result) - importance(chosen)) < AMBIGUOUS_IMPORTANCE and all(far(result, other) for other in options)):
+                and abs(importance(result) - importance(chosen)) < current.SETTINGS.ambiguous_importance and all(far(result, other) for other in options)):
             options.append(result)
     for other in options[1:]:
         move_to_centre(other)   # as the first one was, in search_places
@@ -349,7 +346,7 @@ def find_airports(entry: str, place: Place) -> list[str]:
     found = [a["code"] for a in nearby if word.search(airports[a["code"]]["search_text"])]
     try:
         city = geocode(entry)
-        found += [a["code"] for a in airports_near(city, CITY_AIRPORT_RADIUS_KM)]
+        found += [a["code"] for a in airports_near(city, current.SETTINGS.city_airport_radius_km)]
     except Exception:
         pass
     return list(dict.fromkeys(found))
@@ -399,7 +396,7 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
         return sorted((airport_from(place, code) for code in dict.fromkeys(found_codes)), key=lambda airport: airport["km"])
 
     apart = round(distance_km(origin.latitude, origin.longitude, destination.latitude, destination.longitude))
-    if apart < MIN_TRIP_KM:
+    if apart < settings.min_trip_km:
         raise ValueError(tr("places_too_close", origin=origin.label, destination=destination.label, km=apart))
 
     # Each side on the scale chosen for it: how far to look and how many airports to keep

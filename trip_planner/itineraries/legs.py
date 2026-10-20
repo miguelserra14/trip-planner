@@ -17,8 +17,8 @@ ESTIMATE_EUR_PER_KM = 0.12        # price of bus and train where nothing better 
 MIN_TICKET_EUR = 2.0              # no ticket is cheaper than this
 MAX_PLAUSIBLE_SPEED_KMH = 200     # no public transport is faster than this in a straight line, door to door
 MAX_PLAUSIBLE_EUR_PER_KM = 1.0    # ... or more expensive than this
-UNVERIFIED_PRICE_FACTOR = 2       # a price that is a guess is compared as this many times itself with a real price
-SMALL_ESTIMATE_EUR = 5.0          # estimates up to this (a metro ticket) are accepted even when estimates are not allowed
+# How far a ground leg may be estimated, and how estimated prices count, are settings: max_estimate_km,
+# small_estimate_eur and unverified_price_factor (config.py)
 
 class Rejected(ValueError):
     """Why a flight cannot make an itinerary, written for the traveller. Any other error raised while an itinerary
@@ -70,7 +70,7 @@ def model_price(price_eur: float, known: bool, km: float | None, country: str = 
     if km is None:
         raise Rejected(tr("reject_price_unknown"))
     price = estimated_price(km, country)
-    if not current.SETTINGS.allow_estimated_prices and price > SMALL_ESTIMATE_EUR:
+    if not current.SETTINGS.allow_estimated_prices and price > current.SETTINGS.small_estimate_eur:
         raise Rejected(tr("reject_price_unknown"))
     return price, "estimate"
 
@@ -97,6 +97,12 @@ def best_on_real_prices(candidates: list[dict[str, Any]], key: Callable, day: st
         read += [id(candidate) for candidate in front]
     return min(candidates, key=key)
 
+def estimate_allowed(airport: str) -> None:
+    """Raises Rejected when an airport is too far from its city for a ground leg to be estimated (max_estimate_km in the settings)."""
+    km = current.TRIP.km(airport)
+    if km is None or km > current.SETTINGS.max_estimate_km:
+        raise Rejected(tr("reject_estimate_too_far", airport=airport, km="?" if km is None else km, limit=current.SETTINGS.max_estimate_km))
+
 def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
                    closest: bool = False, priced: bool = False) -> dict[str, Any]:
     """How the traveller gets to the departure airport: a real connection when one is published, otherwise the
@@ -116,7 +122,7 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         # Trains cost this traveller nothing: each connection is priced vehicle by vehicle, as at the destination
         for option in timetable["options"]:
             price = sum(step_price(step, True, country_of(airport)) for step in option["steps"])
-            if current.SETTINGS.allow_estimated_prices or price <= SMALL_ESTIMATE_EUR:
+            if current.SETTINGS.allow_estimated_prices or price <= current.SETTINGS.small_estimate_eur:
                 real.append({**option, "kind": "timetable", "country": country_of(airport), "price_eur": price, "price_kind": "estimate" if price else "free"})
     elif timetable["options"]:
         # A timetable has no prices: the model's price if it found a believable one, otherwise an estimate
@@ -130,16 +136,16 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
     if suitable:
         # Leaving hours before it is needed is not free: every hour spent waiting at the airport, compared with the
         # connection that leaves last, costs what an extra hour of travel costs this traveller. A price that is a
-        # guess counts UNVERIFIED_PRICE_FACTOR times, so that it only beats a real one when it clearly would.
+        # guess counts unverified_price_factor times, so that it only beats a real one when it clearly would.
         last = max(o["leave"] for o in suitable)
         waiting = lambda o: current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, (last - o["leave"]) / 60)
-        weighed = lambda o: o["price_eur"] * (1 if o["price_kind"] in KNOWN_PRICES else UNVERIFIED_PRICE_FACTOR)
+        weighed = lambda o: o["price_eur"] * (1 if o["price_kind"] in KNOWN_PRICES else current.SETTINGS.unverified_price_factor)
         value = lambda o: (weighed(o) + waiting(o), *preference(o))
         return best_on_real_prices(suitable, value, day, current.SETTINGS.free_trains_at_origin) if priced else min(suitable, key=value)
     if closest:
         # Whatever real connection still reaches the airport: first the one that cuts the least of the time at the
         # airport, then the one that leaves closest to the window (see REQUIREMENTS in ranking.py)
-        last_call = to_minutes(flight["departure_time"]) - timetables.MIN_AIRPORT_FLOOR
+        last_call = to_minutes(flight["departure_time"]) - current.SETTINGS.airport_floor_minutes
         reachable = [o for o in real if o["leave"] < o["arrive"] <= last_call]
         if reachable:
             return min(reachable, key=lambda o: (max(0, o["arrive"] - at_terminal),
@@ -155,7 +161,8 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
                           latest=current.SETTINGS.latest_leave, limit=to_time(at_terminal),
                           real=real_options_text(in_time + in_window or real)))
 
-    # No timetable covers this airport: only the model's estimate is left (grade C)
+    # No timetable covers this airport: only the model's estimate is left (grade C), if the airport is near enough
+    estimate_allowed(airport)
     if transfer is None:
         raise Rejected(tr("reject_no_transfer", airport=airport))
     if not transfer["reachable"]:
@@ -244,15 +251,15 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
         # The price plus what arriving later is worth to the traveller: a coach that saves a few EUR and arrives
         # hours after the first train is not the better way
         first = min(o["arrive"] for o in suitable)
-        # As towards the airport, a price that is a guess counts UNVERIFIED_PRICE_FACTOR times next to a real one:
+        # As towards the airport, a price that is a guess counts unverified_price_factor times next to a real one:
         # it only wins when it clearly would. Among guesses alone nothing changes.
         some_real = lambda: any(o["price_kind"] in KNOWN_PRICES for o in suitable)
-        weighed = lambda o: o["price_eur"] * (UNVERIFIED_PRICE_FACTOR if o["price_kind"] not in KNOWN_PRICES and some_real() else 1)
+        weighed = lambda o: o["price_eur"] * (current.SETTINGS.unverified_price_factor if o["price_kind"] not in KNOWN_PRICES and some_real() else 1)
         value = lambda o: (weighed(o) + current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, (o["arrive"] - first) / 60),
                            o["arrive"])
         best = (best_on_real_prices(suitable, value, timetables.landing_day(flight), current.SETTINGS.free_trains_at_destination)
                 if priced else min(suitable, key=value))
-        if not current.SETTINGS.allow_estimated_prices and best["price_kind"] not in KNOWN_PRICES and best["price_eur"] > SMALL_ESTIMATE_EUR:
+        if not current.SETTINGS.allow_estimated_prices and best["price_kind"] not in KNOWN_PRICES and best["price_eur"] > current.SETTINGS.small_estimate_eur:
             raise Rejected(tr("reject_price_unknown"))
         later = sorted({o["leave"] for o in suitable if o["leave"] > best["leave"]})
         # The best of the other kind is shown next to it: by coach when the best goes by train, and the reverse
@@ -263,7 +270,8 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
                 "other": min(others, key=value) if others else None,
                 "other_by_coach": not by_coach(best)}
 
-    # No timetable covers this route: only the model's timetable is left (grade C)
+    # No timetable covers this route: only the model's timetable is left (grade C), if the airport is near enough
+    estimate_allowed(airport)
     unverified = tr("unverified_basis") + " "
     if route is None:
         raise Rejected(tr("reject_no_route", airport=airport))

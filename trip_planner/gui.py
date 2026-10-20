@@ -461,9 +461,9 @@ class TripWindow:
         if not planned() or planned()[-1].get("report") is None:
             return
         trip = planned()[-1]
-        from trip_planner.report.full import keep_report, RECENT_REPORTS   # loaded with the search: a report exists
+        from trip_planner.report.full import keep_report   # loaded with the search: a report exists
         trip["report"] = keep_report(trip["report"], self.keep.get())
-        note = tr("ui_report_kept", folder=trip["report"].parent) if self.keep.get() else tr("ui_report_not_kept", limit=RECENT_REPORTS)
+        note = tr("ui_report_kept", folder=trip["report"].parent) if self.keep.get() else tr("ui_report_not_kept", limit=current.SETTINGS.recent_reports)
         self.say_status(note)
         self.confirm(note, self.keep_box)
 

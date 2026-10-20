@@ -34,7 +34,7 @@ def test_4_connections_after_landing(record):
     answer = check_covered(case, found)
     ready = to_minutes(found["flight"]["arrival_time"]) + current.SETTINGS.min_landing_minutes
     for option in answer["options"]:
-        assert ready <= option["leave"] < 24 * 60 and option["leave"] < option["arrive"] < 24 * 60 + timetables.NIGHT_MINUTES
+        assert ready <= option["leave"] < 24 * 60 and option["leave"] < option["arrive"] < 24 * 60 + current.SETTINGS.night_minutes
         assert option["steps"] and option["grade"] in "AB"
 
 def test_5_leg_of_the_itinerary(record):

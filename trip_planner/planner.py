@@ -16,7 +16,7 @@ from trip_planner.agents import coordinator, subagents
 from trip_planner.agents.steps import run_steps, STEPS
 from trip_planner.config import TripSettings
 from trip_planner.places import ask_airports, ask_places, choose_airports, codes, show_airports, TripPlaces
-from trip_planner.report.full import keep_report, RECENT_REPORTS, save_report
+from trip_planner.report.full import keep_report, save_report
 from trip_planner.sources import web
 from trip_planner.texts import any_of, tr
 from trip_planner.utils import plain, say, show, TIMINGS
@@ -169,7 +169,7 @@ def ask_to_keep() -> None:
     if not PLANNED or PLANNED[-1].get("report") is None:
         return
     try:
-        answer = input("\n" + tr("keep_report_prompt", limit=RECENT_REPORTS) + " ")
+        answer = input("\n" + tr("keep_report_prompt", limit=current.SETTINGS.recent_reports) + " ")
     except (EOFError, KeyboardInterrupt):
         return
     if plain(answer) in ("y", "yes", "s", "sim"):

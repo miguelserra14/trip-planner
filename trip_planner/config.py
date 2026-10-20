@@ -25,16 +25,17 @@ RANGES = {
     "max_stopovers": (0, 3),
     "tiebreak_eur_per_hour": (0, 1000), "fallback_saving_eur_per_hour": (0, 1000), "extra_hour_growth": (1, 5),
     "options_shown": (1, 10),
+    "max_estimate_km": (0, 300), "small_estimate_eur": (0, 50), "unverified_price_factor": (1, 10),
+    "city_walk_minutes": (5, 120), "wide_city_walk_minutes": (5, 180), "airport_walk_minutes": (5, 60),
+    "airport_floor_minutes": (15, 360), "night_minutes": (0, 360),
+    "min_trip_km": (0, 500), "city_airport_radius_km": (5, 150), "ambiguous_importance": (0, 1),
+    "recent_reports": (1, 100),
 }
 MAX_DATES = 7                # travel dates in one search: each one multiplies the routes to search
 MAX_DAYS_AHEAD = 360         # airlines do not sell further ahead than about this
 FAR_DAYS_AHEAD = 300         # ... and beyond this few flights are on sale yet
 CONFIRMED_DAYS_AHEAD = 8     # timetables for the travel date itself (grade A) are only read this close to it
 TIGHT_DAY_MINUTES = 90       # time left for all the travel, below which the leave and arrival limits hardly fit
-# A connection may cross midnight by this much. After a late landing, the last trains reach the destination in the
-# first hours of the next day. Before an early flight, when nothing runs at night, the last connection of the
-# evening before is the only one there is: it is kept for the closest alternatives (the traveller leaves a day early).
-NIGHT_MINUTES = 240
 NARROW_LEAVE_MINUTES = 60    # a window to leave in shorter than this rarely contains a connection
 
 class SettingError(ValueError):
@@ -103,6 +104,31 @@ class TripSettings:
     options_shown: int = 5                        # itineraries in the final comparison
     free_trains_at_origin: bool = False           # True if trains around the origin cost this traveller nothing
     free_trains_at_destination: bool = False      # True if trains at the destination cost this traveller nothing
+
+    # Rules of the program. They decide what counts as a trip, and are the same for every trip unless changed.
+    # Ground legs (itineraries/legs.py)
+    max_estimate_km: int = 50             # a ground leg no timetable covers is estimated (by a model, checked against the distance)
+                                          # only if the airport is this close to its city. Beyond it a guess is not a trip:
+                                          # Treviso to Campogalliano, 150 km, was a regional train the model made up
+    small_estimate_eur: float = 5.0       # an estimated price up to this (a metro ticket) is accepted even with allow_estimated_prices=False
+    unverified_price_factor: float = 2.0  # a price that is a guess counts as this many times itself next to a real one,
+                                          # so that it only beats a real price when it clearly would
+    # Timetables (sources/timetables.py)
+    city_walk_minutes: int = 40           # walking allowed between the city centre and the first or last stop. Not counted in the trip
+    wide_city_walk_minutes: int = 90      # ... tried when nothing is found with the walk above: where the timetables lack a city's
+                                          # own transport (Athens's metro), the station is further than that on foot
+    airport_walk_minutes: int = 20        # walking allowed between the terminal and a stop. Counted in the trip
+    airport_floor_minutes: int = 45       # the closest alternatives may cut min_airport_minutes, but never below this
+    night_minutes: int = 240              # a ground connection may cross midnight by this much: after a late landing it may reach the
+                                          # destination up to 04:00, and before an early flight the one of the evening before
+                                          # (from 20:00) is kept for the closest alternatives
+    # Places (places.py)
+    min_trip_km: int = 80                 # an origin and a destination closer than this are not a trip by plane
+    city_airport_radius_km: int = 45      # a city in the airport settings ("Paris") means every airport this close to it
+    ambiguous_importance: float = 0.2     # places of the same name whose importance (0 to 1, from OpenStreetMap) differs by less
+                                          # than this could each be the one meant: the traveller chooses ("Nazare": Bahia or Leiria)
+    # Reports (report/full.py)
+    recent_reports: int = 5               # reports kept in reports/. Older ones are deleted, except those kept in reports/saved/
 
     # Speed
     use_flight_agent: bool = False        # True adds a model that also searches flights. Slower, and the code searches every route anyway
@@ -211,6 +237,8 @@ class TripSettings:
 
         # Settings that only make sense together
         self.ideal_airport_minutes = max(self.ideal_airport_minutes, self.min_airport_minutes)
+        self.airport_floor_minutes = min(self.airport_floor_minutes, self.min_airport_minutes)
+        self.wide_city_walk_minutes = max(self.wide_city_walk_minutes, self.city_walk_minutes)
         if self.primary_radius_km > self.fallback_radius_km:
             raise fail("radius_order", primary=self.primary_radius_km, fallback=self.fallback_radius_km)
         both = {plain(entry) for entry in self.include_airports} & {plain(entry) for entry in self.exclude_airports}
@@ -252,7 +280,7 @@ class TripSettings:
         """On the clock of the day the flight lands. Past 24 hours it is in the night after that day."""
         if self.latest_arrival:
             return to_minutes(self.latest_arrival)
-        return 24 * 60 - 1 + (NIGHT_MINUTES if self.next_day_arrivals else 0)
+        return 24 * 60 - 1 + (self.night_minutes if self.next_day_arrivals else 0)
 
     def scale(self, name: str) -> tuple:
         """What a scale means: (radius in km, most airports kept, the setting that holds the radius)."""

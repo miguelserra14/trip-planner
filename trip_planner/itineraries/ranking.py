@@ -16,7 +16,7 @@ from trip_planner.utils import as_duration, to_minutes, to_time
 # may give way, the most important first. An itinerary that breaks one of them is always behind an itinerary that
 # only breaks the ones after it, however small the first breach and however large the others:
 #   arrival    arriving within the window asked for: someone or something is usually waiting
-#   airport    the minimum time at the airport: below it the flight may be missed (never under MIN_AIRPORT_FLOOR)
+#   airport    the minimum time at the airport: below it the flight may be missed (never under airport_floor_minutes)
 #   stopovers  the number of stopovers: a longer trip and one more thing that can go wrong
 #   leave      the times the traveller leaves at: a matter of comfort
 # Among itineraries that break the same requirement, the smaller breach comes first, then the cheaper itinerary.

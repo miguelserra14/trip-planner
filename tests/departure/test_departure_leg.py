@@ -30,7 +30,7 @@ def test_4_connections_in_time_for_the_flight(record):
     answer = check_covered(case, found)
     take_off = to_minutes(found["flight"]["departure_time"])
     for option in answer["options"]:
-        assert -timetables.NIGHT_MINUTES <= option["leave"] < option["arrive"] <= take_off - timetables.MIN_AIRPORT_FLOOR
+        assert -current.SETTINGS.night_minutes <= option["leave"] < option["arrive"] <= take_off - current.SETTINGS.airport_floor_minutes
         assert option["steps"] and option["grade"] in "AB"
     at_terminal = take_off - current.SETTINGS.min_airport_minutes
     assert any(option["arrive"] <= at_terminal for option in answer["options"]), "none leaves the time asked for at the airport"

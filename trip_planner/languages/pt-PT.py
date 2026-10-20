@@ -154,6 +154,7 @@ TEXTS = {
     "reject_too_far": "saindo às {earliest} só chegas a {airport} às {arrive}, e o voo é às {flight} (mínimo {minimum} min antes)",
     "reject_no_connection_after_landing": "aterra em {airport} às {landing} e nenhuma ligação chega ao destino {limits} (horário de {day}; ligações depois da aterragem: {real})",
     "reject_no_route": "não foi encontrado transporte do aeroporto {airport} até ao destino",
+    "reject_estimate_too_far": "nenhum horário publicado cobre os {km} km entre {airport} e a cidade, e acima de {limit} km uma estimativa de um modelo não é uma viagem em que se possa confiar",
     "reject_arrival_outside": "chegaria ao destino às {arrive}, fora do intervalo pedido ({limits})",
     "reject_not_worth_it": "{total} EUR no total, parte de um aeroporto distante e não compensa: poupa {saving} EUR e demora mais {extra} do que a opção de {reference} (poupança mínima exigida: {required} EUR)",
     "reject_below_minimum": "os horários são {grade}, abaixo do mínimo {minimum} pedido",

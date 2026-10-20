@@ -137,9 +137,8 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     ]
     return "\n".join(lines)
 
-REPORTS = ROOT / "reports"           # every run saves its report here, and only the newest RECENT_REPORTS stay
+REPORTS = ROOT / "reports"           # every run saves its report here, and only the newest recent_reports (a setting) stay
 SAVED_REPORTS = REPORTS / "saved"    # the reports the traveller chose to keep. Nothing here is ever deleted
-RECENT_REPORTS = 5
 
 def save_report(response: dict[str, Any], recommendation: str) -> Path:
     """Save the full reasoning and the final result, one file per run, and make room: the oldest reports go.
@@ -154,10 +153,10 @@ def save_report(response: dict[str, Any], recommendation: str) -> Path:
     return path
 
 def remove_old_reports() -> None:
-    """Delete the reports beyond the newest RECENT_REPORTS, with their logs. The ones in saved/ are not counted
+    """Delete the reports beyond the newest recent_reports of the settings, with their logs. The ones in saved/ are not counted
     and not touched."""
     reports = sorted(REPORTS.glob("trip_*.md"), key=lambda report: report.stat().st_mtime)
-    for old in reports[:-RECENT_REPORTS]:
+    for old in reports[:-current.SETTINGS.recent_reports]:
         old.unlink(missing_ok=True)
         log_of(old).unlink(missing_ok=True)
 

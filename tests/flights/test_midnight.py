@@ -9,7 +9,7 @@ from datetime import timedelta
 import pytest
 
 from tests.flights.test_next_day import accept, connection, found_by_search, LEAVES, trip   # noqa: F401 (trip is the fixture)
-from trip_planner.config import NIGHT_MINUTES
+from trip_planner import current
 from trip_planner.itineraries.ranking import check_itinerary
 from trip_planner.report.formatting import arriving, leaving
 from trip_planner.sources import flight_search
@@ -74,7 +74,7 @@ def read(answer: dict, to_airport: bool) -> list[tuple]:
 
 def test_a_connection_from_the_airport_may_end_in_the_night_after():
     assert read(planned(f"{DAY}T22:40:00Z", f"{NEXT}T00:20:00Z"), to_airport=False) == [(22 * 60 + 40, MIDNIGHT + 20)]
-    late = f"{NEXT}T{NIGHT_MINUTES // 60 + 1:02}:00:00Z"
+    late = f"{NEXT}T{current.SETTINGS.night_minutes // 60 + 1:02}:00:00Z"
     assert read(planned(f"{DAY}T23:00:00Z", late), to_airport=False) == []       # a night in a station is not a connection
     assert read(planned(f"{NEXT}T00:10:00Z", f"{NEXT}T01:00:00Z"), to_airport=False) == []   # it leaves the next day
     accept(next_day_arrivals=False)

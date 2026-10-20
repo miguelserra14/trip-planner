@@ -22,7 +22,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from trip_planner import current
-from trip_planner.config import NIGHT_MINUTES, ROOT, USER_AGENT
+from trip_planner.config import ROOT, USER_AGENT
 from trip_planner.places import distance_km
 from trip_planner.sources import fares, web
 from trip_planner.utils import logged, plain, say, to_minutes, to_time
@@ -43,9 +43,7 @@ LIFT_MODES = "FUNICULAR,AERIAL_LIFT,OTHER"
 GROUND_MODES = "RAIL,SUBURBAN,SUBWAY,TRAM,BUS,COACH,FERRY," + LIFT_MODES   # everything but planes: the planner also flies, and those answers are no use here
 NO_COACH_MODES = "RAIL,SUBURBAN,SUBWAY,TRAM,BUS,FERRY," + LIFT_MODES       # ... and but long-distance coaches
 ROAD_MODES = "COACH,BUS,TRAM,SUBWAY,FERRY"                   # ... and but trains
-CITY_WALK_SECONDS = 2400         # walking allowed between the city centre and a stop. It is not counted: the traveller is somewhere in the city
-WIDE_CITY_WALK_SECONDS = 5400    # ... tried when nothing is found: where the timetables lack the city's own transport (Athens), the station is further than that on foot
-AIRPORT_WALK_SECONDS = 1200      # walking allowed between the terminal and a stop. It is counted
+# The walks allowed at each end are settings: city_walk_minutes, wide_city_walk_minutes, airport_walk_minutes (config.py)
 AIRFIELD_WALK_SECONDS = 3600     # terminal not known: the planner walks from the middle of the airfield, allow for it...
 AIRFIELD_WALK_MINUTES = 15       # ... and count this fixed time between the stop and the terminal instead
 # The stops of an airport. The planner walks badly around terminals (35 minutes to a station under the building),
@@ -59,7 +57,6 @@ AIRPORT_WORDS = ("airport", "aeroport", "aeropuerto", "aerodrom", "flughafen", "
                  "lotnisko", "letiste", "letisko", "letalisce", "zracna luka", "repuloter", "lentoasema", "lennujaam",
                  "lidosta", "oro uostas", "αεροδρομιο", "летище", "terminal")
 LAST_RIDES_MINUTES = 120         # how long before the latest time the traveller leaves at the last connections are asked from
-MIN_AIRPORT_FLOOR = 45           # the closest alternatives may cut the time at the airport, but never below this
 MAX_FLIGHTS_CHECKED = 16         # flights whose ground transport is looked up: the cheapest ones
 MAX_FLIGHTS_PER_AIRPORT_DAY = 3  # ... with at most this many per departure airport and date
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
@@ -350,21 +347,24 @@ class Timetables:
 
     async def plan(self, start: tuple | str, end: tuple | str, day: str, minutes: int, arrive_by: bool, zones: tuple,
                    to_airport: bool, terminal_known: bool, modes: str = "", stop_walk: int = 0,
-                   city_walk: int = CITY_WALK_SECONDS) -> list[dict[str, Any]]:
+                   city_walk: int | None = None) -> list[dict[str, Any]]:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
         on the clock of the end point when arrive_by, otherwise of the start point. modes limits the kinds of
         vehicle, empty for everything on the ground.
-        The times returned are minutes since the midnight that day starts with. Up to NIGHT_MINUTES across a
+        city_walk is the walk allowed at the city end in seconds, city_walk_minutes of the settings when not given.
+        The times returned are minutes since the midnight that day starts with. Up to night_minutes across a
         midnight are accepted: below 0 a connection to the airport leaves the evening before, and above 24 hours
         one from the airport arrives in the night after (only if the traveller accepts arriving on a later day).
         One end is the city and the other the airport terminal (to_airport says which way). On the city side the
         time returned is that of the vehicle, on the airport side it includes the walk to or from the terminal.
         The airport end (start, or end when to_airport) may be a stop of the airport instead of a point (see
         airport_stops): stop_walk is then the minutes on foot between the terminal and it."""
+        settings = current.SETTINGS
+        city_walk = settings.city_walk_minutes * 60 if city_walk is None else city_walk
         from_stop, to_stop = isinstance(start, str), isinstance(end, str)
         # The time asked for is at the terminal: at the stop it is the walk later when leaving, earlier when arriving
         at_stop = minutes + stop_walk if from_stop else minutes - stop_walk if to_stop and arrive_by else minutes
-        airport_walk = AIRPORT_WALK_SECONDS if terminal_known else AIRFIELD_WALK_SECONDS
+        airport_walk = settings.airport_walk_minutes * 60 if terminal_known else AIRFIELD_WALK_SECONDS
         walks = (city_walk, airport_walk) if to_airport else (airport_walk, city_walk)
         params = {
             "fromPlace": start if from_stop else f"{start[0]},{start[1]}", "toPlace": end if to_stop else f"{end[0]},{end[1]}",
@@ -393,8 +393,8 @@ class Timetables:
                 arrive += stop_walk
             elif not terminal_known:
                 leave, arrive = (leave, arrive + AIRFIELD_WALK_MINUTES) if to_airport else (leave - AIRFIELD_WALK_MINUTES, arrive)
-            first_leave = -NIGHT_MINUTES if to_airport else 0
-            last_arrive = 24 * 60 + (NIGHT_MINUTES if not to_airport and current.SETTINGS.next_day_arrivals else 0)
+            first_leave = -settings.night_minutes if to_airport else 0
+            last_arrive = 24 * 60 + (settings.night_minutes if not to_airport and settings.next_day_arrivals else 0)
             if not first_leave <= leave < arrive < last_arrive or leave >= 24 * 60:
                 continue
             connections.append({
@@ -414,8 +414,8 @@ class Timetables:
                 # Operator links come from the timetable feed the operator published
                 "urls": list(dict.fromkeys(url for url in (web.secure_url(leg.get("agencyUrl")) for leg in legs) if url)),
             })
-        if not connections and not modes and city_walk < WIDE_CITY_WALK_SECONDS:
-            return await self.plan(start, end, day, minutes, arrive_by, zones, to_airport, terminal_known, modes, stop_walk, WIDE_CITY_WALK_SECONDS)
+        if not connections and not modes and city_walk < settings.wide_city_walk_minutes * 60:
+            return await self.plan(start, end, day, minutes, arrive_by, zones, to_airport, terminal_known, modes, stop_walk, settings.wide_city_walk_minutes * 60)
         return connections
 
     async def is_covered(self, start: tuple | str, end: tuple | str, day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
@@ -482,7 +482,7 @@ class Timetables:
                 return dict(NOT_COVERED)
         # Kept up to the shortest time at the airport ever offered: the ones that arrive after the time asked for
         # only serve the closest alternatives, when nothing respects every requirement
-        last_call = to_minutes(flight["departure_time"]) - MIN_AIRPORT_FLOOR
+        last_call = to_minutes(flight["departure_time"]) - current.SETTINGS.airport_floor_minutes
         return self.answer([c for c in found if c["arrive"] <= max(at_terminal, last_call)], service, flight["date"])
 
     async def onward(self, airport: tuple | str, end: tuple, service: str, ready: int, zones: tuple, known: bool,

@@ -11,7 +11,7 @@ from typing import Any
 from langchain.chat_models import init_chat_model
 from langchain.messages import SystemMessage
 
-from trip_planner import current
+from trip_planner import current, ground_choice
 from trip_planner.agents import models, subagents
 from trip_planner.config import LANGUAGES, LIGHTS
 from trip_planner.texts import tr
@@ -72,6 +72,7 @@ def coordinator_prompt() -> str:
     The hard constraints of this trip, enforced by code:
     - {subagents.stopovers_rule(s)}
     - The traveller leaves {s.origin} between {s.earliest_leave} and {s.latest_leave}.
+    - Ground transport to the departure airport: {ground_choice.describe(True)}. From the arrival airport: {ground_choice.describe(False)}.
     - The traveller is at the airport at least {s.min_airport_minutes} minutes before the flight departs.
     - The traveller needs {s.min_landing_minutes} minutes to leave the arrival airport after landing.
     - The traveller reaches {s.destination} {s.arrival_window}.

@@ -43,8 +43,11 @@ def build_request(settings: TripSettings, places: TripPlaces) -> str:
 
 def check_recommendation(text: str, recommended: int) -> str:
     """The recommendation is written by a model. If it names another option than the one the rules chose,
-    say so instead of letting the two disagree silently."""
+    say so instead of letting the two disagree silently. When there is no option at all and it names one, it is
+    describing options that do not exist (a flight of the list, on 2026-10-21): a fixed text is shown instead."""
     named = re.search(rf"(?:{any_of('option_word')})\s*\**\s*([0-9]+)", plain(text))
+    if not recommended and named:
+        return tr("recommendation_none", heading=tr("recommendation"))
     if recommended and named and int(named[1]) != recommended:
         return text + "\n\n> " + tr("warn_recommendation_differs", model=named[1], rules=recommended)
     return text
@@ -79,8 +82,9 @@ async def recommend(state: dict[str, Any], messages: list[Any]) -> str:
     except Exception as error:
         say(tr("progress_no_model", error=type(error).__name__))
         return tr("recommendation_by_rules", heading=tr("recommendation"), option=recommended) if recommended else ""
-    messages.append(AIMessage(content=text))
-    return web.only_known_links(check_recommendation(text, recommended), report)
+    text = check_recommendation(text, recommended)
+    messages.append(AIMessage(content=text))   # what the traveller was shown is what the follow-up questions build on
+    return web.only_known_links(text, report)
 
 async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) -> dict[str, Any]:
     """Plan one trip, show the result and save the report. places are the airports already chosen for it;

@@ -119,3 +119,10 @@ def test_without_a_model_and_without_an_option_nothing_is_added(two_models):
 def test_the_model_reads_the_request_and_what_each_step_found():
     text = planner.results_for_model("I want to go to Antwerp.", {"notes": ["8 flights", "timetables cover 6 of 8 legs", "the report"]})
     assert text.startswith("I want to go to Antwerp.") and "Step 1, flight search:\n8 flights" in text and "Step 3, itineraries:\nthe report" in text
+
+def test_with_no_option_a_recommendation_of_one_is_not_shown(two_models):
+    """Nothing respected the requirements, and a model recommended "option 1": a flight of the list, not an option."""
+    two_models("## Recommendation\n\nI recommend option 1 (CRL-BGY, 69 EUR).", None)
+    messages = [HumanMessage(content="the results")]
+    text = asyncio.run(planner.recommend({"recommended": 0, "report": "no itinerary"}, messages))
+    assert "CRL-BGY" not in text and text.startswith("## ") and messages[-1].content == text

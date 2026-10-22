@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from trip_planner import current
+from trip_planner import current, ground_choice
 from trip_planner.config import LIGHTS, ROOT
 from trip_planner.places import airport_groups, too_far_notice
 from trip_planner.report.formatting import at_destination, grade_text, table
@@ -90,6 +90,8 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         f"### 3. {tr('step_ground')}",
         "",
         tr("ground_explained", sources=timetables.TIMETABLE_SOURCES, requests=ground.get("requests", 0)),
+        "",
+        tr("ground_choice_report", to_airport=ground_choice.describe(True), from_airport=ground_choice.describe(False)),
         "",
         *table([tr("col_flight"), tr("col_to_airport"), tr("col_from_airport")],
                [[f["id"], leg_cell(ground[f["id"]]["to_airport"]), leg_cell(ground[f["id"]]["from_airport"])]

@@ -4,14 +4,18 @@
 - The cheapest way to each destination counts the way to the airport, and back home from the one the return lands at.
 - The breakdown counts every request, says which answers were full, and explains the known routes not found.
 - The map page cannot be broken by a name, and the arguments are checked.
+- Kiwi is asked politely: never again after a refusal, within a daily limit, without Ryanair only where Ryanair answered.
+- A city is one dot, and a trip of the map opens the planner only when its own page asks.
 - The planner does not depend on this folder."""
+import asyncio
 import json
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
 
-from discover import __main__ as command, breakdown, finder, page, sources
+from discover import __main__ as command, breakdown, finder, page, plan, serve, sources
 from discover import routes as routes_module
 from discover.sources import Days
 from trip_planner.places import Place
@@ -157,3 +161,150 @@ def test_the_radar_knows_a_city_found_by_another_airport(known, monkeypatch):
     searches = [{"source": "Kiwi", "from": "OPO", "to": "GB", "answered": True, "flights": [flight("OPO", "STN", 30, "easyJet", carrier="U2")]}]
     reasons = {row[0]: row[4] for row in breakdown.radar_section(found_with(searches), AIRPORTS)["rows"]}
     assert "another airport (STN" in reasons["LGW"]
+
+# ---------------------------------------------------------------- asking Kiwi politely
+def fake_leg(code: str, to_airport: bool, place, today, label: str = "", ride=None, price: float = 10.0) -> dict:
+    """A way between an airport and a city, as access.leg gives it, estimated at price."""
+    return {"airport": code, "to_airport": to_airport, "place": label, "price_eur": price, "minutes": 30, "grade": "C", "price_grade": "C",
+            "how": "estimated from the distance", "looked_up": False}
+
+@pytest.fixture
+def services(monkeypatch, tmp_path):
+    """Two departure airports and three countries, Ryanair down at Lisbon, and Kiwi refusing its fourth request.
+    Returns the requests Kiwi was sent: (airport, country, airlines left out)."""
+    monkeypatch.setattr(finder, "KIWI_COUNT", tmp_path / "kiwi_requests.json")
+    monkeypatch.setattr(finder, "KIWI_AT_ONCE", 1)
+    monkeypatch.setattr(finder, "KIWI_PAUSE_SECONDS", 0.0)
+    monkeypatch.setattr(finder, "airports_near", lambda place, km, airlines_only: [{"code": "OPO", "km": 117, "country": "PT"},
+                                                                                   {"code": "LIS", "km": 190, "country": "PT"}])
+    monkeypatch.setattr(finder.access, "leg", fake_leg)
+    monkeypatch.setattr(finder.access, "centres", lambda codes, airports, today, say: {})
+    monkeypatch.setattr(finder.transfers, "look_up", lambda *arguments: {})
+    monkeypatch.setattr(finder.operator_rides, "look_up", lambda *arguments: {})
+    monkeypatch.setattr(finder, "load_airports", lambda: AIRPORTS)
+    monkeypatch.setattr(finder, "countries_near", lambda place, departures: ["ES", "GB", "FR"])
+    monkeypatch.setattr(finder, "route_counts", lambda: {})
+    monkeypatch.setattr(finder.flown, "routes", lambda codes, today, say=print, extract=None: {})
+
+    def ryanair(code: str, days: Days) -> list:
+        if code == "LIS":
+            raise ConnectionError("Ryanair is down")
+        return [flight("OPO", "MAD", 20)]
+
+    async def connect() -> None:
+        pass
+    sent = []
+
+    async def kiwi(code: str, country: str, days: Days, stops: int, excluded: str) -> list:
+        sent.append((code, country, excluded))
+        if len(sent) == 4:
+            raise RuntimeError("Client error '403 Forbidden'")
+        return [flight(code, "LGW", 30, "easyJet", carrier="U2")]
+    monkeypatch.setattr(finder, "ryanair_destinations", ryanair)
+    monkeypatch.setattr(finder, "kiwi_destinations", kiwi)
+    monkeypatch.setattr(finder.kiwi, "connect_kiwi", connect)
+    monkeypatch.setattr(finder.kiwi, "kiwi_search", object())
+    return sent
+
+def test_after_a_refusal_kiwi_is_not_asked_again(services):
+    found = asyncio.run(finder.discover(PLACE, ONE_WAY))
+    assert len(services) == 4 and "403" in found.kiwi_refused
+    skipped = [s for s in found.searches if "not asked" in s["error"]]
+    assert [(s["from"], s["to"]) for s in skipped] == [("LIS", "GB"), ("LIS", "FR")]
+    assert finder.kiwi_used(date.today().isoformat()) == 4   # the ones sent, not the ones skipped
+    errors = breakdown.errors_section(found)
+    assert "403" in errors["note"] and any("ConnectionError" in row[2] for row in errors["rows"])
+
+def test_kiwi_leaves_ryanair_out_only_where_ryanair_answered(services):
+    found = asyncio.run(finder.discover(PLACE, ONE_WAY))
+    assert [excluded for _, _, excluded in services] == ["FR", "FR", "FR", ""]   # Lisbon's Ryanair request failed
+    assert "FR too from LIS" in found.kiwi_options
+
+def test_the_maps_of_one_day_share_a_limit_of_requests_to_kiwi(services):
+    (finder.KIWI_COUNT).write_text(json.dumps({"day": date.today().isoformat(), "requests": finder.KIWI_DAILY - 4}), encoding="utf-8")
+    found = asyncio.run(finder.discover(PLACE, ONE_WAY))
+    assert found.kiwi_allowed == 4 and found.countries_left_out == ["FR"]   # two countries for each of the two airports
+    (finder.KIWI_COUNT).write_text(json.dumps({"day": "2020-01-01", "requests": 999}), encoding="utf-8")
+    assert finder.kiwi_used(date.today().isoformat()) == 0   # another day's count is not today's
+
+def test_a_light_map_asks_kiwi_fewer_times(services):
+    found = asyncio.run(finder.discover(PLACE, ONE_WAY, kiwi_requests=2))
+    assert found.kiwi_allowed == 2 and len(services) == 2 and found.countries_left_out == ["GB", "FR"]
+
+def test_kiwi_saying_something_else_than_an_answer_is_an_error_with_its_words(monkeypatch):
+    class Refusing:
+        async def ainvoke(self, asked):
+            return "Tool call failed: 403 Forbidden"
+    monkeypatch.setattr(sources.kiwi, "kiwi_search", Refusing())
+    with pytest.raises(ValueError, match="403"):
+        asyncio.run(sources.kiwi_destinations("OPO", "GB", ONE_WAY))
+
+# ---------------------------------------------------------------- one dot per city
+def test_the_airports_of_one_city_are_one_dot():
+    airports = {"STN": {"country": "GB", "city": "London"}, "LGW": {"country": "GB", "city": "London"}, "MAD": {"country": "ES", "city": "Madrid"},
+                "XYZ": {"country": "GB", "city": ""}}
+    destinations = [{"to": "STN", "from": "OPO", "total_eur": 30.0}, {"to": "MAD", "from": "OPO", "total_eur": 35.0},
+                    {"to": "LGW", "from": "LIS", "total_eur": 40.0}, {"to": "XYZ", "from": "OPO", "total_eur": 50.0}]
+    grouped = finder.one_per_city(destinations, airports)
+    assert [d["to"] for d in grouped] == ["STN", "MAD", "XYZ"]
+    assert grouped[0]["also"] == [{"to": "LGW", "from": "LIS", "total_eur": 40.0}]
+
+# ---------------------------------------------------------------- from the map to the planner
+def test_each_trip_of_the_map_opens_the_planner_on_its_own_cities_and_day():
+    out = {**flight("OPO", "BHX", 45, back=back_to("MAN", "LIS"))}
+    found = finder.Found(PLACE, RETURN, [], [out], [], [])
+    airports = {"BHX": {"city": "Birmingham"}, "MAN": {"city": "Manchester"}}
+    assert plan.trips(found, airports) == {"BHX-out": ["Coimbra", "Birmingham", "12/11/2026"],
+                                           "BHX-back": ["Manchester", "Coimbra", "16/11/2026"]}
+
+def test_the_server_opens_only_a_trip_of_its_map_asked_by_its_page():
+    opened = []
+    planner = serve.Planner({"BHX-out": ["Coimbra", "Birmingham", "12/11/2026"]}, "secret", opened.append)
+    ask = lambda body, now=0.0: planner.ask(json.dumps(body).encode(), now)
+    assert ask({"token": "guess", "trip": "BHX-out"})[0] == 403
+    assert ask({"token": "secret", "trip": "Coimbra & del C:"})[0] == 404
+    assert planner.ask(b"<html>", 0.0)[0] == 400
+    assert ask({"token": "secret", "trip": "BHX-out"}) == (200, "opening")
+    assert ask({"token": "secret", "trip": "BHX-out"}, 1.0) == (200, "already opening")   # a double click is one window
+    assert len(opened) == 1 and opened[0][-4:] == ["discover.plan", "Coimbra", "Birmingham", "12/11/2026"]
+
+def test_a_page_opened_as_a_file_shows_the_command_and_has_no_token(monkeypatch):
+    monkeypatch.setattr(page, "load_airports", lambda: {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB",
+                                                                "latitude": 52.4, "longitude": -1.7}})
+    found = finder.Found(PLACE, ONE_WAY, [], [{**flight("OPO", "BHX", 10), "ground_eur": 5.0, "total_eur": 15.0}], [], [])
+    data = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [])).group(1))
+    assert data["token"] == "" and "discover.plan Coimbra Birmingham 12/11/2026" in data["state"]["points"][0]["plan"]["out"]["command"]
+    served = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [], token="abc")).group(1))
+    assert served["token"] == "abc"
+
+# ---------------------------------------------------------------- OpenFlights
+def test_an_error_page_is_not_kept_as_openflights():
+    assert routes_module.rows_of("<html><body>Rate limited</body></html>") is None
+    row = "FR,4296,OPO,1636,MAD,1229,,0,738"
+    assert len(routes_module.rows_of("\n".join([row] * routes_module.MIN_ROWS))) == routes_module.MIN_ROWS
+
+# ---------------------------------------------------------------- the traveller's airports
+def test_the_airports_are_the_ones_with_most_routes_not_only_the_closest(monkeypatch):
+    near = [{"code": code, "km": km} for code, km in (("ANR", 3), ("BRU", 40), ("EIN", 80), ("CRL", 95), ("OST", 110), ("LGG", 120), ("MST", 130))]
+    monkeypatch.setattr(finder, "airports_near", lambda place, km, airlines_only: near)
+    monkeypatch.setattr(finder, "MAX_AIRPORTS", 3)
+    monkeypatch.setattr(finder, "route_counts", lambda: {"ANR": 4, "BRU": 180, "EIN": 70, "CRL": 120, "OST": 10})
+    monkeypatch.setattr(finder.flown, "routes", lambda codes, today, say=print, extract=None: {})
+    assert [airport["code"] for airport in finder.departure_airports(PLACE)] == ["BRU", "EIN", "CRL"]   # Antwerp's own is left out
+    # The routes of today, when read, come before the ones of 2014: Ostend flies to more places now
+    today = {"OST": {"routes": [{"to": f"X{number:02d}", "airline": "TUI", "seasonal": False} for number in range(90)], "checked": "", "article": ""}}
+    monkeypatch.setattr(finder.flown, "routes", lambda codes, day, say=print, extract=None: {code: today[code] for code in codes if code in today})
+    assert [airport["code"] for airport in finder.departure_airports(PLACE)] == ["BRU", "CRL", "OST"]
+    monkeypatch.setattr(finder, "route_counts", lambda: None)
+    monkeypatch.setattr(finder.flown, "routes", lambda codes, day, say=print, extract=None: {})
+    assert [airport["code"] for airport in finder.departure_airports(PLACE)] == ["ANR", "BRU", "EIN"]   # without routes: the closest
+
+def test_kiwi_is_asked_for_all_the_airports_at_once(services, monkeypatch):
+    monkeypatch.setattr(finder, "airports_near", lambda place, km, airlines_only: [{"code": "OPO", "km": 117, "country": "PT"},
+                                                                                   {"code": "FAO", "km": 300, "country": "PT"},
+                                                                                   {"code": "LIS", "km": 190, "country": "PT"}])
+    asyncio.run(finder.discover(PLACE, ONE_WAY))
+    assert services[:3] == [("OPO,FAO", "ES", "FR"), ("OPO,FAO", "GB", "FR"), ("OPO,FAO", "FR", "FR")]   # Ryanair answered there
+    assert services[3] == ("LIS", "ES", "")   # Ryanair did not answer at Lisbon: every airline from there
+    groups = finder.kiwi_groups([{"code": "OPO"}, {"code": "LIS"}], {"OPO", "LIS"})
+    assert groups == [(["OPO", "LIS"], "FR")]

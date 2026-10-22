@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from trip_planner.dates import read_dates, UnreadableDate
+from trip_planner.ground_choice import CHOICES, NO_CHANGE_LIMIT
 from trip_planner.texts import LANGUAGES, REFERENCE, text_in
 from trip_planner.utils import plain, to_minutes, to_time
 
@@ -22,7 +23,7 @@ RANGES = {
     "primary_radius_km": (1, 1000), "fallback_radius_km": (1, 1500), "arrival_radius_km": (1, 1000),
     "max_departure_airports": (1, 30), "max_arrival_airports": (1, 15), "max_road_hours": (1, 48),
     "min_airport_minutes": (30, 360), "ideal_airport_minutes": (30, 480), "min_landing_minutes": (0, 240),
-    "max_stopovers": (0, 3),
+    "max_stopovers": (0, 3), "max_changes_to_airport": (0, NO_CHANGE_LIMIT), "max_changes_from_airport": (0, NO_CHANGE_LIMIT),
     "tiebreak_eur_per_hour": (0, 1000), "fallback_saving_eur_per_hour": (0, 1000), "extra_hour_growth": (1, 5),
     "options_shown": (1, 10),
     "max_estimate_km": (0, 300), "small_estimate_eur": (0, 50), "unverified_price_factor": (1, 10),
@@ -90,6 +91,13 @@ class TripSettings:
     next_day_arrivals: bool = True        # accept flights that land on a later day than they leave (night and long flights),
                                           # and connections from the airport that reach the destination after midnight.
                                           # The arrival times above are then read on the clock of the day of arrival
+    # Ground transport on each side of the flight (ground_choice.py): "any", "train" or "bus", and the most changes of
+    # vehicle. Metro, tram and ferries are the city's own transport and count with either choice. 9 = no limit on changes.
+    # With a choice, a leg that cannot be checked (a model's estimate, a stretch estimated from the distance) is not used.
+    to_airport_by: str = "any"            # from the origin to the departure airport
+    from_airport_by: str = "any"          # from the arrival airport to the destination
+    max_changes_to_airport: int = NO_CHANGE_LIMIT
+    max_changes_from_airport: int = NO_CHANGE_LIMIT
 
     # Data integrity
     min_reliability: str = "B"            # worst schedule grade accepted: "A", "B" or "C". See "Data integrity" above
@@ -199,10 +207,11 @@ class TripSettings:
         self.min_reliability = self.min_reliability.upper()
         if self.min_reliability not in GRADES:
             raise fail("bad_choice", setting="min_reliability", value=self.min_reliability, choices=", ".join(GRADES))
-        for name in ("departure_scale", "arrival_scale"):
-            setattr(self, name, getattr(self, name).lower())
-            if getattr(self, name) not in SCALES:
-                raise fail("bad_choice", setting=name, value=getattr(self, name), choices=", ".join(SCALES))
+        for names, choices in ((("departure_scale", "arrival_scale"), SCALES), (("to_airport_by", "from_airport_by"), CHOICES)):
+            for name in names:
+                setattr(self, name, getattr(self, name).lower())
+                if getattr(self, name) not in choices:
+                    raise fail("bad_choice", setting=name, value=getattr(self, name), choices=", ".join(choices))
 
         # The times, all as HH:MM. A day runs from 00:00 to 23:59, so a limit "by 00:00" can only mean the end of the
         # day: read as its start it would leave no time at all. An empty time means no limit.

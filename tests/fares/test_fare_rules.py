@@ -5,6 +5,7 @@ import pytest
 
 from trip_planner.itineraries.legs import estimated_price, price_with_tickets
 from trip_planner.sources import fares
+from trip_planner.places import Place
 from trip_planner.sources.fares import FareSource, Trip
 
 TRAVEL = (date.today() + timedelta(days=70)).isoformat()
@@ -52,6 +53,8 @@ def test_each_operator_is_recognised_by_its_vehicles():
     assert name(step("NMBS/SNCB", from_id="be-sncb_8200100", to_id="be-sncb_8200120")).startswith("Luxembourg")
     assert name(step("NMBS/SNCB", from_id="be-sncb_8200100", to_id="be-sncb_8866001")) is None   # leaves Luxembourg
     assert name(step("NS")) is None
+    alsa = step("ALSA", rail=False, from_id="es-ALSA-autobuses_0000555500000001", to_id="es-ALSA-autobuses_0000030500000001")
+    assert name(alsa) == "ALSA" and fares.alsa_stop(alsa["from_id"]) == "5555"   # its site's own stop id
 
 def test_trains_in_a_row_of_one_railway_are_one_ticket(sells):
     steps = [step("Rail", time="10:00", arrive="10:30"), step("Rail", time="10:40", arrive="11:30"), step("City bus", rail=False),
@@ -122,3 +125,161 @@ def test_a_leg_without_vehicles_is_left_alone(sells):
     model_leg = {"kind": "model", "steps": [], "price_kind": "model", "price_eur": 9.0}
     price_with_tickets(model_leg, FLIGHT["date"], False)
     assert model_leg["price_eur"] == 9.0
+
+# ---------------------------------------------------------------- Rede Expressos, on a made-up answer
+LAGOS = Place("Lagos", "Lagos", "Lagos", "Portugal", 37.1028, -8.6730)
+FARO_AIRPORT = {"code": "FAO", "country": "PT", "latitude": 37.0144, "longitude": -7.9659, "km": 70}
+
+def coach(leave: str, arrive: str, to: str, price: float = 7.3, changes: int = 0) -> dict:
+    return {"departureDate": leave, "arrivalDate": arrive, "from": {"name": "Faro Aeroporto"}, "to": {"name": to},
+            "departureCarrier": {"name": "Rede Expressos"}, "minPrice": price, "availableSeats": 40, "transfersCount": changes, "distance": 90}
+
+@pytest.fixture
+def coaches(monkeypatch):
+    """Rede Expressos answers every search with these rides, and keeps what it was asked."""
+    answer = {"rides": [], "asked": []}
+
+    class Answer:
+        def raise_for_status(self):
+            return self
+
+        def json(self):
+            return {"outgoingSchedules": answer["rides"]}
+
+    def post(url, headers=None, json=None):
+        answer["asked"].append(json)
+        return Answer()
+    monkeypatch.setattr(fares.http, "post", post)
+    return answer
+
+def test_only_the_rides_of_the_town_asked_are_kept(coaches):
+    coaches["rides"] = [coach("2026-12-17 09:10", "2026-12-17 12:10", "Lagos"), coach("2026-12-17 13:40", "2026-12-17 17:05", "Alvor")]
+    rides = fares.rede_expressos_rides(LAGOS, FARO_AIRPORT, "2026-12-17", to_airport=False)
+    assert [ride["steps"][0]["to"] for ride in rides] == ["Lagos"]   # Alvor is 8 km away: another town
+    assert rides[0]["grade"] == "A" and rides[0]["price_eur"] == 7.3
+
+def test_a_coach_that_arrives_after_midnight_counts_past_24_hours(coaches):
+    coaches["rides"] = [coach("2026-12-17 22:10", "2026-12-18 01:30", "Lagos", changes=1)]
+    ride = fares.rede_expressos_rides(LAGOS, FARO_AIRPORT, "2026-12-17", to_airport=False)[0]
+    assert (ride["leave"], ride["arrive"]) == (22 * 60 + 10, 25 * 60 + 30)
+    assert "1" in ride["steps"][0]["line"]   # the change of coach is said
+
+def test_rede_expressos_is_not_asked_outside_portugal(coaches):
+    madrid = Place("Madrid", "Madrid", "Madrid", "Spain", 40.4168, -3.7038)
+    assert fares.rede_expressos_rides(madrid, {**FARO_AIRPORT, "country": "ES", "latitude": 40.49, "longitude": -3.57}, "2026-12-17") is None
+    assert coaches["asked"] == []
+
+# ---------------------------------------------------------------- Movelia, on a made-up answer
+SPANISH_PLACES = {"madrid": "MADRID", "salamanca": "SALAMANCA", "sevilla": "SEVILLA", "aeropuerto alicante-elche": "AEROPUERTO ALICANTE-ELCHE",
+                  "alicante": "ALICANTE / ALACANT", "murcia": "MURCIA"}
+MADRID_AIRPORT = {"code": "MAD", "country": "ES", "name": "Adolfo Suárez Madrid–Barajas Airport", "city": "Madrid", "km": 200,
+                  "search_text": "adolfo suarez madrid barajas airport madrid"}
+
+def test_an_airport_is_searched_by_the_name_movelia_gives_it():
+    alicante = {**MADRID_AIRPORT, "name": "Alicante-Elche Miguel Hernández Airport", "city": "Alicante"}
+    seville = {**MADRID_AIRPORT, "name": "Seville Airport", "city": "Seville", "search_text": "seville airport seville sevilla, sevilla airport"}
+    assert fares.movelia_airport(alicante, SPANISH_PLACES) == "AEROPUERTO ALICANTE-ELCHE"   # its own name for the airport
+    assert fares.movelia_airport(MADRID_AIRPORT, SPANISH_PLACES) == "MADRID"                 # the city, then only the airport's stations
+    assert fares.movelia_airport(seville, SPANISH_PLACES) == "SEVILLA"                       # a name of the airport database
+
+def movelia(leave: str, start: str, direct: str = "1", kind: str = "1", price: str = "22,93") -> dict:
+    return {"salable": "1", "direct": direct, "busOrBoat": kind, "departureDate": "05/11/2026", "arrivalDate": "05/11/2026",
+            "departureTime": leave, "arrivalTime": "23:00", "originName": start, "destinationName": "SALAMANCA",
+            "companyName": "MONBUS LARGA DISTANCIA S.L.U.", "basicPrice": price}
+
+def test_only_direct_rides_from_a_station_of_the_airport_are_kept(monkeypatch):
+    answer = [movelia("10:15", "Aeropuerto Adolfo Suárez T4"), movelia("06:40", "Madrid Estación Sur"),
+              movelia("11:00", "Aeropuerto Adolfo Suárez T4", direct="0"), movelia("12:00", "AEROPUERTO T4 TREN", kind="3", price="18,05"),
+              movelia("13:00", "Aeropuerto Adolfo Suárez T4", kind="4")]   # a flight
+
+    class Answer:
+        status_code = 200
+
+        def raise_for_status(self):
+            return self
+
+        def json(self):
+            return {"schedules": {"responseData": {"travel": {"outbound": {"section": [{"combination": answer}]}}}}}
+    monkeypatch.setattr(fares, "MOVELIA_SESSION", {"places": SPANISH_PLACES, "token": "x"})
+    monkeypatch.setattr(fares.http, "post", lambda url, json=None, headers=None, timeout=None: Answer())
+    rides = fares.movelia_rides(Place("Salamanca", "Salamanca", "Salamanca", "Spain", 40.96, -5.66), MADRID_AIRPORT, "2026-11-05", to_airport=False)
+    assert [(ride["leave"], ride["price_eur"], ride["steps"][0]["rail"]) for ride in rides] == [(10 * 60 + 15, 22.93, False), (12 * 60, 18.05, True)]
+
+# ---------------------------------------------------------------- Obilet, on a made-up answer
+def test_an_airport_of_obilet_is_the_one_whose_name_shares_most_words(monkeypatch):
+    istanbul = [{"id": 6664, "text": "İstanbul Havalimanı - İstanbul", "isDomestic": True},
+                {"id": 6746, "text": "İstanbul Sabiha Gökçen Havalimanı - İstanbul", "isDomestic": True},
+                {"id": 350, "text": "İstanbul Anadolu - İstanbul", "isDomestic": True}]
+    skopje = [{"id": 1818, "text": "Üsküp - Makedonya Cumhuriyeti", "isDomestic": False}]
+    monkeypatch.setattr(fares, "OBILET_SESSION", {"places": {"istanbul": istanbul, "skopje": skopje}})
+    assert fares.obilet_place(["Istanbul"], "TR", True)["id"] == 6664                           # the shorter of two that tie
+    assert fares.obilet_place(["Sabiha Gokcen", "Istanbul"], "TR", True)["id"] == 6746
+    assert fares.obilet_place(["Istanbul"], "TR", False)["id"] == 350
+    assert fares.obilet_place(["Skopje"], "MK", False)["id"] == 1818                           # its country, written in Turkish
+    assert fares.obilet_place(["Skopje"], "AL", False) is None
+
+def test_a_coach_from_the_airports_city_starts_with_the_way_there_estimated(monkeypatch):
+    journey = {"journey": {"departure": "2026-11-05T07:05:00", "arrival": "2026-11-05T09:10:00", "internet-price": 11.0, "currency": "EUR",
+                           "origin": "Podgorica Central Bus Station", "destination": "Kotor", "kind": "Bus"},
+               "partner-name": "Royal Travel", "is-active": True, "available-seats": 30}
+
+    class Answer:
+        def json(self):
+            return {"journeys": [journey]}
+    monkeypatch.setattr(fares, "OBILET_SESSION", {"opened": True})
+    monkeypatch.setattr(fares, "obilet_ask", lambda method, url, **options: Answer())
+    airport = {"code": "TGD", "country": "ME", "km": 70}
+    ride = fares.obilet_search({"id": 7303, "display": "Kotor"}, {"id": 7304, "display": "Podgorica"}, 13.0, airport, "2026-11-05", False)[0]
+    first, coach = ride["steps"]
+    assert first["estimated"] and first["from"] == "TGD" and first["to"] == "Podgorica Central Bus Station"
+    assert ride["grade"] == "C" and ride["confirmed_eur"] == 11.0 and ride["price_eur"] > 11.0   # only the coach is a real price
+    assert ride["leave"] == 7 * 60 + 5 - first["minutes"] and coach["time"] == "07:05"
+
+def test_obilet_means_the_city_of_a_district_and_reads_its_turkish_countries(monkeypatch):
+    places = {"rethymno": [{"id": 149739, "text": "Agia Triada Rethymno - Resmo, Yunanistan", "display": "Agia Triada Rethymno"}],
+              "resmo": [{"id": 9057, "text": "Resmo - Yunanistan", "display": "Resmo"}],
+              "novi sad": [{"id": 7309, "text": "Novi Sad - Sırbistan", "display": "Novi Sad"}]}
+    monkeypatch.setattr(fares, "OBILET_SESSION", {"places": places})
+    assert fares.obilet_place(["Ρέθυμνο", "Rethymno"], "GR", False)["id"] == 9057   # another alphabet is not asked, a district is its city
+    assert fares.obilet_place(["Novi Sad"], "RS", False)["id"] == 7309             # Sırbistan, with a Turkish dotless i
+
+def test_obilet_rides_to_the_towns_around_the_one_asked_are_left_out(monkeypatch):
+    def journey(destination: str, hour: int) -> dict:
+        return {"journey": {"departure": f"2026-11-05T{hour:02d}:00:00", "arrival": f"2026-11-05T{hour + 2:02d}:00:00", "internet-price": 600.0, "currency": "RSD",
+                            "sorting-price": 5.11, "origin": "Athens Airport", "destination": destination, "kind": "Bus"},
+                "partner-name": "KTEL", "is-active": True, "available-seats": 30}
+
+    class Answer:
+        def json(self):
+            return {"journeys": [journey("Nemea Barbecue Restaurant", 6), journey("Nafplio Tripoleos 30 Bus Stop", 7), journey("Main Bus Station (Otogar)", 8)]}
+    monkeypatch.setattr(fares, "OBILET_SESSION", {"opened": True})
+    monkeypatch.setattr(fares, "obilet_ask", lambda method, url, **options: Answer())
+    rides = fares.obilet_search({"id": 9158, "display": "Nafplion"}, {"id": 1, "display": "Athens Airport"}, 0.0,
+                                {"code": "ATH", "country": "GR", "km": 140}, "2026-11-05", False, ("Nafplio", "Nafplio"))
+    assert [ride["steps"][0]["to"] for ride in rides] == ["Nafplio Tripoleos 30 Bus Stop", "Main Bus Station (Otogar)"]   # Nemea is 45 km away
+    assert rides[0]["price_eur"] == 5.11   # its own price in EUR, where the central bank has no rate
+
+def test_flixbus_is_not_asked_from_a_city_to_itself(monkeypatch):
+    monkeypatch.setattr(fares, "flixbus_city", lambda *args: "innsbruck")   # its airport is a stop of the city
+    monkeypatch.setattr(fares, "flixbus_search", lambda *args: pytest.fail("asked from Innsbruck to Innsbruck"))
+    airport = {"city": "Innsbruck", "name": "Innsbruck Airport", "latitude": 47.26, "longitude": 11.34, "km": 3}
+    assert fares.flixbus_rides(Place("Innsbruck", "Innsbruck", "Innsbruck", "Austria", 47.27, 11.39), airport, "2026-11-12", False) is None
+
+def test_obilet_takes_no_airport_of_the_same_city_that_shares_no_name(monkeypatch):
+    rome = [{"id": 1, "text": "Giovan Battista Pastine International Airport - Roma, Italya"}]   # Ciampino, not Fiumicino
+    monkeypatch.setattr(fares, "OBILET_SESSION", {"places": {"rome-fiumicino leonardo da vinci international airport": rome, "rome": rome}})
+    assert fares.obilet_place(["Rome-Fiumicino Leonardo da Vinci International Airport", "Rome"], "IT", True) is None
+
+def test_a_coach_from_a_stop_of_the_airport_needs_no_estimated_way(monkeypatch):
+    journey = {"journey": {"departure": "2026-11-12T08:45:00", "arrival": "2026-11-12T09:55:00", "internet-price": 5.26, "currency": "EUR",
+                           "origin": "Naples Airport", "destination": "Salerno Bus Station", "kind": "Bus"},
+               "partner-name": "Sita", "is-active": True, "available-seats": 30}
+
+    class Answer:
+        def json(self):
+            return {"journeys": [journey]}
+    monkeypatch.setattr(fares, "OBILET_SESSION", {"opened": True})
+    monkeypatch.setattr(fares, "obilet_ask", lambda method, url, **options: Answer())
+    airport = {"code": "NAP", "name": "Naples International Airport", "city": "Naples", "country": "IT", "km": 50}
+    ride = fares.obilet_search({"id": 2, "display": "Salerno"}, {"id": 1, "display": "Napoli"}, 9.0, airport, "2026-11-12", False, ("Salerno",))[0]
+    assert ride["grade"] == "A" and len(ride["steps"]) == 1 and ride["leave"] == 8 * 60 + 45

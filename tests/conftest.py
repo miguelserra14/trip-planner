@@ -103,8 +103,17 @@ def check_covered(case, found: dict) -> dict:
     if not answer["options"]:
         expect_gap(case, found)
     assert answer["covered"] and answer["options"], f"no timetable covers {case.airport} and {case.city}"
-    assert not gap(case, found), f"{case.name} is listed as a known gap but connections were found: remove known_gap"
+    # A known gap may be bridged by a mixed leg: the published part, and a stretch estimated from the distance
+    assert not gap(case, found) or all(map(mixed, answer["options"])),         f"{case.name} is listed as a known gap but published connections were found: remove known_gap"
     return answer
+
+def mixed(option: dict) -> bool:
+    """A connection with a stretch in no timetable, estimated from the road and within the limit of the settings."""
+    return bool(option.get("estimated_km")) and option["estimated_km"] <= current.SETTINGS.max_estimate_km
+
+def graded(option: dict) -> bool:
+    """A timetable's grade, or orange for a mixed connection: its estimated stretch is not verified."""
+    return option["grade"] in "AB" or (option["grade"] == "C" and mixed(option))
 
 def reasonable_minutes(case, found: dict) -> float:
     """The longest a trip may take before it means something else is wrong, such as the place being located

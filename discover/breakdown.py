@@ -8,7 +8,8 @@ gaps to look into, it does not prove them."""
 from collections import Counter
 from typing import Any
 
-from discover.finder import COUNTRIES_KM, Found, KIWI_REQUESTS
+from discover import flown
+from discover.finder import COUNTRIES_KM, Found
 from discover.routes import airline_names, known_routes
 from trip_planner.places import distance_km, load_airports
 from trip_planner.sources import kiwi
@@ -23,17 +24,27 @@ def country_of(code: str, airports: dict[str, Any]) -> str:
 
 def requests_section(found: Found) -> dict[str, Any]:
     rows = []
+    # Ryanair is asked airport by airport, Kiwi for several airports at once ("BRU,CRL,EIN"): one row for each
     for source in ("Ryanair", "Kiwi"):
-        for airport in found.departures:
-            searches = [s for s in found.searches if s["source"] == source and s["from"] == airport["code"]]
-            if not searches:
-                continue
+        for start in dict.fromkeys(s["from"] for s in found.searches if s["source"] == source):
+            searches = [s for s in found.searches if s["source"] == source and s["from"] == start]
             full = sum(1 for s in searches if source == "Kiwi" and len(s["flights"]) >= kiwi.RESULT_CAP)
-            rows.append([source, airport["code"], len(searches), sum(not s["answered"] for s in searches), full,
+            rows.append([source, start.replace(",", "+"), len(searches), sum(not s["answered"] for s in searches), full,
                          sum(len(s["flights"]) for s in searches), len({f["to"] for s in searches for f in s["flights"]})])
     return section("Requests", ["Source", "From", "Requests", "No answer", "Full answers", "Flights", "Destinations"], rows,
                    f"A full answer is one with Kiwi's maximum of {kiwi.RESULT_CAP} flights, one per city: that country may have more cities "
                    "than it shows. Ryanair answers with all of its destinations at once.")
+
+def errors_section(found: Found) -> dict[str, Any]:
+    """The requests without an answer, by source and error: a failure of the service, a refusal, and an answer
+    the code could not read (the service changed) are not the same problem."""
+    errors = Counter((s["source"], s.get("error") or "no answer") for s in found.searches if not s["answered"])
+    note = (f"Kiwi refused a request ({found.kiwi_refused}): the ones after it were not sent, so that it does not refuse "
+            "for longer, the planner included. " if found.kiwi_refused else "")
+    if not errors:
+        return section("Requests without an answer", [], [], note + "Every request was answered.")
+    return section("Requests without an answer", ["Source", "Requests", "Error"],
+                   [[source, count, error] for (source, error), count in errors.most_common()], note)
 
 def countries_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     rows = []
@@ -52,7 +63,7 @@ def countries_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     note = ("The main airline is the one with most of the country's flights: when it has nearly all of them, the other airlines "
             "to that country may only be dearer, or hidden behind it in a full answer. ")
     if found.countries_left_out:
-        note += f"Not asked, beyond the {KIWI_REQUESTS} requests to Kiwi a map may make: {', '.join(found.countries_left_out)}. "
+        note += f"Not asked, beyond the {found.kiwi_allowed} requests to Kiwi this map could make: {', '.join(found.countries_left_out)}. "
     if found.kiwi_options:
         note += f"Kiwi was asked for {found.kiwi_options}."
     return section("Kiwi, by country asked", ["Country", "Requests", "No answer", "Full", "Flights", "Destinations", "Airlines",
@@ -128,15 +139,43 @@ def radar_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
             + (f"Airlines known to fly from there that appear in no answer: {', '.join(silent)}." if silent else "Every airline known to fly from there appears in some answer."))
     return section("Radar: known routes not found", ["Code", "Destination", "Country", "Airlines (2014)", "Likely reason"], rows, note)
 
+def lookups_section(found: Found) -> dict[str, Any]:
+    """The cities looked up in the real timetables (confirm.py), and what their ways to and from the airports were."""
+    if not found.lookups:
+        return section("Looked up in the timetables", [], [], found.confirm_stop or "No city was looked up in the timetables.")
+    rows = [[lookup["city"], ", ".join(lookup["airports"]), lookup["requests"], lookup["found"], lookup["impossible"], lookup["not covered"]]
+            for lookup in found.lookups]
+    note = ("Each way to or from an airport, at the hour of its flight: found is a real connection that fits it, impossible a way "
+            "the timetables cover where nothing fits (the flight is left out), not covered a way no timetable knows (its "
+            "estimate stays). " + (f"The lookups {found.confirm_stop}." if found.confirm_stop else ""))
+    return section("Looked up in the timetables", ["City", "Airports", "Requests", "Found", "Impossible", "Not covered"], rows, note)
+
+def coverage_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
+    """How many of the destinations flown today from the traveller's airports the map found, and the ones it did not,
+    with who flies there (flown.py: the airports' Wikipedia articles)."""
+    seen = found.coverage
+    note = (f"{seen['found']} of the {seen['flown']} destinations flown from {', '.join(seen['airports'])} (their Wikipedia articles) "
+            f"were found on these days. {seen['ryanair_no_fare']} more are flown by Ryanair only, whose own answer, which has every fare it "
+            f"sells, had none to them those days. The {len(seen['missing'])} below were asked of Kiwi once more by name and still not found: "
+            f"no flight those days ({len(seen['missing_seasonal'])} are seasonal), or one Kiwi does not sell. The airline's own site may have it.")
+    gaps = {code: routes for code, routes in flown.missing(found.flown, set(), set()).items() if code in seen["missing"]}
+    rows = [[code, (airports.get(code) or {}).get("city") or (airports.get(code) or {}).get("name", code), country_of(code, airports),
+             ", ".join(sorted({route["airline"] for route in routes})), ", ".join(sorted({route["from"] for route in routes})),
+             "seasonal" if code in seen["missing_seasonal"] else "all year"]
+            for code, routes in sorted(gaps.items(), key=lambda item: (country_of(item[0], airports), item[0]))]
+    return section("Destinations flown from here, not found", ["Code", "Destination", "Country", "Airlines", "From", "Flown"], rows, note)
+
 def breakdown(found: Found) -> list[dict[str, Any]]:
     airports = load_airports()
     stops = Counter(min(f["stops"], 2) for f in found.flights)
-    return [requests_section(found), countries_section(found, airports), airlines_section(found, airports),
-            destinations_section(found, airports),
+    # What was missed comes first when today's routes are known; without them, the 2014 radar comes last
+    current = [coverage_section(found, airports)] if found.coverage.get("flown") else []
+    return [*current, lookups_section(found), requests_section(found), errors_section(found), countries_section(found, airports),
+            airlines_section(found, airports), destinations_section(found, airports),
             section("Stops", ["Stops", "Flights found", "On the map"],
                     [[label, stops.get(number, 0), sum(1 for f in found.destinations if min(f["stops"], 2) == number)]
                      for number, label in ((0, "direct"), (1, "one"), (2, "two or more"))]),
-            radar_section(found, airports)]
+            *([] if current else [radar_section(found, airports)])]
 
 def as_text(sections: list[dict[str, Any]], rows: int = 12) -> str:
     """The sections for the terminal, each one cut to its first rows."""

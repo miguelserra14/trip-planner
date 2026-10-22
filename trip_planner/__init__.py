@@ -24,8 +24,8 @@ Who does what, and where:
 Data integrity: what can be trusted
 Every figure in the report carries its source and one of three grades. Nothing a model wrote is ever shown as confirmed.
 
-- A, confirmed for the travel date: read by code from the operator's own system (PRICE_CHECKERS, FlixBus), from a
-  timetable published for that date, or from Kiwi for flight times.
+- A, confirmed for the travel date: read by code from the operator's own system (PRICE_CHECKERS, FlixBus, Rede
+  Expressos, Movelia, Obilet), from a timetable published for that date, or from Kiwi for flight times.
 - B, typical timetable: read by code from a published timetable, but for the same weekday of a nearer week, because
   the travel date is not published yet.
 - C, not verified: found by a model in web search, or estimated by code from the distance.

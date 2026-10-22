@@ -108,6 +108,7 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 | `resources/airports.csv` | The airports with scheduled flights of the OurAirports database (snapshot of 8 October 2026). Delete it to download the current one |
 | `resources/airfields.json` | Airports left out of the automatic choice because no airline flies from them (Viseu, Cascais...). Worked out once from OurAirports runways and OpenFlights routes. Delete it to work it out again |
 | `resources/terminals.json` | Where the passenger terminal of every airport is, from OpenStreetMap, worked out once so that a search does not depend on it. `python main.py --terminals all` works it out again |
+| `resources/operators/` | What the coach and train operators' booking systems need and do not give with each answer, one file per operator (see the README there) |
 | `resources/timezones.json` | Cache of time zones, filled as trips are planned |
 | `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted |
 | `reports/saved/` | The reports you chose to keep, with **Keep this report** in the window. Never deleted |
@@ -184,7 +185,7 @@ saved snapshot.
 The **results** are not, and cannot be. Each run reads live data, so two runs a day apart can recommend different
 trips:
 
-- Flight prices (Kiwi, Ryanair) and coach prices (FlixBus) change by the hour.
+- Flight prices (Kiwi, Ryanair) and coach prices (FlixBus, Rede Expressos, Movelia, Obilet) change by the hour.
 - The models (Gemini) do not answer the same way twice. They only write the recommendation and the unverified
   estimates (grade C): flights, timetables, checks and ranking are computed by code.
 - Timetables come from the week of the run, for the same weekday as the travel date.
@@ -205,7 +206,10 @@ The program depends on these services. None of them is under the project's contr
 | Google Flights, through the `fast-flights` library | Flights when Kiwi does not answer. Not an official service: it reads the page a browser gets, so it can stop working or be refused without notice | none |
 | Transitous | Published timetables of trains, coaches and local transport | none |
 | FlixBus, Ryanair | Prices confirmed for the travel date (unofficial endpoints, they can change without notice) | none |
-| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/fares.py` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance, at a rate per country (`itineraries/legs.py`) | none |
+| Rede Expressos | The national coaches of Portugal, which publish no timetable: rides and prices for the travel date between a city and the airports of Lisbon, Porto and Faro, read with the requests its own site makes (unofficial too) | none |
+| Movelia | The booking site of the Spanish coach companies (Monbus, Damas, Bacoma, Subus, ALSA...) and of Renfe: direct rides and prices for the travel date between a city and an airport of Spain, read with the requests its own site makes (unofficial too) | none |
+| Obilet | The booking site of the coach companies of Turkey, which also sells those of Italy (Itabus, MarinoBus), Poland (Szwagropol, Majer), Moldova, Greece (the KTEL of the mainland), Croatia, Slovenia, Serbia, Montenegro, North Macedonia, Kosovo, Albania, Bosnia, Bulgaria and Romania: rides and prices for the travel date. Where the airport is not one of its stops, from the coach station of the airport's city, with the way there estimated (not verified). Read with the requests its own site makes (unofficial too) | none |
+| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), ALSA (Spain), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/fares.py` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance, at a rate per country (`itineraries/legs.py`) | none |
 | Eurostat | Price level of transport services per country, copied into the code: the rate per km of the countries where no railway price can be read | none |
 | European Central Bank | Exchange rates, for prices in forints and crowns | none |
 | PID (Prague), BKK (Budapest), STIB and De Lijn (Belgium), TEC (Charleroi airport bus), Carris and Metro (Lisbon) | Published tariffs of city networks, copied into `sources/fares.py` with the page and the day each was read. A tariff is no longer used a year after it was read | none |

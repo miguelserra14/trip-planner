@@ -4,7 +4,7 @@ time for the flight."""
 import pytest
 
 from tests.cases import CASES
-from tests.conftest import check_city, check_covered, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
+from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
 from trip_planner import current
 from trip_planner.itineraries.legs import to_airport_leg
 from trip_planner.places import as_place, TripPlaces
@@ -31,7 +31,7 @@ def test_4_connections_in_time_for_the_flight(record):
     take_off = to_minutes(found["flight"]["departure_time"])
     for option in answer["options"]:
         assert -current.SETTINGS.night_minutes <= option["leave"] < option["arrive"] <= take_off - current.SETTINGS.airport_floor_minutes
-        assert option["steps"] and option["grade"] in "AB"
+        assert option["steps"] and graded(option)
     at_terminal = take_off - current.SETTINGS.min_airport_minutes
     assert any(option["arrive"] <= at_terminal for option in answer["options"]), "none leaves the time asked for at the airport"
 
@@ -44,7 +44,7 @@ def test_5_leg_of_the_itinerary(record):
     place = as_place(case.city, found["place_results"])
     current.TRIP = TripPlaces(place, place, [found["airport"]], [], [found["airport"]])
     leg = to_airport_leg(found["flight"], {found["flight"]["id"]: {"to_airport": found["answer"]}}, None)
-    assert leg["kind"] == "timetable" and leg["grade"] in "AB"
+    assert leg["kind"] == "timetable" and graded(leg)
     assert leg["steps"] and leg["price_eur"] >= 0
     assert leg["arrive"] <= to_minutes(found["flight"]["departure_time"]) - current.SETTINGS.min_airport_minutes
     assert leg["arrive"] - leg["leave"] <= reasonable_minutes(case, found), f"{leg['arrive'] - leg['leave']} minutes for {found['airport']['km']} km"

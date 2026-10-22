@@ -101,12 +101,13 @@ def kiwi_flights(text: str) -> list[dict[str, Any]] | None:
              "back": kiwi_leg(itinerary["inbound"]) if itinerary.get("inbound") else None}
             for itinerary in itineraries]
 
-async def kiwi_destinations(airport: str, country: str, days: Days, max_stops: int = 0, excluded: str = "") -> list[dict[str, Any]] | None:
+async def kiwi_destinations(airport: str, country: str, days: Days, max_stops: int = 0, excluded: str = "") -> list[dict[str, Any]]:
     """Kiwi's cheapest flights from an airport to a country (its two-letter code): one per city of that country, at
     most kiwi.RESULT_CAP, with at most max_stops stops each way, of every airline but the excluded ones (IATA codes,
-    separated by commas). None when Kiwi did not answer. kiwi.connect_kiwi must have been called."""
+    separated by commas). Raises when Kiwi did not answer, with what it said instead: a refusal (403) must be told
+    apart from a failure. kiwi.connect_kiwi must have been called."""
     if kiwi.kiwi_search is None:
-        return None
+        raise RuntimeError("Kiwi is not connected")
     as_kiwi = lambda day: f"{day[8:10]}/{day[5:7]}/{day[0:4]}"
     asked = {"flyFrom": airport, "flyTo": country, "departureDate": as_kiwi(days.first), "departureDateTo": as_kiwi(days.last),
              "sort": "price", "one_for_city": True,   # one per city: the 15 answers are 15 places, not one place 15 times
@@ -119,5 +120,7 @@ async def kiwi_destinations(airport: str, country: str, days: Days, max_stops: i
         result = await kiwi.kiwi_search.ainvoke(asked)
         text = result if isinstance(result, str) else "".join(block.get("text", "") for block in result if isinstance(block, dict))
         found = kiwi_flights(text)
-        entry["result"] = text[:200] if found is None else f"ok: {len(found)} flights"
+        if found is None:
+            raise ValueError(f"not an answer: {text[:200]}")
+        entry["result"] = f"ok: {len(found)} flights"
     return found

@@ -1,8 +1,8 @@
 {
 "case": {"country": "MT", "airport": "MLA", "city": "Valletta", "known_gap": "Malta's buses are not in the published timetables", "gap_in": "", "remote": false},
 "direction": "arrival",
-"recorded": "2026-10-20",
-"flight": {"id": "MT-MLA-Valletta", "date": "2026-12-29", "arrival_airport": "MLA", "arrival_time": "11:00"},
+"recorded": "2026-10-22",
+"flight": {"id": "MT-MLA-Valletta", "date": "2026-12-31", "arrival_airport": "MLA", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Valletta", "display_name": "Valletta, Port Region, Malta", "addresstype": "city", "importance": 0.6344196061019651, "lat": "35.8989979", "lon": "14.5136607", "namedetails": {"name": "Il-Belt Valletta", "name:en": "Valletta"}, "address": {"country": "Malta"}}],
 "airport": {"code": "MLA", "name": "Malta International Airport", "city": "Valletta", "country": "MT", "large": true, "latitude": 35.845932, "longitude": 14.491546, "km": 6},

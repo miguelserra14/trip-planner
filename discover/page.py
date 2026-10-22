@@ -1,14 +1,27 @@
 """The map page: one dot per destination, its colour by the total price, the list below, and under it what was
 searched (breakdown.py). Clicking a dot or a row explains that trip: when to be at the airport, each flight with
 the day and time it leaves and lands, the connections, the way back, the prices, and the links to book it, to
-compare it and to reach the airports. One HTML file, opened in the browser. The map is OpenStreetMap's, drawn by
-Leaflet. Every text is put in the page as text, never as markup, and every link is https."""
+compare it and to reach the airports. And the way to check it in the planner: a button when the page is served
+(serve.py), the command to run when it is opened as a file. The map is OpenStreetMap's, drawn by Leaflet, whose
+files are checked against their known hashes. Every text is put in the page as text, never as markup, and every
+link is https.
+
+The prices carry the planner's grades: the flights A, read by code from the source when the map was made (the
+booking page has the one that counts), each way to and from the airports its own (access.py). While the cheapest
+destinations are looked up in the timetables (confirm.py), the served page asks for them again and redraws itself."""
 import json
+import os
+import subprocess
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
 
+from discover.access import city_name
 from discover.finder import Found
+from discover.plan import command, trips
 from trip_planner.places import load_airports
+
+ROOT = Path(__file__).parents[1]
 
 def google_flights(flight: dict[str, Any]) -> str:
     """Google Flights, searching the same trip on the same days: to compare the price and see every airline."""
@@ -18,6 +31,10 @@ def google_flights(flight: dict[str, Any]) -> str:
     return "https://www.google.com/travel/flights?q=" + quote(asked)
 
 LONG_WAIT_MINUTES = 6 * 60   # a connection this long, or through the night, is shown as a warning
+# Being at the departure airport before this hour, or landing from this hour on, is shown as a warning: public
+# transport may not run then, and the map does not know. The planner, opened on the trip, does.
+EARLY_AIRPORT_HOUR = 6
+LATE_LANDING_HOUR = 23
 
 def airport_place(code: str, airports: dict[str, Any]) -> str:
     """An airport as a place to look up in a map: its name, with "airport" when the name does not say it."""
@@ -42,27 +59,57 @@ def links(flight: dict[str, Any], found: Found, airports: dict[str, Any]) -> lis
                             "url": transit(airport_place(flight["back"]["to"], airports), found.place.label)})
     return found_links
 
-def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120) -> str:
-    """airport_minutes is how long before a flight the traveller is at the airport (the planner's setting)."""
+def shown_command(trip: list[str]) -> str:
+    """The command that opens the planner on a trip, as the traveller would type it in the repository's folder."""
+    arguments = command(trip)
+    try:
+        python = os.path.relpath(arguments[0], ROOT)
+        arguments[0] = arguments[0] if python.startswith("..") else python
+    except ValueError:   # another drive
+        pass
+    return subprocess.list2cmdline(arguments)
+
+def as_script(value: Any) -> str:
+    """A value as JavaScript in the page: JSON without any "<", so that nothing in it can end or open a tag."""
+    return json.dumps(value, ensure_ascii=False).replace("<", "\\u003c")
+
+def map_state(found: Found, sections: list[dict[str, Any]], running: bool = False, version: int = 0) -> dict[str, Any]:
+    """What the page shows that changes while the timetables are looked up (confirm.py): the destinations, the
+    flights left out, the cities looked up and the sections. The served page asks for it again while running."""
     airports = load_airports()
-    points = [{**flight, "name": airports[flight["to"]]["city"] or airports[flight["to"]]["name"], "country": airports[flight["to"]]["country"],
-               "lat": airports[flight["to"]]["latitude"], "lon": airports[flight["to"]]["longitude"], "links": links(flight, found, airports)}
+    planned = trips(found, airports)
+    plan = lambda key: {"key": key, "command": shown_command(planned[key])} if key in planned else None
+    name = lambda code: found.centres[code].english_name if code in found.centres else city_name(airports[code]) or airports[code]["name"]
+    points = [{**flight, "name": name(flight["to"]), "country": airports[flight["to"]]["country"],
+               "lat": airports[flight["to"]]["latitude"], "lon": airports[flight["to"]]["longitude"], "links": links(flight, found, airports),
+               "plan": {"out": plan(f"{flight['to']}-out"), "back": plan(f"{flight['to']}-back")},
+               "confirmed": all(leg["looked_up"] for leg in flight.get("access") or [{"looked_up": False}])}
               for flight in found.destinations if flight["to"] in airports]
-    names = {code: airports[code]["name"] for flight in points for leg in (flight, flight.get("back")) if leg
-             for segment in [leg, *leg.get("segments", [])] for code in (segment["from"], segment["to"]) if code in airports}
-    mine = {airport["code"]: {"km": airport["km"], "ground_eur": airport["ground_eur"]} for airport in found.departures}
-    data = json.dumps({"origin": {"name": found.place.label, "lat": found.place.latitude, "lon": found.place.longitude},
-                       "points": points, "days": str(found.days), "round_trip": found.days.round_trip, "sources": sources,
-                       "sections": sections, "names": names, "mine": mine, "airport_minutes": airport_minutes,
-                       "long_wait": LONG_WAIT_MINUTES},
-                      ensure_ascii=False).replace("</", "<\\/")
-    return PAGE.replace("__DATA__", data).replace("__TITLE__", f"Discover from {found.place.english_name}")
+    codes = {code for flight in points for leg in (flight, flight.get("back")) if leg
+             for segment in [leg, *leg.get("segments", [])] for code in (segment["from"], segment["to"])}
+    codes |= {other["to"] for flight in points for other in flight.get("also", [])} | {gone["to"] for gone in found.discarded}
+    return {"version": version, "running": running, "points": points, "names": {code: airports[code]["name"] for code in codes if code in airports},
+            "discarded": found.discarded, "lookups": found.lookups, "confirm_stop": found.confirm_stop, "sections": sections,
+            "coverage": found.coverage}
+
+def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120, token: str = "",
+             running: bool = False, max_lookups: int = 0) -> str:
+    """airport_minutes is how long before a flight the traveller is at the airport (the planner's setting). token
+    is the served page's (serve.py): without it the page shows the command to open the planner instead of a button,
+    and does not ask for the destinations again. running says the timetables are still being looked up."""
+    data = {"origin": {"name": found.place.label, "lat": found.place.latitude, "lon": found.place.longitude},
+            "days": str(found.days), "round_trip": found.days.round_trip, "sources": sources, "airport_minutes": airport_minutes,
+            "long_wait": LONG_WAIT_MINUTES, "early_hour": EARLY_AIRPORT_HOUR, "late_hour": LATE_LANDING_HOUR, "token": token,
+            "max_lookups": max_lookups, "state": map_state(found, sections, running)}
+    return PAGE.replace("__DATA__", as_script(data)).replace("__TITLE__", f"Discover from {found.place.english_name}")
 
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <style>
   :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --panel: #f5f5f7; --link: #0a66c2; --pick: #fff6d6; }
   @media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --fg: #f2f2f7; --muted: #a1a1a6; --line: #3a3a3c; --panel: #2c2c2e; --link: #6cb4ff; --pick: #3d3519; } }
@@ -71,6 +118,7 @@ PAGE = """<!doctype html>
   header { padding: 12px 16px; } h1 { font-size: 18px; margin: 0 0 4px; } header p { margin: 0; color: var(--muted); }
   h2 { font-size: 16px; margin: 28px 16px 4px; } h3 { font-size: 14px; margin: 20px 16px 4px; } p.note { margin: 4px 16px 8px; color: var(--muted); max-width: 70em; }
   #map { height: 58vh; } .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; }
+  #status { margin-top: 4px; }
   #detail { background: var(--panel); padding: 12px 16px 16px; border-bottom: 1px solid var(--line); }
   #detail h2 { margin: 0 0 2px; } #detail h4 { margin: 14px 0 4px; font-size: 14px; } #detail p { margin: 2px 0; }
   #detail .muted { color: var(--muted); } #detail ol { margin: 4px 0; padding-left: 20px; } #detail li { margin: 2px 0; }
@@ -79,22 +127,25 @@ PAGE = """<!doctype html>
   table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: 6px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; } td.n { text-align: right; font-variant-numeric: tabular-nums; }
   #rows tr { cursor: pointer; } #rows tr:hover, #rows tr.picked { background: var(--pick); }
-  .wrap { overflow-x: auto; }
+  .wrap { overflow-x: auto; } #tiles { margin: 4px 16px; color: var(--muted); }
+  #detail pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px 8px; border: 1px solid var(--line); }
 </style></head><body>
-<header><h1 id="title"></h1><p id="about"></p><p class="legend" id="legend"></p></header>
+<header><h1 id="title"></h1><p id="about"></p><p id="status"></p><p class="legend" id="legend"></p></header>
 <div id="map"></div>
+<p id="tiles" hidden></p>
 <section id="detail" hidden></section>
 <div class="wrap"><table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="discarded"></div>
 <h2>What was searched</h2>
 <div id="sections"></div>
 <script>
 const data = __DATA__;
+let state = data.state;
+let picked = null;   // the destination whose trip is open, by its airport
 const colours = ["#2e9e4f", "#8fbf3f", "#e6b422", "#e67e22", "#d0453a"];
-const totals = data.points.map(p => p.total_eur).sort((a, b) => a - b);
-const band = total => Math.min(colours.length - 1, Math.floor(colours.length * totals.filter(t => t < total).length / Math.max(1, totals.length)));
 const eur = value => value.toFixed(0) + " €";
 const add = (parent, tag, text, kind) => { const element = document.createElement(tag); if (text !== undefined) element.textContent = text; if (kind) element.className = kind; parent.append(element); return element; };
-const place = code => (data.names[code] || code) + " (" + code + ")";
+const place = code => (state.names[code] || code) + " (" + code + ")";
 const day = text => new Date(text + "T12:00:00").toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"});
 const when = (date, time) => time + " on " + day(date);
 const hours = minutes => (minutes >= 1440 ? Math.floor(minutes / 1440) + "d " : "") + Math.floor(minutes % 1440 / 60) + "h" + String(minutes % 60).padStart(2, "0");
@@ -102,26 +153,31 @@ const between = (date1, time1, date2, time2) => Math.round((new Date(date2 + "T"
 const before = (date, time, minutes) => { const moment = new Date(new Date(date + "T" + time) - minutes * 60000);
   const two = number => String(number).padStart(2, "0");
   return [moment.getFullYear() + "-" + two(moment.getMonth() + 1) + "-" + two(moment.getDate()), two(moment.getHours()) + ":" + two(moment.getMinutes())]; };
+const worst = legs => legs.reduce((grade, leg) => [grade, leg.grade, leg.price_grade].sort().pop(), "A");
 
 document.getElementById("title").textContent = (data.round_trip ? "Cheapest return trips from " : "Cheapest flights from ") + data.origin.name;
-document.getElementById("about").textContent = data.days + " · " + data.points.length + " destinations · " + data.sources + " · click a dot or a row for the trip";
 const legend = document.getElementById("legend");
 colours.forEach((colour, i) => { const dot = document.createElement("span"); dot.style.background = colour; legend.append(dot, i === 0 ? "cheapest" : i === colours.length - 1 ? "dearest" : ""); });
+legend.append(" · a dark ring: every way to and from the airports looked up in the timetables");
 const map = L.map("map").setView([data.origin.lat, data.origin.lon], 4);
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 12, attribution: "© OpenStreetMap"}).addTo(map);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 12, attribution: "© OpenStreetMap"}).addTo(map)
+  .once("tileerror", () => { const note = document.getElementById("tiles"); note.hidden = false;
+    note.textContent = "The map's background could not be loaded from OpenStreetMap, which may refuse a page opened as a file: "
+      + "the dots, the list and the trips are all there. python -m discover serves the page, which OpenStreetMap accepts."; });
 L.circleMarker([data.origin.lat, data.origin.lon], {radius: 8, color: "#1f6fd0", fillOpacity: 1}).addTo(map).bindTooltip(data.origin.name);
+const markers = L.layerGroup().addTo(map);
 let line = null;
 
 // One leg of the trip, flight by flight, with the connections between them. What the traveller should know about a
-// connection before booking it goes into warnings.
-function describeLeg(parent, title, leg, first, warnings) {
+// connection before booking it goes into warnings. toAirport and fromAirport are the ways to and from its airports:
+// once looked up in the timetables, the warnings about the hour are theirs to give, not the map's.
+function describeLeg(parent, title, leg, warnings, toAirport, fromAirport) {
   add(parent, "h4", title + " — " + leg.airline + (leg.stops ? ", " + leg.stops + " stop" + (leg.stops > 1 ? "s" : "") : ", direct"));
-  if (first) {
-    const [date, time] = before(leg.date, leg.time, data.airport_minutes);
-    const mine = data.mine[leg.from] || {};
-    add(parent, "p", "Be at " + place(leg.from) + " by " + when(date, time) + " (" + data.airport_minutes + " min before the flight). "
-        + (mine.km ? "It is " + mine.km + " km from " + data.origin.name + ", about " + eur(mine.ground_eur) + " by public transport (an estimate)." : ""));
-  }
+  const [date, time] = before(leg.date, leg.time, data.airport_minutes);
+  if (!(toAirport && toAirport.looked_up) && (date !== leg.date || Number(time.slice(0, 2)) < data.early_hour))
+    warnings.push("Being at " + place(leg.from) + " by " + when(date, time) + " may take the night before or a taxi: "
+                  + "the timetables were not looked up for it. The planner, below, does.");
+  add(parent, "p", "Be at " + place(leg.from) + " by " + when(date, time) + " (" + data.airport_minutes + " min before the flight).");
   const steps = add(parent, "ol");
   leg.segments.forEach((segment, index) => {
     if (index) {
@@ -141,28 +197,69 @@ function describeLeg(parent, title, leg, first, warnings) {
     add(steps, "li", "Leave " + place(segment.from) + " at " + when(segment.date, segment.time) + ", land at " + place(segment.to) + " at "
         + (segment.arrival_time ? when(segment.arrival_date, segment.arrival_time) : "a time not given") + " — " + (segment.airline || leg.airline) + (segment.flight ? " " + segment.flight : ""));
   });
+  const landing = Number((leg.arrival_time || "12").slice(0, 2));
+  if (!(fromAirport && fromAirport.looked_up) && leg.arrival_time && (landing >= data.late_hour || landing < data.early_hour))
+    warnings.push("Landing at " + place(leg.to) + " at " + when(leg.arrival_date, leg.arrival_time) + ": public transport may have stopped by then.");
   add(parent, "p", "You arrive at " + place(leg.to) + " at " + (leg.arrival_time ? when(leg.arrival_date, leg.arrival_time) : "a time not given")
       + (leg.minutes ? ", " + hours(leg.minutes) + " after take-off" : "") + ". Times are local, at each airport.");
 }
 
-function explain(p) {
+// The ways to and from the airports, each with its grades and where it comes from
+function describeAccess(parent, p) {
+  add(parent, "h4", "To and from the airports");
+  const list = add(parent, "ul", undefined, "links");
+  for (const leg of p.access || []) {
+    const where = leg.to_airport ? (leg.place || "the city") + " to " + place(leg.airport) : place(leg.airport) + " to " + (leg.place || "the city");
+    const times = leg.looked_up && leg.leave ? ", leaving at " + leg.leave + " and arriving at " + leg.arrive : "";
+    const item = add(list, "li", where + ": " + eur(leg.price_eur) + (leg.minutes ? " and " + hours(leg.minutes) : "") + times
+        + " (timetable " + leg.grade + ", price " + leg.price_grade + "). "
+        + (leg.looked_up ? "Looked up for this flight: " + leg.how : leg.how.charAt(0).toUpperCase() + leg.how.slice(1)) + ".",
+        leg.looked_up ? "" : "muted");
+    if (leg.url && leg.url.startsWith("https://")) {
+      item.append(" ");
+      const source = add(item, "a", "Source");
+      source.href = leg.url; source.target = "_blank"; source.rel = "noopener noreferrer";
+    }
+    if (leg.quote) add(item, "div", "“" + leg.quote + "”", "muted");
+    // Every published way from that airport, so the traveller sees the choice and where each price was read
+    if (leg.options && leg.options.length > 1) {
+      const others = add(item, "ul");
+      for (const option of leg.options) {
+        const line = add(others, "li", [option.operator, option.mode].filter(Boolean).join(" ") + (option.to ? " to " + option.to : "")
+                         + ": " + (option.from_price ? "from " : "") + option.price_text + " (" + eur(option.price_eur) + "), " + option.source + " ", "muted");
+        if (option.url && option.url.startsWith("https://")) {
+          const link = add(line, "a", "source");
+          link.href = option.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+        }
+      }
+    }
+  }
+}
+
+function explain(p, scroll) {
+  picked = p.to;
   const panel = document.getElementById("detail");
   panel.replaceChildren();
   panel.hidden = false;
   const close = add(panel, "button", "Close", "close");
-  close.onclick = () => { panel.hidden = true; if (line) line.remove(); };
+  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); };
   add(panel, "h2", data.origin.name + " → " + p.name + " (" + p.to + ", " + p.country + ")");
-  add(panel, "p", "Total " + eur(p.total_eur) + ": " + (p.back ? "flights there and back " : "flight ") + eur(p.price_eur) + " (" + p.source
-      + ", when the map was made) and about " + eur(p.ground_eur) + " to reach the airport" + (p.back ? " and to get home" : "") + ".", "muted");
+  add(panel, "p", "Total " + eur(p.total_eur) + ": " + (p.back ? "flights there and back " : "flight ") + eur(p.price_eur) + " (grade A: " + p.source
+      + ", when the map was made) and " + eur(p.ground_eur) + " to and from the airports. "
+      + (p.confirmed ? "Every way to and from the airports was looked up in the timetables for these flights."
+         : "Not every way to and from the airports was looked up for these flights: the grades below say which."), "muted");
+  if (p.also && p.also.length)
+    add(panel, "p", "Also to " + p.name + ": " + p.also.map(other => place(other.to) + " from " + other.from + ", " + eur(other.total_eur)
+        + (other.access && other.access.every(leg => leg.looked_up) ? " (looked up)" : " (estimated)")).join("; ") + ".", "muted");
   const warnings = [];
   const warning = add(panel, "div");
-  describeLeg(panel, "Out", p, true, warnings);
+  const access = p.access || [];
+  describeLeg(panel, "Out", p, warnings, access[0], access[1]);
   if (p.back) {
     add(panel, "p", hours(between(p.arrival_date || p.date, p.arrival_time || p.time, p.back.date, p.back.time)) + " at the destination.", "muted");
-    describeLeg(panel, "Back", p.back, false, warnings);
-    const mine = data.mine[p.back.to] || {};
-    if (mine.km) add(panel, "p", "Then " + mine.km + " km home to " + data.origin.name + ", about " + eur(mine.ground_eur) + " by public transport (an estimate).");
+    describeLeg(panel, "Back", p.back, warnings, access[2], access[3]);
   }
+  describeAccess(panel, p);
   if (warnings.length) {
     add(warning, "h4", "Before booking", "warn");
     const list = add(warning, "ul", undefined, "links");
@@ -176,39 +273,113 @@ function explain(p) {
     anchor.href = link.url; anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
   }
   add(panel, "p", "The price may have changed since: the booking page has the one that counts.", "muted");
+  describePlan(panel, p);
   if (line) line.remove();
   line = L.polyline([[data.origin.lat, data.origin.lon], [p.lat, p.lon]], {color: "#1f6fd0", weight: 2, dashArray: "4 6"}).addTo(map);
   document.querySelectorAll("#rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === p.to));
-  panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+  if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
+// The way to check the trip in the planner, which looks up the ground transport in real timetables: a button when
+// the page is served, the command to run when it was opened as a file.
+function describePlan(panel, p) {
+  const legs = [["the way there", p.plan.out], ["the way back", p.plan.back]].filter(([, plan]) => plan);
+  if (!legs.length) return;
+  add(panel, "h4", "Check it in the planner");
+  add(panel, "p", "The planner opens with this trip in its form: it compares every airport of both cities, with the transport of each, "
+      + "and leaves out a flight that cannot be reached. It searches only when you ask it to.", "muted");
+  for (const [label, plan] of legs) {
+    if (data.token) {
+      const line = add(panel, "p");
+      const button = add(line, "button", "Open the planner on " + label);
+      const status = add(line, "span", "", "muted");
+      button.onclick = () => {
+        status.textContent = " ...";
+        fetch("/plan", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({token: data.token, trip: plan.key})})
+          .then(response => response.json().then(answer => { status.textContent = " " + (response.ok ? "The planner is " : "Refused: ") + answer.result + "."; }))
+          .catch(() => { status.textContent = " The map's server has stopped. In the repository's folder, run: " + plan.command; });
+      };
+    } else {
+      add(panel, "p", "For " + label + ", run in the repository's folder:");
+      add(panel, "pre", plan.command);
+    }
+  }
 }
 
 const head = document.getElementById("head");
-for (const [title, number] of [["Destination"], ["Out"], ["Back"], ["Airline"], [data.round_trip ? "Flights" : "Flight", 1], ["To and from the airport (est.)", 1], ["Total", 1]])
+for (const [title, number] of [["Destination"], ["Out"], ["Back"], ["Airline"], [(data.round_trip ? "Flights" : "Flight") + " (A)", 1],
+                               ["To and from the airports", 1], ["Total", 1], ["Timetables"]])
   add(head, "th", title, number ? "n" : "");
 const leg = (flight, from) => from + " " + flight.date + " " + flight.time + (flight.stops ? " +" + flight.stops : "");
 const rows = document.getElementById("rows");
-for (const p of data.points) {
-  L.circleMarker([p.lat, p.lon], {radius: 7, color: colours[band(p.total_eur)], fillOpacity: 0.85, weight: 1})
-    .addTo(map).bindTooltip(p.name + " · " + eur(p.total_eur)).on("click", () => explain(p));
-  const row = rows.insertRow();
-  row.dataset.to = p.to;
-  row.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
-  for (const [value, number] of [[p.name + " (" + p.to + ")"], [leg(p, p.from)], [p.back ? leg(p.back, p.back.from) + (p.back.to !== p.from ? " → " + p.back.to : "") : "-"],
-                                 [p.airline + (p.back && p.back.airline !== p.airline ? " / " + p.back.airline : "")],
-                                 [eur(p.price_eur), 1], [eur(p.ground_eur), 1], [eur(p.total_eur), 1]]) {
-    const cell = row.insertCell(); cell.textContent = value; if (number) cell.className = "n";
+
+function describeStatus() {
+  const status = document.getElementById("status");
+  const looked = state.lookups.length;
+  status.textContent = state.running
+    ? "Looking up the cheapest destinations in the real timetables: " + looked + " cities so far, at most " + data.max_lookups + ". The map updates itself."
+    : looked ? "Looked up in the real timetables: " + looked + " cities. " + (state.confirm_stop ? "The lookups " + state.confirm_stop + "." : "")
+    : "Not looked up in the timetables: the ways to and from the airports are estimates, or what earlier maps looked up.";
+}
+
+function render() {
+  const totals = state.points.map(p => p.total_eur).sort((a, b) => a - b);
+  const band = total => Math.min(colours.length - 1, Math.floor(colours.length * totals.filter(t => t < total).length / Math.max(1, totals.length)));
+  document.getElementById("about").textContent = data.days + " · " + state.points.length + " destinations · " + data.sources + " · click a dot or a row for the trip. "
+    + "Flight prices: grade A, as the source gave them when the map was made. To and from the airports: the grade of each way, in the trip.";
+  const seen = state.coverage || {};
+  if (seen.flown)   // how much of what is flown from here the map found: the honest measure of what it may miss
+    document.getElementById("about").textContent += " Found " + seen.found + " of the " + seen.flown + " destinations flown from "
+      + seen.airports.join(", ") + (seen.ryanair_no_fare ? ", and " + seen.ryanair_no_fare + " more are Ryanair's with no fare those days" : "")
+      + (seen.missing.length ? "; the " + seen.missing.length + " not found are listed under What was searched." : ".");
+  describeStatus();
+  markers.clearLayers();
+  rows.replaceChildren();
+  for (const p of state.points) {
+    L.circleMarker([p.lat, p.lon], {radius: 7, fillColor: colours[band(p.total_eur)], color: p.confirmed ? "#1d1d1f" : colours[band(p.total_eur)],
+                                    fillOpacity: 0.85, weight: p.confirmed ? 2 : 1})
+      .addTo(markers).bindTooltip(p.name + " · " + eur(p.total_eur) + (p.confirmed ? " · looked up" : "")).on("click", () => explain(p));
+    const row = rows.insertRow();
+    row.dataset.to = p.to;
+    row.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
+    for (const [value, number] of [[p.name + " (" + p.to + ")"], [leg(p, p.from)], [p.back ? leg(p.back, p.back.from) + (p.back.to !== p.from ? " → " + p.back.to : "") : "-"],
+                                   [p.airline + (p.back && p.back.airline !== p.airline ? " / " + p.back.airline : "")],
+                                   [eur(p.price_eur), 1], [eur(p.ground_eur) + " (" + worst(p.access || []) + ")", 1], [eur(p.total_eur), 1],
+                                   [p.confirmed ? "looked up" : (p.access || []).some(leg => leg.looked_up || leg.checked) ? "partly" : "estimated"]]) {
+      const cell = row.insertCell(); cell.textContent = value; if (number) cell.className = "n";
+    }
   }
+  const discarded = document.getElementById("discarded");
+  discarded.replaceChildren();
+  if (state.discarded.length) {
+    add(discarded, "h2", "Left out: the timetables show they cannot be made");
+    const list = add(add(discarded, "div", undefined, "note"), "ul");
+    for (const gone of state.discarded) add(list, "li", place(gone.to) + " from " + gone.from + " on " + gone.date + ": " + gone.reason);
+  }
+  const sections = document.getElementById("sections");
+  sections.replaceChildren();
+  for (const part of state.sections) {
+    add(sections, "h3", part.title);
+    if (part.note) add(sections, "p", part.note, "note");
+    if (!part.header.length) continue;
+    const table = add(add(sections, "div", undefined, "wrap"), "table");
+    const top = table.createTHead().insertRow();
+    part.header.forEach(title => add(top, "th", title));
+    const body = table.createTBody();
+    for (const values of part.rows) { const row = body.insertRow(); values.forEach(value => { row.insertCell().textContent = value; }); }
+  }
+  const open = picked && state.points.find(p => p.to === picked);
+  if (open) explain(open, false);
 }
-const sections = document.getElementById("sections");
-for (const part of data.sections) {
-  add(sections, "h3", part.title);
-  if (part.note) add(sections, "p", part.note, "note");
-  if (!part.header.length) continue;
-  const table = add(add(sections, "div", undefined, "wrap"), "table");
-  const top = table.createTHead().insertRow();
-  part.header.forEach(title => add(top, "th", title));
-  const body = table.createTBody();
-  for (const values of part.rows) { const row = body.insertRow(); values.forEach(value => { row.insertCell().textContent = value; }); }
+
+// While the timetables are looked up, the served page asks for the destinations again
+function follow() {
+  if (!data.token || !state.running) return;
+  setTimeout(() => fetch("/state").then(response => response.json())
+    .then(next => { if (next.version !== state.version) { state = next; render(); } follow(); })
+    .catch(() => { state.running = false; describeStatus(); }), 4000);
 }
+render();
+follow();
 </script></body></html>
 """

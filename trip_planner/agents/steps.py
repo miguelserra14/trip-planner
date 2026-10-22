@@ -9,7 +9,7 @@ from typing import Any
 
 from langchain.messages import HumanMessage
 
-from trip_planner import current
+from trip_planner import current, ground_choice
 from trip_planner.agents import subagents
 from trip_planner.config import LIGHTS
 from trip_planner.itineraries import selection
@@ -158,6 +158,8 @@ async def ground_transport(checked: list[dict[str, Any]], asked: set = frozenset
     asked is the airports the specialists were already asked about, as ("to" or "from", code): not asked again."""
     leaving = {flight["departure_airport"] for flight in checked if ("to", flight["departure_airport"]) not in asked}
     landing = {flight["arrival_airport"] for flight in checked if ("from", flight["arrival_airport"]) not in asked}
+    # On a side where the traveller chose how to travel, what a model finds cannot be checked and is not used: not asked
+    leaving, landing = (set() if ground_choice.restricted(True) else leaving), (set() if ground_choice.restricted(False) else landing)
     if await asyncio.to_thread(web.available):
         return tuple(await asyncio.gather(read_timetables(checked), ask_transfer_agent(checked, leaving), ask_destination_agent(checked, landing)))
     # Plan B, without the web search: the timetables first, then the specialists only for the airports no
@@ -199,7 +201,8 @@ def itineraries_of(flights: list[dict[str, Any]], ground: dict[str, Any], transf
     for flight in flights:
         made[flight["id"]] = itinerary_or_reason(flight, ground, transfer_of, route_of)[0]
     price_itineraries([itinerary for itinerary in made.values() if itinerary])
-    return made
+    # One whose operator says a connection does not run that day cannot win, nor stop the search for the others
+    return {flight_id: itinerary if itinerary and not itinerary["not_running"] else None for flight_id, itinerary in made.items()}
 
 async def look_up_in_rounds(flights: list[dict[str, Any]]) -> tuple:
     """The ground transport of the flights that can still win, a few at a time (see selection.py).
@@ -273,6 +276,9 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                 continue
             itineraries.append(itinerary)
         price_itineraries(itineraries)
+        rejected += [f"{itinerary['flight']['id']} ({itinerary['total_cost']:.0f} EUR): {itinerary['not_running']}"
+                     for itinerary in itineraries if itinerary["not_running"]]
+        itineraries = [itinerary for itinerary in itineraries if not itinerary["not_running"]]
 
         # Reliability comes before price: an itinerary below the minimum grade is only shown when nothing better exists
         reliable = [itinerary for itinerary in itineraries if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
@@ -305,7 +311,8 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                         continue   # no real connection at all: it is already among the rejected, with the reason
                     if itinerary["breaches"]:
                         price_itinerary(itinerary)
-                        near.append(itinerary)
+                        if not itinerary["not_running"]:
+                            near.append(itinerary)
             reliable = [itinerary for itinerary in near if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
             if near and not reliable:
                 warnings.append(tr("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))

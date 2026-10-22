@@ -8,7 +8,7 @@ were recorded goes through today's code. With --live the services are asked agai
 import pytest
 
 from tests.cases import CASES
-from tests.conftest import check_city, check_covered, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
+from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
 from trip_planner import current
 from trip_planner.itineraries.legs import from_airport_leg
 from trip_planner.sources import timetables
@@ -35,7 +35,7 @@ def test_4_connections_after_landing(record):
     ready = to_minutes(found["flight"]["arrival_time"]) + current.SETTINGS.min_landing_minutes
     for option in answer["options"]:
         assert ready <= option["leave"] < 24 * 60 and option["leave"] < option["arrive"] < 24 * 60 + current.SETTINGS.night_minutes
-        assert option["steps"] and option["grade"] in "AB"
+        assert option["steps"] and graded(option)
 
 def test_5_leg_of_the_itinerary(record):
     """The leg the itinerary gets is a real connection, with a schedule read from a timetable."""
@@ -44,6 +44,6 @@ def test_5_leg_of_the_itinerary(record):
     if not found["answer"]["options"]:
         expect_gap(case, found)
     leg = from_airport_leg(found["flight"], {found["flight"]["id"]: {"from_airport": found["answer"]}}, None)
-    assert leg["kind"] == "timetable" and leg["grade"] in "AB"
+    assert leg["kind"] == "timetable" and graded(leg)
     assert leg["steps"] and leg["price_eur"] >= 0
     assert leg["arrive"] - leg["leave"] <= reasonable_minutes(case, found), f"{leg['arrive'] - leg['leave']} minutes for {found['airport']['km']} km"

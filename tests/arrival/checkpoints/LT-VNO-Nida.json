@@ -1,13 +1,13 @@
 {
-"case": {"country": "LT", "airport": "VNO", "city": "Nida, Lithuania", "known_gap": "published, but one coach a day each way: it leaves Vilnius at dawn and Nida in the afternoon", "gap_in": "", "remote": true},
+"case": {"country": "LT", "airport": "VNO", "city": "Nida, Lithuania", "known_gap": "published, but one coach a day each way: it leaves Vilnius at dawn and Nida in the afternoon. The other way is by the Klaipeda ferry, which is not published", "gap_in": "", "remote": true},
 "direction": "arrival",
-"recorded": "2026-10-13",
-"flight": {"id": "LT-VNO-Nida", "date": "2026-12-22", "arrival_airport": "VNO", "arrival_time": "11:00"},
+"recorded": "2026-10-22",
+"flight": {"id": "LT-VNO-Nida", "date": "2026-12-31", "arrival_airport": "VNO", "arrival_time": "11:00"},
 "reached": ["place", "terminal", "stops", "connections"],
 "place_results": [{"name": "Nida", "display_name": "Nida, Neringa, Neringos savivaldybė, Klaipėda County, Lithuania", "addresstype": "suburb", "importance": 0.437614861262228, "lat": "55.3036064", "lon": "21.0038475", "namedetails": {"name": "Nida", "name:en": "Nida"}, "address": {"country": "Lithuania"}}],
 "airport": {"code": "VNO", "name": "Vilnius International Airport", "city": "Vilnius", "country": "LT", "large": true, "latitude": 54.634102, "longitude": 25.285801, "km": 283},
 "terminal": [54.6430552, 25.2811371],
-"stops_around": [{"name": "Oro uostas", "stopId": "lt-vilnius_18375", "lat": 54.64396, "lon": 25.27959, "modes": ["BUS"]}, {"name": "Oro uostas", "stopId": "lt-LTG-Link_Oro uostas", "lat": 54.642628, "lon": 25.276487, "modes": ["REGIONAL_RAIL"]}, {"name": "Vilniaus oro uostas", "stopId": "lt-kautra_20909", "lat": 54.64298, "lon": 25.27955, "modes": ["COACH"]}, {"name": "Rodūnios kelias", "stopId": "lt-vilnius_7817", "lat": 54.6416, "lon": 25.27772, "modes": ["BUS"]}, {"name": "Rodūnios kelias", "stopId": "lt-vilnius_7820", "lat": 54.642210000000006, "lon": 25.27783, "modes": ["BUS"]}, {"name": "Felikso Vaitkaus st.", "stopId": "lt-vilnius_8240", "lat": 54.64478, "lon": 25.27357, "modes": ["BUS"]}, {"name": "Felikso Vaitkaus st.", "stopId": "lt-vilnius_5184", "lat": 54.64352, "lon": 25.27401, "modes": ["BUS"]}, {"name": "Dariaus ir Girėno st.", "stopId": "lt-vilnius_5182", "lat": 54.64719, "lon": 25.27313, "modes": ["BUS"]}],
+"stops_around": [{"name": "Oro uostas", "stopId": "lt-LTG-Link_Oro uostas", "lat": 54.642628, "lon": 25.276487, "modes": ["REGIONAL_RAIL"]}, {"name": "Vilniaus oro uostas", "stopId": "lt-kautra_20909", "lat": 54.64298, "lon": 25.27955, "modes": ["COACH"]}, {"name": "Oro uostas", "stopId": "lt-vilnius_18375", "lat": 54.64396, "lon": 25.27959, "modes": ["BUS"]}, {"name": "Rodūnios kelias", "stopId": "lt-vilnius_7820", "lat": 54.642210000000006, "lon": 25.27783, "modes": ["BUS"]}, {"name": "Rodūnios kelias", "stopId": "lt-vilnius_7817", "lat": 54.6416, "lon": 25.27772, "modes": ["BUS"]}, {"name": "Dariaus ir Girėno st.", "stopId": "lt-vilnius_5182", "lat": 54.64719, "lon": 25.27313, "modes": ["BUS"]}, {"name": "Felikso Vaitkaus st.", "stopId": "lt-vilnius_8240", "lat": 54.64478, "lon": 25.27357, "modes": ["BUS"]}, {"name": "Felikso Vaitkaus st.", "stopId": "lt-vilnius_5184", "lat": 54.64352, "lon": 25.27401, "modes": ["BUS"]}],
 "zones": ["Europe/Vilnius", "Europe/Vilnius"],
 "answer": {"covered": false, "service_day": null, "grade": "C", "options": []}
 }

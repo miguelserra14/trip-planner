@@ -4,10 +4,17 @@ from typing import Any
 
 from trip_planner import current
 from trip_planner.config import LIGHTS
-from trip_planner.itineraries.ranking import REQUIREMENTS
+from trip_planner.itineraries.ranking import price_range, REQUIREMENTS, tied_on_price
 from trip_planner.report.formatting import arriving, at_destination, day_text, leaving, grade_text, leg_source, price_source, price_text, steps_text, table
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_time
+
+def total_text(itinerary: dict[str, Any]) -> str:
+    """The total cost of an option, with what it may really cost when part of it is a guess: '78 EUR (59-116)'."""
+    if itinerary.get("guessed_eur", 0) < 1:
+        return f"{itinerary['total_cost']:.0f} EUR"
+    lowest, highest = price_range(itinerary)
+    return f"{itinerary['total_cost']:.0f} EUR ({lowest:.0f}-{highest:.0f})"
 
 def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
     """One option, step by step: its cost, how reliable each part is, the times and where to book."""
@@ -99,7 +106,7 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
              tr("col_duration"), tr("col_extra_time"), tr("col_time_value"), tr("col_schedules"), tr("col_confirmed")],
             [[(f"**{number}** ({tr('recommended')})" if itinerary is recommended else str(number)),
               date.fromisoformat(itinerary["flight"]["date"]).strftime("%d/%m"), itinerary["flight"]["route"],
-              f"{itinerary['total_cost']:.0f} EUR", leaving(itinerary), arriving(itinerary),
+              total_text(itinerary), leaving(itinerary), arriving(itinerary),
               as_duration(itinerary["total_minutes"]),
               as_duration(itinerary["extra_minutes"]) if itinerary["extra_minutes"] else tr("fastest"),
               f"{itinerary['time_cost']:.0f} EUR",
@@ -112,6 +119,9 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
         "",
         tr("legend_grades"),
     ]
+    tied = tied_on_price(itineraries)
+    if tied:
+        lines += ["", tr("price_tie", options=", ".join(map(str, tied)), factor=f"{current.SETTINGS.unverified_price_factor:g}")]
     cheapest = itineraries[0]
     if recommended is not cheapest:
         lines += ["", tr("not_cheapest", extra=f"{recommended['total_cost'] - cheapest['total_cost']:.0f}",
@@ -146,7 +156,7 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
              tr("col_duration"), tr("col_breaks"), tr("col_schedules"), tr("col_confirmed")],
             [[f"**{number}** ({tr('closest')})" if number == 1 else str(number),
               date.fromisoformat(itinerary["flight"]["date"]).strftime("%d/%m"), itinerary["flight"]["route"],
-              f"{itinerary['total_cost']:.0f} EUR", leaving(itinerary), arriving(itinerary),
+              total_text(itinerary), leaving(itinerary), arriving(itinerary),
               as_duration(itinerary["total_minutes"]),
               "; ".join(tr("breach_" + breach["kind"], value=breach["value"], limit=breach["limit"]) for breach in itinerary["breaches"]),
               LIGHTS[itinerary["schedule_grade"]],

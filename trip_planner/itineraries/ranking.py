@@ -6,7 +6,7 @@ from typing import Any
 from trip_planner import current
 from concurrent.futures import ThreadPoolExecutor
 
-from trip_planner.itineraries.legs import country_of, from_airport_leg, price_with_tickets, Rejected, to_airport_leg
+from trip_planner.itineraries.legs import country_of, from_airport_leg, not_running_reason, price_with_tickets, Rejected, to_airport_leg
 from trip_planner.sources import airlines
 from trip_planner.sources.timetables import landing_day
 from trip_planner.texts import tr
@@ -102,6 +102,10 @@ def price_itinerary(itinerary: dict[str, Any]) -> None:
     price_with_tickets(itinerary["from"], landing_day(flight), current.SETTINGS.free_trains_at_destination)
     # An operator that sells the very departure of a leg confirms its timetable for the day (price_with_tickets)
     itinerary["schedule_grade"] = max(itinerary["to"]["grade"], itinerary["from"]["grade"])
+    # ... and one that runs other rides that day but not this one says it does not run: the reason, or ""
+    stopped = [(leg["not_running"], day) for leg, day in ((itinerary["to"], flight["date"]), (itinerary["from"], landing_day(flight)))
+               if leg.get("not_running")]
+    itinerary["not_running"] = not_running_reason(*stopped[0]) if stopped else ""
     booking = airlines.verify_with_airline(flight)   # the traveller books on the airline's site: that price counts when it is known
     itinerary["booking"] = booking
     itinerary["flight_price"] = booking["price_eur"]
@@ -110,6 +114,31 @@ def price_itinerary(itinerary: dict[str, Any]) -> None:
         (booking["price_eur"] if booking["verified"] else 0.0)
         + sum(leg.get("confirmed_eur", leg["price_eur"] if leg["price_kind"] == "operator" else 0.0) for leg in (itinerary["to"], itinerary["from"]))
     )
+    itinerary["guessed_eur"] = guessed_eur(itinerary["to"]) + guessed_eur(itinerary["from"])
+
+def guessed_eur(leg: dict[str, Any]) -> float:
+    """How much of the price of a ground leg is a guess: a model's price or an estimate from the distance, for the
+    whole leg or for the vehicles no operator priced. A price read for another day or from a tariff is not a guess."""
+    if leg["price_kind"] in ("model", "estimate"):
+        return leg["price_eur"]
+    if leg["price_kind"] == "partly":
+        return leg["price_eur"] - sum(ticket["price_eur"] for ticket in leg.get("tickets") or [])
+    return 0.0
+
+def price_range(itinerary: dict[str, Any]) -> tuple:
+    """What an itinerary may really cost, (lowest, highest): each guessed EUR may be unverified_price_factor times
+    less or more than guessed."""
+    factor, guessed = current.SETTINGS.unverified_price_factor, itinerary.get("guessed_eur", 0.0)
+    known = itinerary["total_cost"] - guessed
+    return known + guessed / factor, known + guessed * factor
+
+def tied_on_price(itineraries: list[dict[str, Any]]) -> list[int]:
+    """The numbers (from 1) of the itineraries that may cost as little as the cheapest one, itself included: their
+    guessed prices make them impossible to tell apart. Empty when the cheapest stands out."""
+    cheapest = min(itineraries, key=lambda itinerary: itinerary["total_cost"])
+    highest = price_range(cheapest)[1]
+    tied = [number for number, itinerary in enumerate(itineraries, start=1) if price_range(itinerary)[0] <= highest]
+    return tied if len(tied) > 1 else []
 
 FARE_THREADS = 6   # operators asked at the same time: each ticket is one or two requests to a different site
 

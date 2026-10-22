@@ -1,5 +1,7 @@
-"""The window: the trip is typed in a form, the airports are ticked in a list, and the progress, the result and the
-follow-up questions all happen in the same window. Nothing is asked in the terminal.
+"""The window: the trip is typed on a main page like the first page of a flight search site (where from, where to,
+when, and three ticks), every other setting is behind the advanced settings button, the airports can be reviewed in
+a list, and the progress, the result and the follow-up questions all happen in the same window. Nothing is asked in
+the terminal.
 
 The planner itself does not change. It runs on its own thread (an asyncio loop), and what it says and shows
 (`say` and `show` in utils.py) is handed to the window through a queue, because only the main thread may touch it."""
@@ -16,11 +18,13 @@ import tkinter as tk
 import traceback
 import webbrowser
 from datetime import date, timedelta
+from typing import Any
 from tkinter import messagebox, ttk
 
 from trip_planner import current, translate, utils
-from trip_planner.config import GRADES, LANGUAGES, LIGHTS, MAX_DATES, MAX_DAYS_AHEAD, SCALES, TripSettings
+from trip_planner.config import GRADES, LANGUAGES, LIGHTS, MAX_DATES, MAX_DAYS_AHEAD, RANGES, SCALES, TripSettings
 from trip_planner.dates import read_dates
+from trip_planner.ground_choice import CHOICES, NO_CHANGE_LIMIT
 from trip_planner.places import airport_groups, choose_airports, choose_place, unclear_places, remove_airports, too_far_notice, TripPlaces
 from trip_planner.texts import REFERENCE, TEXTS, tr
 
@@ -87,6 +91,15 @@ def style(root: tk.Tk) -> None:
         ("Box.indicator", {"side": "left", "sticky": ""}),
         ("Checkbutton.focus", {"side": "left", "sticky": "w", "children": [("Checkbutton.label", {"sticky": "nswe"})]})]})])
     ttk_style.configure("TLabelframe.Label", font=(FONT, 10, "bold"))
+    # The search card of the main page: white, with its labels, ticks and a larger search button
+    ttk_style.configure("Card.TFrame", background=t["surface"])
+    ttk_style.configure("Card.TLabel", background=t["surface"], foreground=t["muted"])
+    ttk_style.configure("Card.TCheckbutton", background=t["surface"])
+    ttk_style.map("Card.TCheckbutton", background=[("active", t["surface"])])
+    ttk_style.configure("Big.Accent.TButton", padding=(26, 9), font=(FONT, 11, "bold"))
+    ttk_style.configure("Swap.TButton", padding=(6, 5))
+    ttk_style.configure("TNotebook", background=t["background"])
+    ttk_style.configure("TNotebook.Tab", padding=(12, 5))
     ttk_style.configure("TProgressbar", background=t["accent"], bordercolor=t["border"])
 
 # The search and the models take several seconds to load, so the window opens without them. They are loaded behind
@@ -103,6 +116,32 @@ async def loaded() -> list:
 def planned() -> list:
     """Every trip planned in this window (planner.PLANNED). None before the search is loaded."""
     return getattr(sys.modules.get("trip_planner.planner"), "PLANNED", [])
+
+# The main page holds what the first page of a flight search site holds: where from, where to, when, and three ticks
+# (airports near each city, direct flights only). Every other setting is in AdvancedSettings. Both hold the same
+# variables, one per setting of TripSettings, so the two never disagree.
+MAIN_SETTINGS = ("origin", "destination", "departure_scale", "arrival_scale", "max_stopovers")
+CHANGES = ("max_changes_to_airport", "max_changes_from_airport")   # shown with how to travel on each side
+NOT_IN_WINDOW = ("dates", "language")   # the calendar and the list of languages hold these two
+
+def shown(name: str, value: Any) -> Any:
+    """A setting as the window shows it: a list as text with commas, a whole day without its times, 5.0 as 5."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, list):
+        return ", ".join(value)
+    if isinstance(value, float):
+        return f"{value:g}"
+    if (name, value) in (("earliest_leave", "00:00"), ("latest_leave", "23:59")):
+        return ""
+    return str(value)
+
+def same(first: Any, second: Any) -> bool:
+    """Whether two values of a setting are the same, "5" and "5.0" included."""
+    try:
+        return float(first) == float(second)
+    except (TypeError, ValueError):
+        return first == second
 
 class LineWriter:
     """Stands in for the terminal: whatever is printed becomes a line in the window."""
@@ -129,6 +168,7 @@ class TripWindow:
         self.links = 0
         self.advice = ""
         self.manager: LanguageManager | None = None   # the list of languages, while it is open
+        self.advanced: AdvancedSettings | None = None  # the advanced settings, while they are open
         current.SETTINGS = settings
 
         # The planner's thread. One loop for the whole session: the saved trips and the Kiwi connection live in it.
@@ -168,12 +208,15 @@ class TripWindow:
 
     # ---------------------------------------------------------------- the widgets
     def build(self) -> None:
-        top = ttk.Frame(self.root, padding=(14, 12, 14, 4))
+        self.header = ttk.Frame(self.root, padding=(14, 10, 14, 0))
+        self.header.pack(fill="x")
+        top = ttk.Frame(self.root, padding=(14, 8, 14, 4))
         top.pack(fill="x")
         self.form = ttk.Frame(top)
         self.form.pack(fill="x")
         self.airports = ttk.Frame(top)    # takes the place of the form while the airports are being chosen
         self.make_variables()
+        self.build_header()
         self.build_form()
 
         status = ttk.Frame(self.root, padding=(14, 2))
@@ -222,94 +265,122 @@ class TripWindow:
             self.output.tag_configure(f"light_{grade}", foreground=colour)
         self.busy(False)
         self.asking(False)
+        self.write(tr("ui_welcome") + "\n", "log")   # what to do, until the first search clears it
 
     def make_variables(self) -> None:
-        """What the form holds. Made once: the form is built again when the language changes, and keeps what was typed."""
-        s = self.defaults
-        self.origin = tk.StringVar(value=s.origin)
-        self.destination = tk.StringVar(value=s.destination)
+        """One variable per setting the window shows, on the main page or in the advanced settings, starting with
+        what settings.py says. Made once: the widgets are built again when the language changes, and keep them."""
+        self.values: dict[str, tk.Variable] = {}
+        for setting in dataclasses.fields(TripSettings):
+            if setting.name in NOT_IN_WINDOW:
+                continue
+            value = shown(setting.name, getattr(self.defaults, setting.name))
+            variable = tk.BooleanVar(value=value) if isinstance(value, bool) else tk.StringVar(value=value)
+            variable.trace_add("write", lambda *changed: self.count_changes())
+            self.values[setting.name] = variable
+        self.origin, self.destination = self.values["origin"], self.values["destination"]
         self.dates = tk.StringVar(value="")   # clicked in the calendar every time
-        # The whole day is read as 00:00 to 23:59: the form leaves it empty, as the traveller would
-        self.earliest_leave = tk.StringVar(value="" if s.earliest_leave == "00:00" else s.earliest_leave)
-        self.latest_leave = tk.StringVar(value="" if s.latest_leave == "23:59" else s.latest_leave)
-        self.latest_arrival = tk.StringVar(value=s.latest_arrival)
-        self.max_stopovers = tk.StringVar(value=str(s.max_stopovers))
-        self.min_reliability = tk.StringVar(value=s.min_reliability)
-        self.language = tk.StringVar(value=s.language)
-        self.free_trains_origin = tk.BooleanVar(value=s.free_trains_at_origin)
-        self.free_trains = tk.BooleanVar(value=s.free_trains_at_destination)
-        self.scales: dict[str, str] = {}
-        self.departure_scale = tk.StringVar(value=s.departure_scale)
-        self.arrival_scale = tk.StringVar(value=s.arrival_scale)
+        self.language = tk.StringVar(value=self.defaults.language)
+
+    def value(self, name: str) -> Any:
+        """A setting as the window holds it, as TripSettings reads it: "no limit" of the changes is its number."""
+        value = self.values[name].get()
+        if name in CHANGES:
+            return int(value) if str(value).isdigit() else NO_CHANGE_LIMIT
+        return value
+
+    def changed(self) -> list[str]:
+        """The settings of the advanced settings that differ from settings.py."""
+        default = lambda name: getattr(self.defaults, name) if name in CHANGES else shown(name, getattr(self.defaults, name))
+        return [name for name in self.values if name not in MAIN_SETTINGS and not same(self.value(name), default(name))]
+
+    def count_changes(self) -> None:
+        """The advanced settings button says how many settings differ from settings.py: they are not on the screen."""
+        if getattr(self, "advanced_button", None) is not None and self.advanced_button.winfo_exists():
+            count = len(self.changed())
+            self.advanced_button.configure(text=tr("ui_advanced_changed", count=count) if count else tr("ui_advanced"))
+
+    def show_limits(self) -> None:
+        """No limit of changes is shown in words, in the language of the window."""
+        for name in CHANGES:
+            value = self.values[name].get()
+            if not str(value).isdigit() or int(value) >= NO_CHANGE_LIMIT:
+                self.values[name].set(tr("ui_changes_any"))
+
+    def build_header(self) -> None:
+        """The name of the program, and the language on the right, as on a travel site."""
+        for child in self.header.winfo_children():
+            child.destroy()
+        ttk.Label(self.header, text=tr("ui_title"), font=(FONT, 15, "bold")).pack(side="left")
+        self.language_box = ttk.Combobox(self.header, textvariable=self.language, values=list(LANGUAGES), state="readonly", width=8)
+        self.language_box.pack(side="right")
+        self.language_box.bind("<<ComboboxSelected>>", lambda event: self.change_language())
+        ttk.Label(self.header, text=tr("ui_language"), style="Muted.TLabel").pack(side="right", padx=(0, 6))
 
     def build_form(self) -> None:
-        s, form = self.defaults, self.form
+        """The main page: where from, where to, when, and three ticks under them, in a white card with the search
+        button, as on the first page of a flight search site. Everything else is in the advanced settings."""
+        form = self.form
         for child in form.winfo_children():
             child.destroy()
-        # The scale of each side is chosen by what it means: how far the airports are looked for, and how many.
-        # The list shows the meaning in the language of the window, so the scale chosen is kept by its name.
-        chosen = [self.scales.get(variable.get(), variable.get()) for variable in (self.departure_scale, self.arrival_scale)]
-        self.scales = {tr(f"ui_scale_{name}", km=s.scale(name)[0], count=s.scale(name)[1]): name for name in SCALES}
-        labels = {name: label for label, name in self.scales.items()}
-        self.departure_scale.set(labels[chosen[0]])
-        self.arrival_scale.set(labels[chosen[1]])
+        self.show_limits()
+        border = tk.Frame(form, background=THEME["border"])   # a one-pixel border around the card
+        border.pack(fill="x")
+        card = ttk.Frame(border, style="Card.TFrame", padding=(14, 10, 14, 12))
+        card.pack(fill="both", padx=1, pady=1)
+        for column, key in ((0, "ui_from"), (2, "ui_to"), (3, "ui_dates")):
+            ttk.Label(card, text=tr(key), style="Card.TLabel").grid(row=0, column=column, sticky="w", padx=(12 if column == 3 else 0, 0), pady=(0, 2))
+        origin = ttk.Entry(card, textvariable=self.origin, font=(FONT, 11), width=14)
+        origin.grid(row=1, column=0, sticky="we", ipady=4)
+        ttk.Button(card, text="↔", width=2, command=self.swap, style="Swap.TButton").grid(row=1, column=1, padx=6)
+        destination = ttk.Entry(card, textvariable=self.destination, font=(FONT, 11), width=14)
+        destination.grid(row=1, column=2, sticky="we", ipady=4)
+        # The dates are only clicked in the calendar: a click on the field opens it
+        dates = ttk.Entry(card, textvariable=self.dates, font=(FONT, 11), width=16, state="readonly", cursor="hand2")
+        dates.grid(row=1, column=3, sticky="we", padx=(12, 0), ipady=4)
+        dates.bind("<Button-1>", lambda event: DatePicker(self))
+        self.find_button = ttk.Button(card, text=tr("ui_search"), command=self.find_airports, style="Big.Accent.TButton")
+        self.find_button.grid(row=1, column=4, sticky="ns", padx=(12, 0))
+        # The ticks hold the same variables as the advanced settings: the scale of each side, and the stopovers
+        for column, key, name, on, off in ((0, "ui_nearby", "departure_scale", "wide", "near"), (2, "ui_nearby", "arrival_scale", "wide", "near"),
+                                           (3, "ui_direct", "max_stopovers", "0", "1")):
+            ttk.Checkbutton(card, text=tr(key), variable=self.values[name], onvalue=on, offvalue=off, style="Card.TCheckbutton").grid(
+                row=2, column=column, sticky="w", padx=(12 if column == 3 else 0, 0), pady=(10, 0))
+        for column in (0, 2, 3):
+            card.columnconfigure(column, weight=1, uniform="field")
+        under = ttk.Frame(form)
+        under.pack(fill="x", pady=(6, 0))
+        ttk.Label(under, text=tr("ui_trip_kind"), style="Muted.TLabel").pack(side="left")
+        self.advanced_button = ttk.Button(under, text=tr("ui_advanced"), command=self.open_advanced)
+        self.advanced_button.pack(side="right")
+        self.count_changes()
+        for entry in (origin, destination):
+            entry.bind("<Return>", lambda event: self.find_airports())
+        if getattr(self, "running", False):   # the new button as the old one was
+            self.find_button.configure(state="disabled")
 
-        def field(row: int, column: int, label: str, widget: tk.Widget) -> None:
-            """Three fields a row, each one under its label."""
-            ttk.Label(form, text=label).grid(row=2 * row, column=column // 2, sticky="w", padx=(0, 16), pady=(4, 1))
-            widget.grid(row=2 * row + 1, column=column // 2, sticky="we", padx=(0, 16), pady=(0, 4))
+    def swap(self) -> None:
+        """Where from and where to change places, as on a flight search site."""
+        origin = self.origin.get()
+        self.origin.set(self.destination.get())
+        self.destination.set(origin)
 
-        field(0, 0, tr("origin"), ttk.Entry(form, textvariable=self.origin, width=12))
-        field(0, 2, tr("destination"), ttk.Entry(form, textvariable=self.destination, width=12))
-        # The dates are only clicked in the calendar: the field shows them, and a click on it opens the calendar too
-        dates = ttk.Frame(form)
-        ttk.Button(dates, text=tr("ui_calendar"), command=lambda: DatePicker(self)).grid(row=0, column=0, padx=(0, 6))
-        dates_entry = ttk.Entry(dates, textvariable=self.dates, width=14, state="readonly", cursor="hand2")
-        dates_entry.grid(row=0, column=1, sticky="we")
-        dates_entry.bind("<Button-1>", lambda event: DatePicker(self))
-        dates.columnconfigure(1, weight=1)
-        field(0, 4, tr("ui_dates"), dates)
-        field(1, 0, tr("ui_earliest_leave"), ttk.Entry(form, textvariable=self.earliest_leave, width=8))
-        field(1, 2, tr("ui_latest_leave"), ttk.Entry(form, textvariable=self.latest_leave, width=8))
-        field(1, 4, tr("ui_latest_arrival"), ttk.Entry(form, textvariable=self.latest_arrival, width=8))
-        field(2, 0, tr("ui_stopovers"), ttk.Spinbox(form, textvariable=self.max_stopovers, from_=0, to=3, width=6))
-        lights = ttk.Frame(form)   # the minimum is chosen by its colour
-        for grade in GRADES:
-            tk.Radiobutton(lights, text=LIGHT_DOT, variable=self.min_reliability, value=grade, indicatoron=False,
-                           foreground=LIGHT_COLOURS[grade], activeforeground=LIGHT_COLOURS[grade], selectcolor=THEME["border"],
-                           background=THEME["background"], activebackground=THEME["hover"],
-                           font=(FONT, 15), width=2, borderwidth=1, offrelief="flat", cursor="hand2").pack(side="left", padx=(0, 4))
-        field(2, 2, tr("ui_reliability"), lights)
-        languages = ttk.Frame(form)   # the language is chosen in the list, and the list is changed with the button
-        self.language_box = ttk.Combobox(languages, textvariable=self.language, values=list(LANGUAGES), state="readonly", width=8)
-        self.language_box.pack(side="left")
-        self.language_box.bind("<<ComboboxSelected>>", lambda event: self.change_language())
-        ttk.Button(languages, text=tr("ui_languages"), command=lambda: LanguageManager(self)).pack(side="left", padx=(6, 0))
-        field(2, 4, tr("ui_language"), languages)
-        field(3, 0, tr("ui_departure_scale"),
-              ttk.Combobox(form, textvariable=self.departure_scale, values=list(self.scales), state="readonly", width=21))
-        field(3, 2, tr("ui_arrival_scale"),
-              ttk.Combobox(form, textvariable=self.arrival_scale, values=list(self.scales), state="readonly", width=21))
-        trains = ttk.Frame(form)
-        trains.grid(row=8, column=0, columnspan=3, sticky="w", pady=(8, 4))
-        ttk.Checkbutton(trains, text=tr("ui_free_trains_origin"), variable=self.free_trains_origin).pack(side="left")
-        ttk.Checkbutton(trains, text=tr("ui_free_trains"), variable=self.free_trains).pack(side="left", padx=(24, 0))
-        for column in range(3):
-            form.columnconfigure(column, weight=1, uniform="field")
+    def open_advanced(self) -> None:
+        if self.advanced is not None:
+            self.advanced.top.lift()
+        else:
+            AdvancedSettings(self)
 
-        buttons = ttk.Frame(form)
-        buttons.grid(row=9, column=0, columnspan=3, sticky="we", pady=(8, 2))
-        self.find_button = ttk.Button(buttons, text=tr("ui_find_airports"), command=self.find_airports, style="Accent.TButton")
-        self.find_button.pack(side="left")
-        self.check_button = ttk.Button(buttons, text=tr("ui_check"), command=self.check)
-        self.check_button.pack(side="left", padx=8)
-        ttk.Label(buttons, text=tr("ui_more_settings"), style="Muted.TLabel").pack(side="right")
-        for entry in form.winfo_children():
-            if isinstance(entry, ttk.Entry):
-                entry.bind("<Return>", lambda event: self.find_airports())
-        if getattr(self, "running", False):   # the new buttons as the old ones were
-            for button in (self.find_button, self.check_button):
-                button.configure(state="disabled")
+    def check_advanced(self) -> str:
+        """Whether the settings can be used, whatever the main page holds yet: the reason when they cannot, else ""."""
+        tomorrow = f"{date.today() + timedelta(days=1):%d/%m/%Y}"
+        try:
+            dataclasses.replace(self.defaults, **({name: self.value(name) for name in self.values}
+                                                  | {"origin": "A", "destination": "B", "dates": tomorrow, "language": self.language.get()}))
+        except ValueError as error:
+            # The reason names the setting as settings.py does: here it is named as the window shows it
+            return re.sub(r"`([a-z_]+)`", lambda name: f"«{AdvancedSettings.label(name[1])}»", str(error))
+        return ""
 
     def change_language(self) -> None:
         """A language was chosen in the list: the window speaks it at once, not only once the trip is searched.
@@ -318,6 +389,7 @@ class TripWindow:
             return
         current.SETTINGS = dataclasses.replace(current.SETTINGS, language=self.language.get())
         self.root.title(tr("ui_title"))
+        self.build_header()
         self.build_form()
         for widget, key in ((self.question_label, "ui_question"), (self.ask_button, "ui_ask"),
                             (self.report_button, "ui_open_report"), (self.keep_box, "ui_keep_report")):
@@ -328,8 +400,9 @@ class TripWindow:
             for code, box in self.boxes.items():
                 box.set(ticked.get(code, True))
         self.say_status("")
-        if self.manager is not None:
-            self.manager.close()   # its texts are in the language before: opened again, it speaks the new one
+        for opened in (self.manager, self.advanced):
+            if opened is not None:
+                opened.close(check=False) if opened is self.advanced else opened.close()   # opened again, they speak the new one
 
     def build_airports(self, places: TripPlaces) -> None:
         """The airports found, a box each: ticked ones are searched."""
@@ -369,18 +442,9 @@ class TripWindow:
 
     # ---------------------------------------------------------------- what the buttons do
     def read_form(self) -> TripSettings:
-        """The trip in the form. Raises ValueError, with the reason, if it is not valid."""
-        return dataclasses.replace(
-            self.defaults,
-            origin=self.origin.get(), destination=self.destination.get(),
-            dates=self.dates.get(),
-            earliest_leave=self.earliest_leave.get().strip(), latest_leave=self.latest_leave.get().strip(),
-            latest_arrival=self.latest_arrival.get().strip(), max_stopovers=self.max_stopovers.get(),
-            min_reliability=self.min_reliability.get(), language=self.language.get(),
-            free_trains_at_origin=self.free_trains_origin.get(), free_trains_at_destination=self.free_trains.get(),
-            departure_scale=self.scales[self.departure_scale.get()], arrival_scale=self.scales[self.arrival_scale.get()],
-            confirm_airports=False,   # they are confirmed here, with the boxes
-        )
+        """The trip on the main page and in the advanced settings. Raises ValueError, with the reason, if it is not valid."""
+        return dataclasses.replace(self.defaults, **{name: self.value(name) for name in self.values},
+                                   dates=self.dates.get(), language=self.language.get())
 
     def find_airports(self) -> None:
         if self.running:
@@ -429,6 +493,8 @@ class TripWindow:
             await planner.plan_trip(settings, places)
             self.events.put(("planned", None))
         self.clear()
+        if self.advice:   # what is allowed but will probably disappoint, before the search starts
+            self.write(self.advice + "\n", "log")
         self.asking(False)
         self.show_form()
         self.start(work(), tr("ui_searching"))
@@ -552,10 +618,15 @@ class TripWindow:
                     PlaceChooser(self, *value)
                 elif kind == "airports":
                     self.places = value
-                    self.build_airports(value)
-                    self.form.pack_forget()
-                    self.airports.pack(fill="x")
-                    self.done(self.advice)   # what is allowed but will probably disappoint, before the search starts
+                    if self.settings.confirm_airports:   # the traveller asked to review them first (advanced settings)
+                        self.build_airports(value)
+                        self.form.pack_forget()
+                        self.airports.pack(fill="x")
+                        self.done(self.advice)   # what is allowed but will probably disappoint, before the search starts
+                    else:                                # as on a flight search site: the search goes on with all of them
+                        self.boxes = {}
+                        self.done("")
+                        self.search()
                 elif kind == "planned":
                     self.keep.set(False)   # a new report: it is only kept if the box is ticked again
                     self.asking(True)
@@ -586,7 +657,8 @@ class TripWindow:
 
     def busy(self, running: bool) -> None:
         self.running = running
-        for button in (self.find_button, self.check_button, getattr(self, "search_button", None)):
+        for button in (getattr(self, "find_button", None), getattr(self, "search_button", None),
+                       getattr(self.advanced, "check_button", None)):
             if button is not None and button.winfo_exists():
                 button.configure(state="disabled" if running else "normal")
         if running:
@@ -796,6 +868,161 @@ class DatePicker:
     def use(self) -> None:
         self.window.dates.set(", ".join(f"{day:%d/%m/%Y}" for day in sorted(self.chosen)))
         self.top.destroy()
+
+class AdvancedSettings:
+    """Every setting that is not on the main page, in tabs. They hold the same variables as the window: what is
+    changed here is what the next search uses, and the main page says how many settings differ from settings.py.
+    Closing checks them, and says what is wrong instead of closing.
+    Kept small: a label is one column of two lines at most, a choice is a list, and what a setting means is said in
+    one line at the bottom when the mouse is over it, instead of a column of its own."""
+    LABEL_WIDTH = 230   # pixels at 100%, before a label goes on to a second line
+    TABS = (
+        ("ui_tab_times", ("earliest_leave", "latest_leave", "earliest_arrival", "latest_arrival", "next_day_arrivals",
+                          "max_stopovers", "min_airport_minutes", "ideal_airport_minutes", "min_landing_minutes")),
+        ("ui_tab_airports", ("departure_scale", "arrival_scale", "confirm_airports", "primary_radius_km", "fallback_radius_km",
+                             "arrival_radius_km", "max_departure_airports", "max_arrival_airports", "max_road_hours")),
+        ("ui_tab_airport_lists", ("include_airports", "exclude_airports", "primary_airports", "fallback_airports", "arrival_airports")),
+        ("ui_tab_ground", ("to_airport_by", "max_changes_to_airport", "from_airport_by", "max_changes_from_airport",
+                           "free_trains_at_origin", "free_trains_at_destination")),
+        ("ui_tab_estimates", ("allow_estimated_prices", "max_estimate_km", "small_estimate_eur", "unverified_price_factor",
+                              "city_walk_minutes", "wide_city_walk_minutes", "airport_walk_minutes")),
+        ("ui_tab_preferences", ("min_reliability", "tiebreak_eur_per_hour", "fallback_saving_eur_per_hour", "extra_hour_growth",
+                                "options_shown", "extra_wishes")),
+        ("ui_tab_program", ("airport_floor_minutes", "night_minutes", "min_trip_km", "city_airport_radius_km",
+                            "ambiguous_importance", "recent_reports", "use_flight_agent")),
+    )
+    # The settings that already had a label in the window keep it; the others are called set_<name> in the texts
+    LABELS = {"earliest_leave": "ui_earliest_leave", "latest_leave": "ui_latest_leave", "latest_arrival": "ui_latest_arrival",
+              "max_stopovers": "ui_stopovers", "min_reliability": "ui_reliability", "departure_scale": "ui_departure_scale",
+              "arrival_scale": "ui_arrival_scale", "free_trains_at_origin": "ui_free_trains_origin",
+              "free_trains_at_destination": "ui_free_trains", "to_airport_by": "ui_to_airport_by", "from_airport_by": "ui_from_airport_by"}
+    HINTS = {**dict.fromkeys(("earliest_leave", "latest_leave", "earliest_arrival", "latest_arrival"), "hint_times"),
+             **dict.fromkeys(("include_airports", "exclude_airports", "primary_airports", "fallback_airports", "arrival_airports"), "hint_airport_list"),
+             **dict.fromkeys(("to_airport_by", "from_airport_by", *CHANGES), "hint_ground_choice"),
+             **{name: f"hint_{name}" for name in ("min_reliability", "tiebreak_eur_per_hour", "fallback_saving_eur_per_hour",
+                                                  "extra_hour_growth", "unverified_price_factor", "max_estimate_km", "extra_wishes")}}
+
+    def __init__(self, window: TripWindow):
+        self.window = window
+        self.traces: list[tuple] = []   # (variable, trace) of the lists below, removed on closing
+        self.top = tk.Toplevel(window.root)
+        self.top.title(tr("ui_advanced"))
+        self.top.transient(window.root)
+        self.top.resizable(False, False)
+        self.top.geometry(f"+{window.root.winfo_rootx() + 60}+{window.root.winfo_rooty() + 60}")
+        self.top.protocol("WM_DELETE_WINDOW", self.close)
+        window.advanced = self
+        window.show_limits()
+        body = ttk.Frame(self.top, padding=10)
+        body.pack(fill="both", expand=True)
+        self.scale = screen_scale(window.root)
+        tabs = ttk.Notebook(body)
+        tabs.pack(fill="both", expand=True)
+        for title, names in self.TABS:
+            tab = ttk.Frame(tabs, padding=(10, 8))
+            tabs.add(tab, text=tr(title))
+            for row, name in enumerate(names):
+                self.add(tab, row, name)
+            if title == "ui_tab_program":   # what the program can do besides searching
+                buttons = ttk.Frame(tab)
+                buttons.grid(row=len(names), column=0, columnspan=2, sticky="w", pady=(10, 0))
+                ttk.Button(buttons, text=tr("ui_languages"), command=lambda: LanguageManager(window)).pack(side="left")
+                self.check_button = ttk.Button(buttons, text=tr("ui_check"), command=self.check)
+                self.check_button.pack(side="left", padx=8)
+                if window.running:
+                    self.check_button.configure(state="disabled")
+        # What the setting under the mouse means, or what this window is for: one line for every setting
+        self.hint = ttk.Label(body, text=tr("ui_advanced_hint"), style="Muted.TLabel", wraplength=round(440 * self.scale), justify="left")
+        self.hint.pack(anchor="w", fill="x", pady=(6, 0))
+        self.message = ttk.Label(body, wraplength=round(440 * self.scale), justify="left", foreground=THEME["error"])
+        self.message.pack(anchor="w")
+        buttons = ttk.Frame(body)
+        buttons.pack(fill="x", pady=(8, 0))
+        ttk.Button(buttons, text=tr("ui_close"), command=self.close, style="Accent.TButton").pack(side="right")
+        ttk.Button(buttons, text=tr("ui_restore"), command=self.restore).pack(side="left")
+
+    @classmethod
+    def label(cls, name: str) -> str:
+        """A setting as the window names it, in the traveller's language. Its own name when it has no label."""
+        key = cls.LABELS.get(name, f"set_{name}")
+        return tr(key) if key in TEXTS[REFERENCE] else name
+
+    def choice_list(self, parent: tk.Widget, variable: tk.Variable, options: dict[str, str]) -> ttk.Combobox:
+        """A list to choose one value from, shown in words ({value: words}). It holds the window's own variable,
+        so the main page and these settings stay the same, whichever is changed."""
+        words = tk.StringVar(value=options.get(variable.get(), variable.get()))
+        values = {shown: value for value, shown in options.items()}
+        box = ttk.Combobox(parent, textvariable=words, values=list(options.values()), state="readonly",
+                           width=max(map(len, options.values())) + 1)
+        box.bind("<<ComboboxSelected>>", lambda event: variable.set(values[words.get()]))
+        trace = variable.trace_add("write", lambda *changed: words.set(options.get(variable.get(), variable.get())))
+        self.traces.append((variable, trace, words))
+        return box
+
+    def explain(self, widgets: list[tk.Widget], name: str) -> None:
+        """The line at the bottom says what a setting means while the mouse is over it."""
+        meaning = tr(self.HINTS[name]) if name in self.HINTS else self.label(name)
+        for widget in widgets:
+            for part in (widget, *widget.winfo_children()):
+                part.bind("<Enter>", lambda event: self.hint.configure(text=meaning), add="+")
+                part.bind("<Leave>", lambda event: self.hint.configure(text=tr("ui_advanced_hint")), add="+")
+
+    def add(self, tab: ttk.Frame, row: int, name: str) -> None:
+        """One setting on one row: its label, on two lines at most, and the way to change it."""
+        window, variable = self.window, self.window.values[name]
+        default = getattr(window.defaults, name)
+        label = ttk.Label(tab, text=self.label(name), wraplength=round(self.LABEL_WIDTH * self.scale), justify="left")
+        label.grid(row=row, column=0, sticky="w", padx=(0, 10), pady=2)
+        if isinstance(default, bool):
+            widget = ttk.Checkbutton(tab, variable=variable)
+            label.bind("<Button-1>", lambda event: variable.set(not variable.get()))   # the label ticks it too
+        elif name in ("departure_scale", "arrival_scale"):
+            widget = self.choice_list(tab, variable, {scale: tr(f"ui_scale_{scale}", km=window.defaults.scale(scale)[0],
+                                                                count=window.defaults.scale(scale)[1]) for scale in SCALES})
+        elif name in ("to_airport_by", "from_airport_by"):
+            widget = self.choice_list(tab, variable, {choice: tr(f"ui_choice_{choice}") for choice in CHOICES})
+        elif name in CHANGES:   # a number, or no limit in words
+            widget = ttk.Spinbox(tab, textvariable=variable, values=[*map(str, range(NO_CHANGE_LIMIT)), tr("ui_changes_any")],
+                                 state="readonly", width=10, wrap=True)
+        elif name == "min_reliability":   # chosen by its colour, as the reports show it
+            widget = ttk.Frame(tab)
+            for grade in GRADES:
+                tk.Radiobutton(widget, text=LIGHT_DOT, variable=variable, value=grade, indicatoron=False,
+                               foreground=LIGHT_COLOURS[grade], activeforeground=LIGHT_COLOURS[grade], selectcolor=THEME["border"],
+                               background=THEME["background"], activebackground=THEME["hover"],
+                               font=(FONT, 13), width=2, borderwidth=1, offrelief="flat", cursor="hand2").pack(side="left", padx=(0, 4))
+        elif name in RANGES:
+            lowest, highest = RANGES[name]
+            step = 1 if isinstance(default, int) else 0.05 if highest <= 1 else 0.1 if highest <= 10 else 1
+            widget = ttk.Spinbox(tab, textvariable=variable, from_=lowest, to=highest, increment=step, width=7)
+        else:   # a time, a list of airports, or free text
+            widget = ttk.Entry(tab, textvariable=variable, width=8 if self.HINTS.get(name) == "hint_times" else 26)
+        widget.grid(row=row, column=1, sticky="w", pady=2)
+        self.explain([label, widget], name)
+
+    def restore(self) -> None:
+        """Every setting back to what settings.py says, the main page's ticks included. The places stay."""
+        window = self.window
+        for name, variable in window.values.items():
+            if name not in ("origin", "destination"):
+                variable.set(shown(name, getattr(window.defaults, name)))
+        window.show_limits()
+        self.message.configure(text=tr("ui_restored"), foreground=THEME["text"])
+
+    def check(self) -> None:
+        self.window.check()
+
+    def close(self, check: bool = True) -> None:
+        """Closed only with settings that can be used: otherwise it says which one is wrong, and stays."""
+        problem = self.window.check_advanced() if check else ""
+        if problem:
+            self.message.configure(text=problem, foreground=THEME["error"])
+            return
+        for variable, trace, words in self.traces:
+            variable.trace_remove("write", trace)
+        self.window.advanced = None
+        self.top.destroy()
+        self.window.count_changes()
 
 class LanguageManager:
     """The languages of the program, to add one or remove one without leaving the window (translate.py does it).

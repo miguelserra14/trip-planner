@@ -6,7 +6,9 @@ town of every country, far from the airport: what a country's regional trains an
 SECOND_AIRPORTS is the airports cheap flights land at, and NEIGHBOURS the countries around the Union.
 
 A case that cannot find a real connection says why in known_gap. Each reason was checked by asking the timetables
-what they know around the place and around the airport, and what they answer when every limit is relaxed."""
+what they know around the place and around the airport, and what they answer when every limit is relaxed. These
+cases follow the published timetables only: where a reason names an operator's booking system (fares.RIDE_SOURCES),
+the planner finds the trip there."""
 from dataclasses import dataclass
 
 @dataclass(frozen=True)
@@ -60,7 +62,7 @@ REMOTE = [
     Case("AT", "VIE", "Hallstatt, Austria", remote=True),
     Case("BE", "BRU", "Durbuy, Belgium", remote=True),
     Case("BG", "SOF", "Bansko, Bulgaria", remote=True),
-    Case("HR", "ZAG", "Slunj, Croatia", remote=True, known_gap="the timetables know no stop within 5 km of Slunj: Croatia's regional buses are not published"),
+    Case("HR", "ZAG", "Slunj, Croatia", remote=True, known_gap="the timetables know no stop within 5 km of Slunj: Croatia's regional buses are not published. Obilet sells them (fares.obilet_rides)"),
     Case("CY", "LCA", "Polis Chrysochous, Cyprus", remote=True),
     Case("CZ", "PRG", "Cesky Krumlov, Czechia", remote=True),
     Case("DK", "CPH", "Skagen, Denmark", remote=True),
@@ -68,7 +70,7 @@ REMOTE = [
     Case("FI", "HEL", "Savonlinna, Finland", remote=True),
     Case("FR", "LYS", "Le Puy-en-Velay, France", remote=True),
     Case("DE", "MUC", "Berchtesgaden, Germany", remote=True),
-    Case("GR", "ATH", "Nafplio, Greece", remote=True, known_gap="the timetables know no stop within 5 km of Nafplio: Greece's regional coaches (KTEL) are not published"),
+    Case("GR", "ATH", "Nafplio, Greece", remote=True, known_gap="the timetables know no stop within 5 km of Nafplio: Greece's regional coaches (KTEL) are not published. Obilet sells them"),
     Case("HU", "BUD", "Tokaj, Hungary", remote=True),
     Case("IE", "DUB", "Westport, Ireland", remote=True),
     Case("IT", "VCE", "Cortina d'Ampezzo, Italy", remote=True),
@@ -211,14 +213,14 @@ NEIGHBOURS = [
     Case("BA", "SJJ", "Mostar",
          known_gap="the coaches and trains between Sarajevo and Mostar are not published: only the city transport of both is"),
     Case("ME", "TGD", "Kotor",
-         known_gap="Montenegro's coaches are not published: nothing links Podgorica airport and the coast"),
+         known_gap="Montenegro's coaches are not published: nothing links Podgorica airport and the coast. Obilet sells the coaches from Podgorica"),
     Case("MK", "SKP", "Ohrid",
-         known_gap="North Macedonia's coaches are not published, and no stop of Skopje airport is"),
+         known_gap="North Macedonia's coaches are not published, and no stop of Skopje airport is. Obilet sells the coaches from Skopje"),
     Case("XK", "PRN", "Prizren",
-         known_gap="Kosovo is not published: the timetables know no stop at Pristina airport"),
+         known_gap="Kosovo is not published: the timetables know no stop at Pristina airport. Obilet sells the coaches from Pristina"),
     Case("MD", "RMO", "Chisinau"),
     Case("TR", "IST", "Bursa",
-         known_gap="Turkey is not published: the timetables know no stop at Istanbul airport or in Bursa"),
+         known_gap="Turkey is not published: the timetables know no stop at Istanbul airport or in Bursa. Obilet sells the coaches from the airport"),
     Case("TR", "SAW", "Istanbul"),
     Case("AD", "BCN", "Andorra la Vella"),
     Case("LI", "ZRH", "Vaduz"),

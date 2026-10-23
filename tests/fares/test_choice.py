@@ -9,7 +9,7 @@ import pytest
 
 from trip_planner import current
 from trip_planner.itineraries.legs import from_airport_leg, price_with_tickets, to_airport_leg
-from trip_planner.places import Place, TripPlaces
+from trip_planner.trip.places import Place, TripPlaces
 from trip_planner.sources import fares
 from trip_planner.sources.fares import FareSource
 

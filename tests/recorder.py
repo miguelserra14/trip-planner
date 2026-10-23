@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from trip_planner.places import airport_from, as_place, search_places
+from trip_planner.trip.places import airport_from, as_place, search_places
 from trip_planner.sources import timetables
 
 STAGES = ("place", "terminal", "stops", "connections")

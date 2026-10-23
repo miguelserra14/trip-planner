@@ -6,12 +6,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from trip_planner.dates import read_dates, UnreadableDate
-from trip_planner.ground_choice import CHOICES, NO_CHANGE_LIMIT
+from trip_planner.trip.dates import read_dates, UnreadableDate
+from trip_planner.trip.ground_choice import CHOICES, NO_CHANGE_LIMIT
 from trip_planner.texts import LANGUAGES, REFERENCE, text_in
 from trip_planner.utils import plain, to_minutes, to_time
 
-ROOT = Path(__file__).resolve().parent.parent   # the project folder: resources/, reports/ and env/ are in it
+ROOT = Path(__file__).resolve().parents[2]   # the project folder: resources/, reports/ and env/ are in it
 load_dotenv(ROOT / "env" / ".env")       # the API keys, before any client is created
 
 SCALES = ("near", "wide")   # how far around a city its airports are looked for, see TripSettings
@@ -40,7 +40,7 @@ TIGHT_DAY_MINUTES = 90       # time left for all the travel, below which the lea
 NARROW_LEAVE_MINUTES = 60    # a window to leave in shorter than this rarely contains a connection
 
 class SettingError(ValueError):
-    """A setting that cannot be used. Its reason is one of the texts of texts.py, in the traveller's language."""
+    """A setting that cannot be used. Its reason is one of the texts of the languages (texts/), in the traveller's language."""
 
     def __init__(self, language: str, key: str, **values):
         super().__init__(key)

@@ -12,7 +12,7 @@ import pytest
 
 from trip_planner import current
 from trip_planner.itineraries import legs
-from trip_planner.places import airport_from, as_place, search_places
+from trip_planner.trip.places import airport_from, as_place, search_places
 from trip_planner.sources import fares, timetables
 
 CHECKPOINTS = Path(__file__).parent / "checkpoints"

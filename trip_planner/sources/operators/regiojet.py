@@ -1,5 +1,5 @@
 """RegioJet, trains and coaches in Czechia, Slovakia and their neighbours."""
-from trip_planner.places import distance_km
+from trip_planner.trip.places import distance_km
 from trip_planner.sources.operators.base import http, SAME_STATION_KM, Trip
 
 REGIOJET = "https://brn-ybus-pubapi.sa.cz/restapi"

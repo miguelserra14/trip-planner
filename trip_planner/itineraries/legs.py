@@ -4,7 +4,8 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from trip_planner import current, ground_choice
+from trip_planner import current
+from trip_planner.trip import ground_choice
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price, MIN_TICKET_EUR, ROAD_FACTOR, step_price
 from trip_planner.shapes import Answer, Connection
 from trip_planner.sources import fares, timetables
@@ -15,7 +16,7 @@ from trip_planner.utils import to_minutes, to_time
 MAX_PLAUSIBLE_SPEED_KMH = 200     # no public transport is faster than this in a straight line, door to door
 MAX_PLAUSIBLE_EUR_PER_KM = 1.0    # ... or more expensive than this
 # How far a ground leg may be estimated, and how estimated prices count, are settings: max_estimate_km,
-# small_estimate_eur and unverified_price_factor (config.py)
+# small_estimate_eur and unverified_price_factor (trip/trip_settings.py)
 
 class Rejected(ValueError):
     """Why a flight cannot make an itinerary, written for the traveller. Any other error raised while an itinerary

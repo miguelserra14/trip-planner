@@ -10,11 +10,12 @@ from typing import Any
 
 import httpx
 
-from trip_planner import current, ground_choice
-from trip_planner.config import ROOT, USER_AGENT
-from trip_planner.ground_choice import is_rail
+from trip_planner import current
+from trip_planner.trip import ground_choice
+from trip_planner.trip.trip_settings import ROOT, USER_AGENT
+from trip_planner.trip.ground_choice import is_rail
 from trip_planner.itineraries.estimates import ESTIMATE_FIXED_MINUTES, estimated_minutes, ROAD_FACTOR
-from trip_planner.places import distance_km, ROADS_URL
+from trip_planner.trip.places import distance_km, ROADS_URL
 from trip_planner.shapes import Answer, Connection, Step
 from trip_planner.sources import web
 from trip_planner.sources.timetables.airport_stops import (AIRFIELD_WALK_MINUTES, AIRFIELD_WALK_SECONDS, AIRPORT_STOP_KM,
@@ -34,7 +35,7 @@ TRANSITOUS_API = "https://api.transitous.org/api/v1"
 TIMETABLE_CONCURRENCY = 2
 TIMETABLE_SPACING_SECONDS = 0.5  # leave this long between two requests
 PAGE_SIZE = 8                    # connections asked for per request
-# The walks allowed at each end are settings: city_walk_minutes, wide_city_walk_minutes, airport_walk_minutes (config.py)
+# The walks allowed at each end are settings: city_walk_minutes, wide_city_walk_minutes, airport_walk_minutes (trip/trip_settings.py)
 LAST_RIDES_MINUTES = 120         # how long before the latest time the traveller leaves at the last connections are asked from
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
 TIMEZONES: dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}

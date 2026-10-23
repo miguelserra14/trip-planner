@@ -7,7 +7,7 @@ To plan a trip, edit settings.py and run main.py. Nothing else needs to change.
 
 Who does what, and where:
 
-- Places and airports (code, places.py): the cities are located with OpenStreetMap, whatever language they are
+- Places and airports (code, trip/places.py): the cities are located with OpenStreetMap, whatever language they are
   written in, and the airports are found by distance: the straight line, then the hours by road (OSRM), so that
   an airport across a sea is left out.
 - Flight search (code, sources/flight_search.py): every departure airport against every arrival airport on every date, on
@@ -40,4 +40,4 @@ Every figure in the report carries its source and one of three grades. Nothing a
 
 Every run saves the full reasoning, the sources and the time each step took to reports/.
 """
-from trip_planner import config
+from trip_planner.trip import trip_settings

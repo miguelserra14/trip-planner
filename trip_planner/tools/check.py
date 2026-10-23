@@ -10,8 +10,8 @@ from langchain.chat_models import init_chat_model
 
 from trip_planner.agents import models, subagents
 from trip_planner.agents.coordinator import COORDINATOR_MODELS
-from trip_planner.config import ROOT, USER_AGENT
-from trip_planner.places import airport_from, geocode, load_airports, Place, road_hours
+from trip_planner.trip.trip_settings import ROOT, USER_AGENT
+from trip_planner.trip.places import airport_from, geocode, load_airports, Place, road_hours
 from trip_planner.sources import airlines, fares, google_flights, kiwi, timetables, web
 from trip_planner.sources.operators import elron, flixbus, mav, oebb, regiojet, trenitalia
 from trip_planner.utils import message_text

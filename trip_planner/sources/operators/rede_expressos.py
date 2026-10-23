@@ -6,7 +6,7 @@ import time
 import uuid
 from typing import Any
 
-from trip_planner.places import distance_km, Place
+from trip_planner.trip.places import distance_km, Place
 from trip_planner.texts import tr
 from trip_planner.utils import plain, to_minutes
 from trip_planner.sources.operators.base import http, OPERATOR_DATA

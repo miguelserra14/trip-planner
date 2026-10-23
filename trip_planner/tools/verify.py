@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from trip_planner import current
-from trip_planner.config import LIGHTS
+from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.report.full import REPORTS, SAVED_REPORTS
 from trip_planner.sources import fares, timetables
 from trip_planner.sources.timetables import landing_day, local_to_utc, utc_to_local
@@ -117,7 +117,7 @@ async def check_ride(leg: dict[str, Any]) -> None:
     """Ask the operator that sold a ride between the city and the airport whether it still runs it that day."""
     if leg.get("outcome") in SETTLED or not knowable(leg["day"]):
         return
-    from trip_planner.places import Place
+    from trip_planner.trip.places import Place
     rides = await asyncio.to_thread(fares.RIDE_SOURCES[leg["source"]], Place(**leg["city"]), leg["airport"], leg["day"], leg["side"] == "to")
     if rides:
         same = any(ride["leave"] == leg["leave"] and ride["arrive"] == leg["arrive"] for ride in rides)

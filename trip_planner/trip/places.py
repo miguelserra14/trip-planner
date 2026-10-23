@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 
 from trip_planner import current
-from trip_planner.config import ROOT, TripSettings, USER_AGENT
+from trip_planner.trip.trip_settings import ROOT, TripSettings, USER_AGENT
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, logged, plain, say
 

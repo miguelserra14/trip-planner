@@ -10,7 +10,7 @@ from datetime import date
 
 from discover import finder, flown
 from discover.sources import Days
-from trip_planner.places import Place
+from trip_planner.trip.places import Place
 
 ARTICLE = """## Airlines and destinations
 

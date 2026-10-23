@@ -12,10 +12,11 @@ from datetime import date, timedelta
 
 import pytest
 
-from trip_planner import current, ground_choice
-from trip_planner.config import SettingError, TripSettings
+from trip_planner import current
+from trip_planner.trip import ground_choice
+from trip_planner.trip.trip_settings import SettingError, TripSettings
 from trip_planner.itineraries.legs import from_airport_leg, Rejected, to_airport_leg
-from trip_planner.places import Place, TripPlaces
+from trip_planner.trip.places import Place, TripPlaces
 from trip_planner.sources import timetables
 
 DAY = (date.today() + timedelta(days=70)).isoformat()

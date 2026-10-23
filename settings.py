@@ -1,6 +1,6 @@
 """The trip to plan. This is the only file you need to edit: every setting and its default is described in
-TripSettings (trip_planner/config.py). Then run main.py."""
-from trip_planner.config import TripSettings
+TripSettings (trip_planner/trip/trip_settings.py). Then run main.py."""
+from trip_planner.trip.trip_settings import TripSettings
 
 # EDIT SETTINGS to plan another trip. Only origin, destination and dates are required.
 SETTINGS = TripSettings(
@@ -40,7 +40,7 @@ SETTINGS = TripSettings(
     night_minutes=240,          # how far a ground connection may cross midnight: after a late landing it may arrive up to
                                 # 04:00, and before an early flight one of the evening before (from 20:00) is shown
                                 # among the closest alternatives
-    # Places (trip_planner/places.py)
+    # Places (trip_planner/trip/places.py)
     min_trip_km=80,             # an origin and a destination closer than this are not a trip by plane
     city_airport_radius_km=45,  # a city written in the airport settings ("Paris") means every airport this close to it
     ambiguous_importance=0.2,   # when places of the same name differ in importance (0 to 1, from OpenStreetMap) by less

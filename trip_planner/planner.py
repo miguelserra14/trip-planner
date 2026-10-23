@@ -14,8 +14,8 @@ from langchain.messages import AIMessage, HumanMessage
 from trip_planner import current
 from trip_planner.agents import coordinator, subagents
 from trip_planner.agents.steps import run_steps, STEPS
-from trip_planner.config import TripSettings
-from trip_planner.places import ask_airports, ask_places, choose_airports, codes, show_airports, TripPlaces
+from trip_planner.trip.trip_settings import TripSettings
+from trip_planner.trip.places import ask_airports, ask_places, choose_airports, codes, show_airports, TripPlaces
 from trip_planner.report.full import keep_report, save_report
 from trip_planner.sources import web
 from trip_planner.texts import any_of, tr

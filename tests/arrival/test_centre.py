@@ -4,7 +4,7 @@ Siracusa was found 7 km from the city, among fields: the trip to the airport the
 buses a day that stop there, and took 217 minutes instead of under two hours."""
 import pytest
 
-from trip_planner import places
+from trip_planner.trip import places
 
 def result(category: str, kind: str, latitude: float, longitude: float, name: str = "Siracusa", local: str = "Siracusa") -> dict:
     return {"category": category, "addresstype": kind, "lat": str(latitude), "lon": str(longitude), "name": name, "importance": 0.6,

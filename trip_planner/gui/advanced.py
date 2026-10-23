@@ -3,8 +3,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Any, TYPE_CHECKING
 
-from trip_planner.config import GRADES, RANGES, SCALES
-from trip_planner.ground_choice import CHOICES, NO_CHANGE_LIMIT
+from trip_planner.trip.trip_settings import GRADES, RANGES, SCALES
+from trip_planner.trip.ground_choice import CHOICES, NO_CHANGE_LIMIT
 from trip_planner.gui.dialogs import LanguageManager
 from trip_planner.gui.style import FONT, LIGHT_COLOURS, LIGHT_DOT, screen_scale, THEME
 from trip_planner.texts import REFERENCE, TEXTS, tr

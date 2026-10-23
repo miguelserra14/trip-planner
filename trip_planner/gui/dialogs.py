@@ -5,9 +5,9 @@ from datetime import date, timedelta
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
-from trip_planner import translate
-from trip_planner.config import MAX_DATES, MAX_DAYS_AHEAD
-from trip_planner.dates import read_dates
+from trip_planner.texts import translate
+from trip_planner.trip.trip_settings import MAX_DATES, MAX_DAYS_AHEAD
+from trip_planner.trip.dates import read_dates
 from trip_planner.gui.style import FONT, TABLE_FONT, THEME
 from trip_planner.texts import REFERENCE, TEXTS, tr
 

@@ -1,13 +1,13 @@
 """Travel dates the way a traveller writes them: "17/12", "17 dez", "17-19/12", "17 e 18 de dezembro", "sexta",
 "amanhã". Read into real days by `read_dates`. Whatever has no year is the first such day from today on.
-The names of the months and of the weekdays, and words such as "tomorrow", come from the files of languages/."""
+The names of the months and of the weekdays, and words such as "tomorrow", come from the files of texts/languages/."""
 import re
 from datetime import date, timedelta
 
 from trip_planner.texts import any_of, TEXTS, words
 from trip_planner.utils import plain
 
-# The words dates are written with come from the languages (texts.py), all of them at once: a traveller may write
+# The words dates are written with come from the languages (texts/), all of them at once: a traveller may write
 # "17 dez", "Dec 17" or "17 dicembre" whatever the language of the report.
 def numbered(key: str, first: int) -> dict[str, int]:
     """The names of a list text, in every language, with their position: {"dezembro": 12, "december": 12, ...}."""
@@ -33,7 +33,7 @@ MAX_RANGE_DAYS = 60   # a longer range is a mistake, not a choice of travel date
 OVER_MONTH_END_DAYS = 10   # "30-2/1" runs over the end of a month: only believed when it is this short
 
 class UnreadableDate(ValueError):
-    """Something written as a date that is not one. key is a text of texts.py and values what it needs."""
+    """Something written as a date that is not one. key is a text of the languages (texts/) and values what it needs."""
 
     def __init__(self, key: str, **values):
         super().__init__(key)

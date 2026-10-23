@@ -18,7 +18,7 @@ from typing import Any, Callable
 from urllib.parse import unquote
 
 from discover import access
-from trip_planner.places import distance_km, load_airports
+from trip_planner.trip.places import distance_km, load_airports
 from trip_planner.utils import plain
 
 CACHE = Path(__file__).parent / "cache"

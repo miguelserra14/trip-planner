@@ -14,19 +14,20 @@ from datetime import date, timedelta
 from tkinter import ttk
 from typing import Any
 
-from trip_planner import current, translate, utils
-from trip_planner.config import LANGUAGES, TripSettings
-from trip_planner.ground_choice import NO_CHANGE_LIMIT
+from trip_planner import current, utils
+from trip_planner.texts import translate
+from trip_planner.trip.trip_settings import LANGUAGES, TripSettings
+from trip_planner.trip.ground_choice import NO_CHANGE_LIMIT
 from trip_planner.gui.advanced import AdvancedSettings, CHANGES, MAIN_SETTINGS, NOT_IN_WINDOW, same, shown
 from trip_planner.gui.dialogs import DatePicker, LanguageManager, PlaceChooser
 from trip_planner.gui.output import OutputView
 from trip_planner.gui.style import FONT, screen_scale, style, THEME
-from trip_planner.places import airport_groups, choose_airports, choose_place, unclear_places, remove_airports, too_far_notice, TripPlaces
+from trip_planner.trip.places import airport_groups, choose_airports, choose_place, unclear_places, remove_airports, too_far_notice, TripPlaces
 from trip_planner.texts import REFERENCE, TEXTS, tr
 
 # The search and the models take several seconds to load, so the window opens without them. They are loaded behind
 # it as soon as it is open (load_search), and whatever needs them takes them on the planner's thread (loaded).
-SEARCH_MODULES = ("planner", "check", "sources.flight_search")
+SEARCH_MODULES = ("planner", "tools.check", "sources.flight_search")
 
 def load_search() -> list:
     return [importlib.import_module(f"trip_planner.{name}") for name in SEARCH_MODULES]

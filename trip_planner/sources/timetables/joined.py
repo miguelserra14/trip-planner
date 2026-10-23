@@ -6,7 +6,7 @@ import httpx
 
 from trip_planner import current
 from trip_planner.itineraries.estimates import estimated_price, ROAD_FACTOR, step_price
-from trip_planner.places import distance_km
+from trip_planner.trip.places import distance_km
 from trip_planner.sources.timetables.client import by_road, Timetables
 from trip_planner.sources.timetables.days import landing_day, reference_day
 from trip_planner.texts import tr

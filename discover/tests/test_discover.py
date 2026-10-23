@@ -18,7 +18,7 @@ import pytest
 from discover import __main__ as command, breakdown, finder, page, plan, serve, sources
 from discover import routes as routes_module
 from discover.sources import Days
-from trip_planner.places import Place
+from trip_planner.trip.places import Place
 
 ROOT = Path(__file__).parents[2]
 ONE_WAY = Days("2026-11-12", "2026-11-19")

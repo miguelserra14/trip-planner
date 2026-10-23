@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessage
 
 from trip_planner import current
 from trip_planner.agents import models, steps
-from trip_planner.places import Place, TripPlaces
+from trip_planner.trip.places import Place, TripPlaces
 from trip_planner.sources import web
 
 # ---------------------------------------------------------------- the models

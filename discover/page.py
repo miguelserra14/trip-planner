@@ -20,8 +20,8 @@ from urllib.parse import quote, urlencode
 from discover.access import city_name
 from discover.finder import Found
 from discover.plan import command, trips
-from trip_planner.config import TripSettings
-from trip_planner.places import load_airports
+from trip_planner.trip.trip_settings import TripSettings
+from trip_planner.trip.places import load_airports
 
 ROOT = Path(__file__).parents[1]
 

@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from trip_planner.config import USER_AGENT
+from trip_planner.trip.trip_settings import USER_AGENT
 
 OPENFLIGHTS = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/"
 CACHE = Path(__file__).parent / "cache"   # the two files of OpenFlights, downloaded once

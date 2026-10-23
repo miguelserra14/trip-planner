@@ -3,7 +3,7 @@ from datetime import date
 from typing import Any
 
 from trip_planner import current
-from trip_planner.config import LIGHTS
+from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.itineraries.ranking import price_range, REQUIREMENTS, tied_on_price
 from trip_planner.report.formatting import arriving, at_destination, day_text, leaving, grade_text, leg_source, price_source, price_text, steps_text, table
 from trip_planner.texts import tr

@@ -7,9 +7,9 @@ from typing import Any
 
 import httpx
 
-from trip_planner.config import ROOT, USER_AGENT
-from trip_planner.ground_choice import is_rail
-from trip_planner.places import distance_km
+from trip_planner.trip.trip_settings import ROOT, USER_AGENT
+from trip_planner.trip.ground_choice import is_rail
+from trip_planner.trip.places import distance_km
 from trip_planner.sources.timetables.modes import LIFT_MODES
 from trip_planner.utils import logged, plain, say
 
@@ -99,7 +99,7 @@ def fill_terminals(again: bool = False) -> int:
     """Work out the terminal of every airport airlines fly from, a few airports per request, and save them.
     Only the airports not yet in the file, unless again: once a year is enough, terminals do not move.
     Returns how many airports could not be asked about."""
-    from trip_planner.places import airfields, load_airports
+    from trip_planner.trip.places import airfields, load_airports
     skipped = airfields()
     airports = [{"code": code, **airport} for code, airport in load_airports().items()
                 if code not in skipped and (again or not TERMINALS.get(code))]   # the ones without a terminal are asked again

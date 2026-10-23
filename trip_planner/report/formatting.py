@@ -2,7 +2,7 @@
 from datetime import date
 from typing import Any
 
-from trip_planner.config import LIGHTS
+from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.texts import tr
 
 def table(header: list[str], rows: list[list[Any]]) -> list[str]:

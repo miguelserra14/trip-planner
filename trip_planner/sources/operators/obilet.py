@@ -8,7 +8,7 @@ import httpx
 
 from trip_planner import current
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price, ROAD_FACTOR
-from trip_planner.places import distance_km, Place
+from trip_planner.trip.places import distance_km, Place
 from trip_planner.texts import tr
 from trip_planner.utils import plain, to_minutes, to_time
 from trip_planner.sources.operators.base import in_eur
@@ -86,7 +86,7 @@ def obilet_rides(city: Place, airport: dict[str, Any], day: str, to_airport: boo
     price in EUR. From the airport's own place first; when it has none, or nothing leaves from it, from the coach
     station of the airport's city, with the way between the two estimated. Returns None when it does not know the
     city, or neither the airport nor the airport's city."""
-    from trip_planner.places import geocode
+    from trip_planner.trip.places import geocode
     if airport["country"] not in OBILET_COUNTRIES:
         return None
     town = obilet_place([city.local_name, city.english_name], airport["country"], False)

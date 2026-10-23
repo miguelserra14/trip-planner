@@ -17,9 +17,9 @@ from discover import access, confirm, finder
 from discover.finder import Found
 from discover.sources import Days
 from trip_planner import current
-from trip_planner.config import TripSettings
+from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.itineraries import legs
-from trip_planner.places import load_airports, Place
+from trip_planner.trip.places import load_airports, Place
 from trip_planner.sources import timetables
 
 TODAY = date.today()

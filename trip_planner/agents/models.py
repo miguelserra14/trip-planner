@@ -7,7 +7,7 @@ import os
 from langchain.agents.middleware import ModelFallbackMiddleware
 from langchain.chat_models import init_chat_model
 
-from trip_planner import config   # reads env/.env, where the keys are
+from trip_planner.trip import trip_settings   # reads env/.env, where the keys are
 
 SUBAGENT_MODEL = "google_genai:gemini-3.1-flash-lite"
 # Coordinator models, best first. The free tier gives the better models very few requests per day

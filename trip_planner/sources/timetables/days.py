@@ -6,7 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from trip_planner import current
-from trip_planner.places import distance_km
+from trip_planner.trip.places import distance_km
 
 def landing_day(flight: dict[str, Any]) -> str:
     """The day a flight lands, which is the day of everything at the destination. Later than its date for a night flight."""

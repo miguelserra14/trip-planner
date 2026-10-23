@@ -8,8 +8,8 @@ import pytest
 
 from tests import recorder
 from trip_planner import current
-from trip_planner.config import TripSettings
-from trip_planner.places import as_place, distance_km, SETTLEMENTS
+from trip_planner.trip.trip_settings import TripSettings
+from trip_planner.trip.places import as_place, distance_km, SETTLEMENTS
 from trip_planner.sources import timetables
 
 def pytest_addoption(parser):

@@ -5,7 +5,7 @@ The languages there are:                          python main.py --languages
 Add a language, translated by a model:            python main.py --add-language it
 Remove a language:                                python main.py --remove-language it
 Locate the terminal of every airport again:       python main.py --terminals all   (once a year is plenty)
-Check whether the connections shown really ran:   python main.py --verify          (see trip_planner/verify.py)
+Check whether the connections shown really ran:   python main.py --verify          (see trip_planner/tools/verify.py)
 
 In the window the trip is typed in a form that starts with what is in settings.py. In the terminal each trip lists
 its airports and asks which ones to drop, and after the result it takes follow-up questions, until an empty line."""
@@ -15,7 +15,7 @@ import sys
 def in_terminal(check: bool) -> int:
     from settings import EXTRA_TRIPS, SETTINGS
     from trip_planner import current
-    from trip_planner.check import check_setup
+    from trip_planner.tools.check import check_setup
     from trip_planner.planner import ask_to_keep, follow_up, plan_all, responses, show_timings
     from trip_planner.sources import flight_search
 
@@ -36,8 +36,8 @@ def in_terminal(check: bool) -> int:
     return asyncio.run(check_setup() if check else plan())
 
 def languages(arguments: list[str]) -> int:
-    """List, add or remove a language of the program: see trip_planner/translate.py."""
-    from trip_planner import translate
+    """List, add or remove a language of the program: see trip_planner/texts/translate.py."""
+    from trip_planner.texts import translate
     for flag, action in (("--add-language", translate.add_language), ("--remove-language", translate.remove_language)):
         if flag in arguments:
             code = arguments[arguments.index(flag) + 1:][:1]
@@ -70,7 +70,8 @@ if __name__ == "__main__":
         sys.exit(languages(arguments))
     if "--verify" in arguments:
         from settings import SETTINGS
-        from trip_planner import current, verify
+        from trip_planner import current
+        from trip_planner.tools import verify
         current.SETTINGS = SETTINGS   # some operators read the limits of a trip
         sys.exit(verify.main())
     if "--terminals" in arguments:

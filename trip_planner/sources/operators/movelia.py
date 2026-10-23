@@ -5,7 +5,7 @@ import threading
 import time
 from typing import Any
 
-from trip_planner.places import Place
+from trip_planner.trip.places import Place
 from trip_planner.utils import plain, to_minutes
 from trip_planner.sources.operators.base import http, NotOnSale, OPERATOR_DATA, Trip
 

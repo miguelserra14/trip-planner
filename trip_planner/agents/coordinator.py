@@ -11,9 +11,10 @@ from typing import Any
 from langchain.chat_models import init_chat_model
 from langchain.messages import SystemMessage
 
-from trip_planner import current, ground_choice
+from trip_planner import current
+from trip_planner.trip import ground_choice
 from trip_planner.agents import models, subagents
-from trip_planner.config import LANGUAGES, LIGHTS
+from trip_planner.trip.trip_settings import LANGUAGES, LIGHTS
 from trip_planner.texts import tr
 from trip_planner.utils import logged, message_text
 

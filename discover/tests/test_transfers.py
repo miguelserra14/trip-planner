@@ -14,8 +14,8 @@ import pytest
 
 from discover import access, rides, transfers
 from trip_planner import current
-from trip_planner.config import TripSettings
-from trip_planner.places import Place
+from trip_planner.trip.trip_settings import TripSettings
+from trip_planner.trip.places import Place
 
 TODAY = date.today()
 PARIS = Place("Paris", "Paris", "Paris", "FR", 48.8566, 2.3522)

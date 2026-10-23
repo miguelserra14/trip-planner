@@ -6,9 +6,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from trip_planner import current, ground_choice
-from trip_planner.config import LIGHTS, ROOT
-from trip_planner.places import airport_groups, too_far_notice
+from trip_planner import current
+from trip_planner.trip import ground_choice
+from trip_planner.trip.trip_settings import LIGHTS, ROOT
+from trip_planner.trip.places import airport_groups, too_far_notice
 from trip_planner.report.formatting import at_destination, grade_text, table
 from trip_planner.sources import timetables
 from trip_planner.texts import tr

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from trip_planner import verify
+from trip_planner.tools import verify
 from trip_planner.sources import fares
 from trip_planner.sources.fares import FareSource, NotRunning, Trip
 from trip_planner.sources.timetables import local_to_utc

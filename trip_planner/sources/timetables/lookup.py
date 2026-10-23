@@ -3,7 +3,8 @@ import asyncio
 from datetime import date
 from typing import Any
 
-from trip_planner import current, ground_choice
+from trip_planner import current
+from trip_planner.trip import ground_choice
 from trip_planner.sources import fares
 from trip_planner.sources.timetables.airport_stops import find_terminals
 from trip_planner.sources.timetables.client import NOT_COVERED, Timetables

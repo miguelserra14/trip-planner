@@ -1,4 +1,4 @@
-"""Add, remove and check the languages of the program. A language is one file of languages/ (see texts.py):
+"""Add, remove and check the languages of the program. A language is one file of languages/ (see texts/__init__.py):
 
     python main.py --languages             the languages there are, and what is missing in each
     python main.py --add-language it       write languages/it.py, translated from English by a model
@@ -13,7 +13,7 @@ import json
 import re
 import string
 
-from trip_planner import dates
+from trip_planner.trip import dates
 from trip_planner.texts import FOLDER, load_languages, read_languages, REFERENCE
 from trip_planner.utils import message_text
 

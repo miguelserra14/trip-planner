@@ -59,12 +59,12 @@ dates, the airports you allowed and what the real timetables say are never given
 env\.venv\Scripts\python main.py              the window
 env\.venv\Scripts\python main.py --terminal   no window: the trip in settings.py, questions asked in the terminal
 env\.venv\Scripts\python main.py --check      check the services
-env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/verify.py)
+env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/tools/verify.py)
 ```
 
 ### Languages
 
-Each language is one file in `trip_planner/languages/`, named after its code (`en.py`, `pt-PT.py`). Whatever file is
+Each language is one file in `trip_planner/texts/languages/`, named after its code (`en.py`, `pt-PT.py`). Whatever file is
 there is a language of the program: it appears in the window and can be used in `settings.py`, with nothing else to change.
 
 In the window, **Languages...** next to the language list adds one (write its name or its code) and removes one.
@@ -130,15 +130,19 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 
 ```
 trip_planner/
-├── config.py          TripSettings: every setting of a trip and its default
+├── planner.py         plans one trip from start to finish, follow-up questions
 ├── current.py         the trip being planned, read by every other module
-├── texts.py           reads the languages and gives every text the traveller reads in the right one
-├── languages/         one file per language: en.py (the reference), pt-PT.py, it.py...
-├── translate.py       adds, removes and checks languages
-├── dates.py           travel dates as travellers write them
 ├── utils.py           times, text, progress lines, timings
 ├── shapes.py          what the dicts passed between modules hold: a vehicle, a connection, a side of a flight
-├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
+├── trip/              what defines a trip
+│   ├── trip_settings.py   TripSettings: every setting of a trip, its default and its check
+│   ├── dates.py           travel dates as travellers write them
+│   ├── ground_choice.py   by train, by bus or either, and how many changes, on each side of the flight
+│   └── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
+├── texts/             every text the traveller reads
+│   ├── __init__.py        tr(): reads the languages and gives each text in the right one
+│   ├── translate.py       adds, removes and checks languages
+│   └── languages/         one file per language: en.py (the reference), pt-PT.py, it.py...
 ├── sources/           where the data comes from, one module per outside service
 │   ├── flight_search.py   the flight search: every route, on Kiwi first, then on Google Flights
 │   ├── kiwi.py            flights from Kiwi
@@ -169,14 +173,15 @@ trip_planner/
 │   ├── summary.py         the result shown to the traveller
 │   ├── full.py            the full report saved to reports/
 │   └── formatting.py      tables, grades and sources
-├── planner.py         plans one trip from start to finish, follow-up questions
 ├── gui/               the window: form, airport list, progress, result, questions
 │   ├── window.py          the main window, and the work it hands to the planner's thread
 │   ├── output.py          the text where the progress and the result are written
 │   ├── advanced.py        the advanced settings
 │   ├── dialogs.py         which place a name means, the calendar, the languages
 │   └── style.py           colours, fonts and the styles of the widgets
-└── check.py           the --check of every outside service
+└── tools/             the maintenance commands of main.py
+    ├── check.py           --check: whether every outside service answers
+    └── verify.py          --verify: whether the connections of the kept reports really ran
 ```
 
 A trip goes through them in this order: `main.py` → `gui/` (or the terminal) → `planner.py` runs the three steps (`agents/steps.py`) →

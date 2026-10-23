@@ -8,9 +8,9 @@ from datetime import date, timedelta
 import pytest
 
 from trip_planner import current
-from trip_planner.config import TripSettings
+from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.itineraries.ranking import check_itinerary
-from trip_planner.places import Place, TripPlaces
+from trip_planner.trip.places import Place, TripPlaces
 from trip_planner.report.formatting import at_destination
 from trip_planner.sources import flight_search
 from trip_planner.sources.timetables import landing_day, Timetables

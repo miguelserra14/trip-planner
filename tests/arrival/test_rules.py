@@ -5,9 +5,9 @@ from datetime import date, timedelta
 
 import httpx
 
-from trip_planner import places
-from trip_planner.config import TripSettings
-from trip_planner.places import choose_airports, Place, read_road_hours, settlement
+from trip_planner.trip import places
+from trip_planner.trip.trip_settings import TripSettings
+from trip_planner.trip.places import choose_airports, Place, read_road_hours, settlement
 from trip_planner.sources import timetables
 from trip_planner.sources.timetables import choose_airport_stops
 

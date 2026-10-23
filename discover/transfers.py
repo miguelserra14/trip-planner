@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from trip_planner.itineraries.estimates import ROAD_FACTOR
 from trip_planner.itineraries.legs import MAX_PLAUSIBLE_EUR_PER_KM
-from trip_planner.places import airport_from, Place
+from trip_planner.trip.places import airport_from, Place
 from trip_planner.utils import message_text, plain
 
 CACHE = Path(__file__).parent / "cache"
@@ -85,7 +85,7 @@ def to_eur(amount: float, currency: str) -> float | None:
         return found
     if not OTHER_RATES:
         import httpx
-        from trip_planner.config import USER_AGENT
+        from trip_planner.trip.trip_settings import USER_AGENT
         answer = httpx.get(OTHER_RATES_URL, headers={"User-Agent": USER_AGENT}, timeout=30).raise_for_status().json()
         OTHER_RATES.update({code: float(rate) for code, rate in (answer.get("rates") or {}).items()})
     rate = OTHER_RATES.get(currency)

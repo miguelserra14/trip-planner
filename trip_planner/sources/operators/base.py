@@ -8,7 +8,7 @@ from typing import Any
 
 import httpx
 
-from trip_planner.config import ROOT, USER_AGENT
+from trip_planner.trip.trip_settings import ROOT, USER_AGENT
 from trip_planner.utils import plain, to_minutes
 
 TIMEOUT = 20

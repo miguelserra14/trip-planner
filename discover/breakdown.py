@@ -11,7 +11,7 @@ from typing import Any
 from discover import flown
 from discover.finder import COUNTRIES_KM, Found
 from discover.routes import airline_names, known_routes
-from trip_planner.places import distance_km, load_airports
+from trip_planner.trip.places import distance_km, load_airports
 from trip_planner.sources import kiwi
 
 NEARBY_KM = 100  # an airport this close to one on the map serves the same city: Stansted and Gatwick are 75 km apart

@@ -9,6 +9,6 @@ __pycache__/
 *.stackdump
 # Languages added by a model are made again with one click (Languages... in the window), so only the two
 # written by hand belong in the repository
-/trip_planner/languages/*.py
-!/trip_planner/languages/en.py
-!/trip_planner/languages/pt-PT.py
+/trip_planner/texts/languages/*.py
+!/trip_planner/texts/languages/en.py
+!/trip_planner/texts/languages/pt-PT.py

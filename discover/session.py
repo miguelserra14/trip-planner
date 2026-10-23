@@ -22,7 +22,7 @@ from discover.serve import address_of, new_token, open_window, Planner, start, s
 from discover.sources import Days
 from settings import SETTINGS
 from trip_planner import current, utils
-from trip_planner.places import geocode, load_airports
+from trip_planner.trip.places import geocode, load_airports
 from trip_planner.utils import plain
 
 MAPS = Path(__file__).parent / "maps"   # the maps made, in this folder: nothing of the planner's is written to

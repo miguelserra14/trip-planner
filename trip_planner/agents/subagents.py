@@ -20,7 +20,7 @@ from trip_planner.agents import models
 from trip_planner.agents.models import SUBAGENT_MODEL
 from trip_planner.agents.schemas import FlightShortlist, TrainPlan, TransferPlan
 from trip_planner.agents.state import SearchState
-from trip_planner.config import LANGUAGES, TripSettings
+from trip_planner.trip.trip_settings import LANGUAGES, TripSettings
 from trip_planner.sources import flight_search, web
 from trip_planner.utils import to_time
 

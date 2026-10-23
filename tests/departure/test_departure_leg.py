@@ -7,7 +7,7 @@ from tests.cases import CASES
 from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
 from trip_planner import current
 from trip_planner.itineraries.legs import to_airport_leg
-from trip_planner.places import as_place, TripPlaces
+from trip_planner.trip.places import as_place, TripPlaces
 from trip_planner.sources import timetables
 from trip_planner.utils import to_minutes
 

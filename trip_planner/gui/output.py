@@ -5,7 +5,7 @@ import tkinter as tk
 import webbrowser
 from tkinter import ttk
 
-from trip_planner.config import GRADES
+from trip_planner.trip.trip_settings import GRADES
 from trip_planner.gui.style import FONT, LIGHT_COLOURS, LIGHT_DOT, LIGHT_MARKS, TABLE_FONT, THEME
 
 class OutputView:

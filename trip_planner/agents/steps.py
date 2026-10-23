@@ -9,13 +9,15 @@ from typing import Any
 
 from langchain.messages import HumanMessage
 
-from trip_planner import current, ground_choice, verify
+from trip_planner import current
+from trip_planner.tools import verify
+from trip_planner.trip import ground_choice
 from trip_planner.agents import subagents
-from trip_planner.config import LIGHTS
+from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.itineraries import selection
 from trip_planner.itineraries.legs import Rejected
 from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itineraries, price_itinerary, rank_itineraries
-from trip_planner.places import describe_airport
+from trip_planner.trip.places import describe_airport
 from trip_planner.report.formatting import day_text
 from trip_planner.report.summary import render_closest, render_report
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web

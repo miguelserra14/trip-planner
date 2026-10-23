@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from trip_planner import current
-from trip_planner.places import Place
+from trip_planner.trip.places import Place
 from trip_planner.sources import fares, timetables
 from trip_planner.utils import logged, to_minutes, to_time
 

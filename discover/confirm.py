@@ -29,7 +29,7 @@ from discover import finder
 from discover.finder import Found, one_per_city, options_of, with_access
 from trip_planner import current
 from trip_planner.itineraries import legs
-from trip_planner.places import airport_from, load_airports, Place, TripPlaces
+from trip_planner.trip.places import airport_from, load_airports, Place, TripPlaces
 from trip_planner.sources import timetables
 from trip_planner.utils import plain, say, to_minutes, to_time
 

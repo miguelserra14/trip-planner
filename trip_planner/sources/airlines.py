@@ -5,7 +5,7 @@ from urllib.parse import quote_plus, urlparse
 
 import httpx
 
-from trip_planner.config import USER_AGENT
+from trip_planner.trip.trip_settings import USER_AGENT
 from trip_planner.sources import web
 from trip_planner.utils import logged, plain
 

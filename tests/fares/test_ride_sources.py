@@ -12,8 +12,9 @@ import httpx
 import pytest
 
 from tests.conftest import trip_settings
-from trip_planner import current, places
-from trip_planner.places import load_airports, Place
+from trip_planner import current
+from trip_planner.trip import places
+from trip_planner.trip.places import load_airports, Place
 from trip_planner.sources.operators import base, flixbus, movelia, obilet, rede_expressos
 
 CHECKPOINTS = Path(__file__).parent / "checkpoints" / "rides"

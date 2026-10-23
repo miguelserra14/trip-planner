@@ -8,7 +8,7 @@ settings all the others. No window is opened.
 import dataclasses
 from datetime import date, timedelta
 
-from trip_planner.config import TripSettings
+from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.gui import AdvancedSettings, CHANGES, MAIN_SETTINGS, NOT_IN_WINDOW, shown
 from trip_planner.texts import REFERENCE, TEXTS
 

@@ -2,7 +2,7 @@
 import tkinter as tk
 from tkinter import ttk
 
-from trip_planner.config import GRADES, LIGHTS
+from trip_planner.trip.trip_settings import GRADES, LIGHTS
 
 FONT = "Segoe UI"
 TABLE_FONT = "Consolas"

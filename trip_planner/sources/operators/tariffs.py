@@ -1,7 +1,7 @@
 """Published tariffs of city networks, and the free public transport of Luxembourg."""
 from collections.abc import Callable
 
-from trip_planner.places import distance_km
+from trip_planner.trip.places import distance_km
 from trip_planner.sources.operators.base import agency, FareSource, in_eur, Trip
 
 def luxembourg_fare(trip: Trip) -> float | None:

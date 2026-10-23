@@ -1,7 +1,7 @@
 """ÖBB, the Austrian railways."""
 from typing import Any
 
-from trip_planner.places import distance_km
+from trip_planner.trip.places import distance_km
 from trip_planner.utils import to_minutes
 from trip_planner.sources.operators.base import http, SAME_STATION_KM, Trip
 

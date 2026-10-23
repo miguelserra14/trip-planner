@@ -2,7 +2,7 @@
 and the rides it sells only in its booking system."""
 from typing import Any
 
-from trip_planner.places import distance_km, Place
+from trip_planner.trip.places import distance_km, Place
 from trip_planner.utils import plain, to_minutes
 from trip_planner.sources.operators.base import http, Trip, NotRunning
 

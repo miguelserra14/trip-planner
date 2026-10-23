@@ -143,7 +143,8 @@ trip_planner/
 │   ├── kiwi.py            flights from Kiwi
 │   ├── google_flights.py  flights from Google Flights, when Kiwi does not answer
 │   ├── timetables.py      published timetables (Transitous) and airport terminals
-│   ├── fares.py           ticket prices of the vehicles found in the timetables, asked of each operator
+│   ├── fares.py           which operator prices which vehicle, and the operators that list rides (FARE_SOURCES, RIDE_SOURCES)
+│   ├── operators/         one module per operator's booking system (FlixBus, ALSA, Movelia, Obilet...) and the city tariffs
 │   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
 │   └── web.py             web search for the subagents (Tavily), cleaning of what models write
 ├── agents/            the models
@@ -222,10 +223,10 @@ The program depends on these services. None of them is under the project's contr
 | Rede Expressos | The national coaches of Portugal, which publish no timetable: rides and prices for the travel date between a city and the airports of Lisbon, Porto and Faro, read with the requests its own site makes (unofficial too) | none |
 | Movelia | The booking site of the Spanish coach companies (Monbus, Damas, Bacoma, Subus, ALSA...) and of Renfe: direct rides and prices for the travel date between a city and an airport of Spain, read with the requests its own site makes (unofficial too) | none |
 | Obilet | The booking site of the coach companies of Turkey, which also sells those of Italy (Itabus, MarinoBus), Poland (Szwagropol, Majer), Moldova, Greece (the KTEL of the mainland), Croatia, Slovenia, Serbia, Montenegro, North Macedonia, Kosovo, Albania, Bosnia, Bulgaria and Romania: rides and prices for the travel date. Where the airport is not one of its stops, from the coach station of the airport's city, with the way there estimated (not verified). Read with the requests its own site makes (unofficial too) | none |
-| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), ALSA (Spain), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/fares.py` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance, at a rate per country (`itineraries/legs.py`) | none |
+| ÖBB (Austria), Trenitalia and Trenord (Italy), MÁV (Hungary), Elron (Estonia), ALSA and Movelia (Spain: Renfe, Ouigo, coaches), RegioJet, FlixBus | Ticket prices of the trains and coaches found in the timetables, see `sources/operators/` (unofficial endpoints too). Public transport inside Luxembourg is free and priced as such. Everywhere else the price of ground transport is estimated from the distance, at a rate per country (`itineraries/legs.py`) | none |
 | Eurostat | Price level of transport services per country, copied into the code: the rate per km of the countries where no railway price can be read | none |
 | European Central Bank | Exchange rates, for prices in forints and crowns | none |
-| PID (Prague), BKK (Budapest), STIB and De Lijn (Belgium), TEC (Charleroi airport bus), Carris and Metro (Lisbon) | Published tariffs of city networks, copied into `sources/fares.py` with the page and the day each was read. A tariff is no longer used a year after it was read | none |
+| PID (Prague), BKK (Budapest), STIB and De Lijn (Belgium), TEC (Charleroi airport bus), Carris and Metro (Lisbon) | Published tariffs of city networks, copied into `sources/operators/tariffs.py` with the page and the day each was read. A tariff is no longer used a year after it was read | none |
 | OpenStreetMap (Nominatim, Overpass), OurAirports, Wikidata | Cities, terminals, airports, airline sites | none |
 | OSRM (public server) | Hours by road from a city to its airports, so that one across a sea is left out (`max_road_hours`). Without it the airports are chosen by the straight line alone | none |
 

@@ -12,8 +12,8 @@ Who does what, and where:
   an airport across a sea is left out.
 - Flight search (code, sources/flight_search.py): every departure airport against every arrival airport on every date, on
   Kiwi. Nothing is retyped by a model.
-- Real timetables (code, sources/timetables.py and sources/fares.py): the ground transport of every flight is
-  looked up in published timetables.
+- Real timetables (code, sources/timetables.py, sources/fares.py and sources/operators/): the ground transport of every
+  flight is looked up in published timetables.
 - Airport transfer agent and destination transport agent (models, agents/subagents.py): they search the web for
   prices, and for the transport that no timetable covers.
 - Coordinator (model, agents/coordinator.py): called once, after the steps ran in code (agents/steps.py), to write the

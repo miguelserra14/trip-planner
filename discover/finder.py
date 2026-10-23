@@ -202,6 +202,9 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
         airport["home_eur"] = access.leg(airport["code"], False, place, today)["price_eur"]
     say(f"{place.label}: " + ", ".join(f"{airport['code']} ({airport['km']} km)" for airport in departures) + f"; {days}")
     searches: list[dict[str, Any]] = []
+    # Days not all in a row are asked a run at a time (Days.runs), and the requests to Kiwi shared between the runs
+    runs = days.runs()
+    on = lambda run: f" ({run})" if len(runs) > 1 else ""
 
     async def asking(source: str, start: str, target: str, ask) -> list[dict[str, Any]]:
         """One request, kept with its error: a failure, a refusal and an answer the code cannot read are told apart."""
@@ -209,15 +212,17 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
             found, error = await ask(), ""
         except Exception as problem:
             found, error = None, error_text(problem)
+        if found:   # two runs of days joined (Days.runs) may give flights on the days between the ones chosen
+            found = [flight for flight in found if days.allows(flight)]
         searches.append({"source": source, "from": start, "to": target, "answered": found is not None, "error": error,
                          "flights": found or []})
         return found or []
 
     # Ryanair first, while Kiwi connects: Kiwi leaves Ryanair out only from the airports where Ryanair answered, or
     # Ryanair's destinations would be missing from the map when its own request failed.
-    ryanair = asyncio.gather(*[asking("Ryanair", airport["code"], "all its destinations",
-                                      lambda code=airport["code"]: asyncio.to_thread(ryanair_destinations, code, days))
-                               for airport in departures])
+    ryanair = asyncio.gather(*[asking("Ryanair", airport["code"], "all its destinations" + on(run),
+                                      lambda code=airport["code"], run=run: asyncio.to_thread(ryanair_destinations, code, run))
+                               for airport in departures for run in runs])
     answers = await ryanair if fast else (await asyncio.gather(ryanair, kiwi.connect_kiwi()))[0]
     flights = [flight for answer in answers for flight in answer]
     with_ryanair = {search["from"] for search in searches if search["source"] == "Ryanair" and search["answered"]}
@@ -231,32 +236,32 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
         else:
             near = countries_near(place, {airport["code"] for airport in departures})
             groups = kiwi_groups(departures, with_ryanair)
-            each = allowed // len(groups)
+            each = allowed // (len(groups) * len(runs))
             countries, left_out = near[:each], near[each:]
             if countries:
-                say(f"Kiwi: {len(countries)} countries from {' and '.join('+'.join(codes) for codes, _ in groups)}, "
-                    f"{len(countries) * len(groups)} requests")
+                say(f"Kiwi: {len(countries)} countries from {' and '.join('+'.join(codes) for codes, _ in groups)}"
+                    + (f", for {len(runs)} runs of days" if len(runs) > 1 else "") + f", {len(countries) * len(groups) * len(runs)} requests")
             else:
                 say(f"Kiwi was asked {KIWI_DAILY} times today already: only Ryanair's destinations are on the map.")
             turn = asyncio.Semaphore(KIWI_AT_ONCE)
 
-            async def politely(codes: str, country: str, excluded: str) -> list[dict[str, Any]]:
+            async def politely(codes: str, country: str, excluded: str, run: Days) -> list[dict[str, Any]]:
                 async with turn:
                     # Once Kiwi refused, asking again only makes it refuse for longer, the planner included
                     if refusal:
                         raise RuntimeError(f"not asked: Kiwi refused an earlier request ({refusal[0]})")
                     count_kiwi(day)
                     try:
-                        return await kiwi_destinations(codes, country, days, max_stops, excluded)
+                        return await kiwi_destinations(codes, country, run, max_stops, excluded)
                     except Exception as error:
                         if kiwi.refused(error):
                             refusal.append(error_text(error)[:120])
                         raise
                     finally:
                         await asyncio.sleep(KIWI_PAUSE_SECONDS)
-            asked = [asking("Kiwi", ",".join(codes), country,
-                            lambda codes=",".join(codes), country=country, excluded=excluded: politely(codes, country, excluded))
-                     for codes, excluded in groups for country in countries]
+            asked = [asking("Kiwi", ",".join(codes), country + on(run),
+                            lambda codes=",".join(codes), country=country, excluded=excluded, run=run: politely(codes, country, excluded, run))
+                     for codes, excluded in groups for country in countries for run in runs]
             flights += [flight for answer in await asyncio.gather(*asked) for flight in answer]
             # The destinations flown from these airports that no answer gave: asked once more, by name, while the
             # day's requests allow it
@@ -265,14 +270,14 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
             wanted = sorted(gaps, key=lambda code: -len(gaps[code]))
             batches = [wanted[start:start + GAP_BATCH] for start in range(0, len(wanted), GAP_BATCH)]
             room = max(0, min(GAP_REQUESTS, KIWI_DAILY - kiwi_used(day)))
-            gap_asks = [(codes, excluded, batch) for batch in batches for codes, excluded in groups][:room]
-            asked_by_name = {code for _, _, batch in gap_asks for code in batch}
+            gap_asks = [(codes, excluded, batch, run) for batch in batches for codes, excluded in groups for run in runs][:room]
+            asked_by_name = {code for _, _, batch, _ in gap_asks for code in batch}
             if gap_asks:
                 say(f"Kiwi: {len(wanted)} destinations flown from these airports were in no answer, asked again by name "
                     f"({len(gap_asks)} requests)")
-                asked = [asking("Kiwi", ",".join(codes), "flown: " + ",".join(batch),
-                                lambda codes=",".join(codes), batch=",".join(batch), excluded=excluded: politely(codes, batch, excluded))
-                         for codes, excluded, batch in gap_asks]
+                asked = [asking("Kiwi", ",".join(codes), "flown: " + ",".join(batch) + on(run),
+                                lambda codes=",".join(codes), batch=",".join(batch), excluded=excluded, run=run: politely(codes, batch, excluded, run))
+                         for codes, excluded, batch, run in gap_asks]
                 flights += [flight for answer in await asyncio.gather(*asked) for flight in answer]
     if refusal:
         say(f"Kiwi refused a request ({refusal[0]}): the ones after it were not sent.")

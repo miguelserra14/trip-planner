@@ -108,6 +108,8 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
                [[code, day, "; ".join(f"{ride['source']} {to_time(ride['leave'])} → {to_time(ride['arrive'])}, {ride['price_eur']:.2f} EUR"
                                       for ride in rides) or tr("none")]
                 for side in ("operators", "operators_from") for code, days in (ground.get(side) or {}).items() for day, rides in days.items()]),
+        *([""] + [f"- {tr('not_on_sale_line', source=entry['source'], side=tr('sale_side_to' if entry['to_airport'] else 'sale_side_from', airport=entry['airport']), day=entry['day'], days=entry['days'])}"
+                  for entry in ground.get("not_on_sale") or []] if ground.get("not_on_sale") else []),
         "",
         tr("model_transfers_title"),
         "",

@@ -4,7 +4,7 @@ the one before. run_steps runs them in order, in code: no model decides what com
 import asyncio
 import re
 import traceback
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from langchain.messages import HumanMessage
@@ -16,6 +16,7 @@ from trip_planner.itineraries import selection
 from trip_planner.itineraries.legs import Rejected
 from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itineraries, price_itinerary, rank_itineraries
 from trip_planner.places import describe_airport
+from trip_planner.report.formatting import day_text
 from trip_planner.report.summary import render_closest, render_report
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web
 from trip_planner.texts import tr
@@ -223,6 +224,7 @@ async def look_up_in_rounds(flights: list[dict[str, Any]]) -> tuple:
                 for day, rides in days.items():
                     ground[side].setdefault(code, {}).setdefault(day, rides)
         ground["requests"] += found.pop("requests", 0)
+        ground.setdefault("not_on_sale", []).extend(found.pop("not_on_sale", []))
         ground.update(found)
         transfers += new_transfers
         trains += new_trains
@@ -257,6 +259,21 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
             f"Real timetables cover {covered} of {len(legs)} legs; "
             f"the others rely on the specialists' unverified estimates. Prices found by the specialists for "
             f"{sum(t['price_known'] for t in transfers)} of {len(transfers)} departure airports."}
+
+def not_on_sale_warnings(shown: list[dict[str, Any]], ground: dict[str, Any]) -> list[str]:
+    """For the options shown: the operators that do not sell the day of a leg yet (timetables.lookup), and from when
+    it can be known whether they run then. That day is its travel day less how far ahead the operator sells."""
+    warnings = {}
+    for itinerary in shown:
+        flight = itinerary["flight"]
+        for key in ((True, flight["departure_airport"], flight["date"]), (False, flight["arrival_airport"], timetables.landing_day(flight))):
+            for entry in (entry for entry in ground.get("not_on_sale") or [] if (entry["to_airport"], entry["airport"], entry["day"]) == key):
+                days = entry["days"] or 0
+                from_day = max(date.today(), date.fromisoformat(entry["day"]) - timedelta(days=days))
+                side = tr("sale_side_to" if entry["to_airport"] else "sale_side_from", airport=entry["airport"])
+                warnings[tr("warn_not_on_sale", source=entry["source"], days=days, side=side, day=day_text(entry["day"]),
+                            from_day=day_text(from_day.isoformat()))] = None
+    return list(warnings)
 
 def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
     """Combine the flights with their ground transport into door-to-door itineraries, discard the ones that break
@@ -317,6 +334,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
             if near and not reliable:
                 warnings.append(tr("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
             shown = sorted(reliable or near, key=closeness)[:current.SETTINGS.options_shown]
+            warnings += not_on_sale_warnings(shown, ground)
             if shown:
                 for itinerary in shown:
                     if not itinerary["booking"]["url"]:
@@ -343,6 +361,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                 # Not confirmed by the airline: a looked-up site, shown as such
                 itinerary["booking"]["url"] = airlines.airline_site(itinerary["flight"].get("carrier", ""), itinerary["flight"]["airline"])
         number = next(index for index, itinerary in enumerate(shown, start=1) if itinerary is recommended)
+        warnings += not_on_sale_warnings(shown, ground)
         report = render_report(shown, recommended, warnings)
     return {
         "step": 3,

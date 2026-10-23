@@ -249,6 +249,10 @@ TEXTS = {
     "note_flights_beaten": 'Ground transport was looked up for {checked} flights. The other {skipped} were left out because none could beat the recommended option: its ticket, with the cheapest transport seen for its airports, already costs more.',
     "warn_flights_not_checked": "Ground transport was looked up for the {checked} cheapest flights only; {skipped} more expensive flights were not evaluated.",
     "warn_flight_gaps": "The flight list may be incomplete in {count} place(s), see the full report.",
+    "warn_not_on_sale": "{source} sells about {days} days ahead: its rides {side} on {day} are not on sale yet. From {from_day} it can be known whether one runs at the time you need.",
+    "sale_side_to": "to {airport}",
+    "sale_side_from": "from {airport}",
+    "not_on_sale_line": "{source}, {side} on {day}: not on sale yet (it sells about {days} days ahead).",
     "warn_program_errors": "{count} flight(s) were left out because the program failed on them, not because they do not fit: see the rejected flights in the full report.",
     "warn_recommendation_differs": "Integrity warning: this text, written by a model, names option {model}, but the rules computed in code recommend option {rules}. Trust the table.",
     # ---- reliability grades and sources

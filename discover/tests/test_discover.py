@@ -309,3 +309,14 @@ def test_kiwi_is_asked_for_all_the_airports_at_once(services, monkeypatch):
     assert services[3] == ("LIS", "ES", "")   # Ryanair did not answer at Lisbon: every airline from there
     groups = finder.kiwi_groups([{"code": "OPO"}, {"code": "LIS"}], {"OPO", "LIS"})
     assert groups == [(["OPO", "LIS"], "FR")]
+
+def test_the_time_in_the_city_counts_from_reaching_its_centre_to_leaving_it():
+    flight = {"date": "2026-11-12", "time": "07:00", "arrival_date": "2026-11-12", "arrival_time": "10:15",
+              "back": {"date": "2026-11-14", "time": "18:00"},
+              "access": [{"minutes": 60, "looked_up": True}, {"minutes": 45, "looked_up": True},
+                         {"minutes": 45, "looked_up": False}, {"minutes": 60, "looked_up": True}]}
+    # in at 10:15 + 45 + 45 = 11:45 on the 12th, out at 18:00 - 90 - 45 = 15:45 on the 14th
+    assert page.stay(flight, airport_minutes=90, landing_minutes=45) == {"minutes": 52 * 60, "nights": 2, "estimated": True}
+    assert page.stay({**flight, "back": None}) is None   # one way: no time in the city
+    late = {**flight, "back": {"date": "2026-11-12", "time": "12:00"}}
+    assert page.stay(late, 90, 45)["minutes"] == 0   # back before having reached the centre

@@ -27,6 +27,10 @@ from trip_planner.utils import plain
 
 MAPS = Path(__file__).parent / "maps"   # the maps made, in this folder: nothing of the planner's is written to
 
+def times() -> dict[str, int]:
+    """The planner's times at the airports (settings.py), for the time in the city of each trip (page.stay)."""
+    return {"airport_minutes": SETTINGS.min_airport_minutes, "landing_minutes": SETTINGS.min_landing_minutes}
+
 class Session:
     def __init__(self, city: str, days: Days, fast: bool = False, light: bool = False, max_stops: int = finder.MAX_STOPS):
         self.city, self.days, self.fast, self.max_stops = city, days, fast, max_stops
@@ -48,7 +52,10 @@ class Session:
         self.found = asyncio.run(discover(place, self.days, fast=self.fast, max_stops=self.max_stops, kiwi_requests=self.kiwi_requests))
         self.sources = "Ryanair (all its destinations)" + (" and Kiwi (the cheapest of every airline, by country)" if self.found.kiwi else "")
         days = self.days
-        name = f"{plain(place.english_name).replace(' ', '-')}_{days.first}_{days.last}" + (f"_back_{days.back_first}_{days.back_last}" if days.round_trip else "")
+        # The days clicked, when not all in a row, by their day of the month: two maps of the same weeks stay apart
+        clicked = lambda chosen: "_" + "-".join(day[8:] for day in chosen) if chosen else ""
+        name = (f"{plain(place.english_name).replace(' ', '-')}_{days.first}_{days.last}{clicked(days.out_days)}"
+                + (f"_back_{days.back_first}_{days.back_last}{clicked(days.back_days)}" if days.round_trip else ""))
         MAPS.mkdir(exist_ok=True)
         self.path = MAPS / f"{name}.html"
         self.save()
@@ -58,7 +65,7 @@ class Session:
         """The map as a file, and every request, what it answered or why it failed, and how long it took."""
         found = self.found
         self.sections = breakdown(found)
-        self.path.write_text(map_page(found, self.sources, self.sections, SETTINGS.min_airport_minutes, max_lookups=confirm.MAX_LOOKUPS), encoding="utf-8")
+        self.path.write_text(map_page(found, self.sources, self.sections, max_lookups=confirm.MAX_LOOKUPS, **times()), encoding="utf-8")
         self.path.with_suffix(".json").write_text(json.dumps({"days": str(self.days), "departures": found.departures, "searches": found.searches,
                                                               "lookups": found.lookups, "discarded": found.discarded, "log": utils.REQUESTS},
                                                              ensure_ascii=False, indent=1), encoding="utf-8")
@@ -79,9 +86,9 @@ class Session:
         asks for the destinations again until look_up ends. Returns the address."""
         token = new_token()
         self.planner = Planner(trips(self.found, load_airports()), token, open_window)
-        self.live["state"] = map_state(self.found, self.sections, running=looking_up)
-        page = map_page(self.found, self.sources, self.sections, SETTINGS.min_airport_minutes, token=token, running=looking_up,
-                        max_lookups=confirm.MAX_LOOKUPS)
+        self.live["state"] = map_state(self.found, self.sections, running=looking_up, **times())
+        page = map_page(self.found, self.sources, self.sections, token=token, running=looking_up,
+                        max_lookups=confirm.MAX_LOOKUPS, **times())
         self.server = start(page, self.planner, lambda: self.live["state"])
         self.address = address_of(self.server)
         return self.address
@@ -95,13 +102,13 @@ class Session:
             with self.lock:
                 if self.planner:
                     self.planner.trips = trips(found, airports)
-                self.live["state"] = map_state(found, breakdown(found), running=True, version=self.live["state"].get("version", 0) + 1)
+                self.live["state"] = map_state(found, breakdown(found), running=True, version=self.live["state"].get("version", 0) + 1, **times())
         try:
             asyncio.run(confirm.confirm(self.found, changed))
         finally:
             self.save()
             with self.lock:
-                self.live["state"] = map_state(self.found, self.sections, running=False, version=self.live["state"].get("version", 0) + 1)
+                self.live["state"] = map_state(self.found, self.sections, running=False, version=self.live["state"].get("version", 0) + 1, **times())
 
     def stop(self) -> None:
         if self.server:

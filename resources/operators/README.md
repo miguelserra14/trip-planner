@@ -1,8 +1,8 @@
 # Operators' data
 
 What a coach or train operator's booking system needs to be asked and does not give with each answer: where its
-stops are, the names it searches by. One file per operator, read by `trip_planner/sources/fares.py`. To add an
-operator of another country, put its file here and write its function in `fares.py` (see `RIDE_SOURCES`).
+stops are, the names it searches by. One file per operator, read by its module in `trip_planner/sources/operators/`. To add an
+operator of another country, put its file here, write its module there and add it to `RIDE_SOURCES` in `sources/fares.py`.
 
 | File | What it is | How it is kept up to date |
 | :-- | :-- | :-- |

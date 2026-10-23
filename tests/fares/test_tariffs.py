@@ -6,13 +6,14 @@ import pytest
 
 from trip_planner.itineraries.legs import price_with_tickets
 from trip_planner.sources import fares
+from trip_planner.sources.operators import base
 
 DAY = (date.today() + timedelta(days=30)).isoformat()
 AIRPORT_PRAGUE, CENTRE_PRAGUE, KLADNO = [50.1008, 14.2600], [50.0830, 14.4350], [50.1473, 14.1028]
 
 @pytest.fixture(autouse=True)
 def rates(monkeypatch):
-    monkeypatch.setattr(fares, "RATES", {"CZK": 25.0, "HUF": 400.0})
+    monkeypatch.setattr(base, "RATES", {"CZK": 25.0, "HUF": 400.0})
     monkeypatch.setattr(fares, "CACHE", {})
 
 def step(agency: str, line: str = "1", time: str = "10:00", arrive: str = "10:20", start: list = (), end: list = (), rail: bool = False) -> dict:

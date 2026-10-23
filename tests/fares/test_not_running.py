@@ -8,6 +8,7 @@ from trip_planner.itineraries import legs
 from trip_planner.itineraries.legs import best_on_real_prices, Rejected
 from trip_planner.itineraries.ranking import price_range, tied_on_price
 from trip_planner.sources import fares
+from trip_planner.sources.operators import flixbus
 from trip_planner.sources.fares import FareSource, NotRunning, Trip
 
 TRAVEL = (date.today() + timedelta(days=70)).isoformat()
@@ -21,27 +22,27 @@ def flixbus_trip(leave: str = "00:55", arrive: str = "03:05") -> Trip:
     return Trip("Coimbra", "Lisbon (Oriente)", "eu-flixbus_a", "eu-flixbus_b", (), (), TRAVEL, leave, arrive)
 
 @pytest.fixture
-def flixbus(monkeypatch):
+def flixbus_answers(monkeypatch):
     """FlixBus answering from a list of rides instead of the network."""
     rides: list = []
-    monkeypatch.setattr(fares, "flixbus_search", lambda *args, **options: (rides, {}))
+    monkeypatch.setattr(flixbus, "flixbus_search", lambda *args, **options: (rides, {}))
     return rides
 
-def test_flixbus_selling_that_departure_gives_its_price(flixbus):
-    flixbus += [ride("00:20", "02:30"), ride("00:55", "03:05")]
-    assert fares.flixbus_fare(flixbus_trip()) == 9.99
+def test_flixbus_selling_that_departure_gives_its_price(flixbus_answers):
+    flixbus_answers += [ride("00:20", "02:30"), ride("00:55", "03:05")]
+    assert flixbus.flixbus_fare(flixbus_trip()) == 9.99
 
-def test_flixbus_running_other_rides_that_day_says_this_one_does_not_run(flixbus):
-    flixbus += [ride("00:20", "02:30"), ride("01:45", "04:10")]
+def test_flixbus_running_other_rides_that_day_says_this_one_does_not_run(flixbus_answers):
+    flixbus_answers += [ride("00:20", "02:30"), ride("01:45", "04:10")]
     with pytest.raises(NotRunning):
-        fares.flixbus_fare(flixbus_trip())
+        flixbus.flixbus_fare(flixbus_trip())
 
-def test_flixbus_with_no_ride_that_day_says_nothing(flixbus):
-    assert fares.flixbus_fare(flixbus_trip()) is None   # not on sale yet, or no ride at all: nothing is known
+def test_flixbus_with_no_ride_that_day_says_nothing(flixbus_answers):
+    assert flixbus.flixbus_fare(flixbus_trip()) is None   # not on sale yet, or no ride at all: nothing is known
 
-def test_a_sold_out_ride_still_runs(flixbus):
-    flixbus += [ride("00:20", "02:30"), ride("00:55", "03:05", status="full")]
-    assert fares.flixbus_fare(flixbus_trip()) is None   # no price, but it is not said not to run
+def test_a_sold_out_ride_still_runs(flixbus_answers):
+    flixbus_answers += [ride("00:20", "02:30"), ride("00:55", "03:05", status="full")]
+    assert flixbus.flixbus_fare(flixbus_trip()) is None   # no price, but it is not said not to run
 
 def step(time: str, arrive: str) -> dict:
     return {"time": time, "arrive": arrive, "line": "X", "agency": "Coach", "from": "A", "to": "B", "rail": False, "coach": True,

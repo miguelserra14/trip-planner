@@ -10,6 +10,7 @@ A return can leave from another airport than the one flown to, and land at anoth
 Kiwi combines them when it is cheaper (Birmingham out, Manchester back)."""
 import json
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -20,20 +21,62 @@ from trip_planner.utils import logged
 
 RYANAIR = "https://www.ryanair.com/api/farfnd/v4"
 
+MAX_RUNS = 2   # runs of days in a row asked apart, each side: the closest ones are joined beyond it (Days.runs)
+
+def runs_of(days: list[str], most: int = MAX_RUNS) -> list[tuple[str, str]]:
+    """Days in a row as (first, last), the two runs with the smallest gap joined until there are at most most."""
+    found: list[list[date]] = []
+    for day in sorted(date.fromisoformat(text) for text in days):
+        if found and (day - found[-1][1]).days <= 1:
+            found[-1][1] = day
+        else:
+            found.append([day, day])
+    while len(found) > most:
+        gap = min(range(len(found) - 1), key=lambda at: (found[at + 1][0] - found[at][1]).days)
+        found[gap:gap + 2] = [[found[gap][0], found[gap + 1][1]]]
+    return [(first.isoformat(), last.isoformat()) for first, last in found]
+
 @dataclass(frozen=True)
 class Days:
     first: str                 # yyyy-mm-dd: the first and the last day the traveller may leave on
     last: str
     back_first: str | None = None   # the first and the last day the traveller may fly back on. None: one way
     back_last: str | None = None
+    out_days: tuple[str, ...] = ()    # the days clicked to leave on, when not every day from first to last
+    back_days: tuple[str, ...] = ()   # and to come back on
+
+    @classmethod
+    def clicked(cls, out: list[str], back: list[str] | None = None) -> "Days":
+        """The days clicked in a calendar, yyyy-mm-dd, kept as they are when they are not all in a row."""
+        out, back = sorted(out), sorted(back or [])
+        whole = lambda days: len(days) == (date.fromisoformat(days[-1]) - date.fromisoformat(days[0])).days + 1
+        return cls(out[0], out[-1], *((back[0], back[-1]) if back else ()),
+                   out_days=() if whole(out) else tuple(out), back_days=() if not back or whole(back) else tuple(back))
 
     @property
     def round_trip(self) -> bool:
         return self.back_first is not None
 
+    def allows(self, flight: dict[str, Any]) -> bool:
+        """Whether a flight leaves, and comes back, on days the traveller chose."""
+        back = flight.get("back")
+        return ((not self.out_days or flight["date"] in self.out_days)
+                and (not back or not self.back_days or back["date"] in self.back_days))
+
+    def runs(self) -> list["Days"]:
+        """The days as the sources are asked them: one Days per run of days in a row, each side, a return only
+        with a way out that does not start after it. Ryanair and Kiwi give the cheapest flight of each destination
+        over the days asked: asked over the gap between two runs, that flight could be on a day not chosen."""
+        outs = runs_of(list(self.out_days)) if self.out_days else [(self.first, self.last)]
+        if not self.round_trip:
+            return [Days(*out) for out in outs]
+        backs = runs_of(list(self.back_days)) if self.back_days else [(self.back_first, self.back_last)]
+        return [Days(*out, *back) for out in outs for back in backs if back[1] >= out[0]]
+
     def __str__(self) -> str:
-        out = f"{self.first} to {self.last}"
-        return out + (f", back {self.back_first} to {self.back_last}" if self.round_trip else ", one way")
+        shown = lambda days, first, last: ", ".join(days) if days else f"{first} to {last}"
+        out = shown(self.out_days, self.first, self.last)
+        return out + (f", back {shown(self.back_days, self.back_first, self.back_last)}" if self.round_trip else ", one way")
 
 def ryanair_leg(flight: dict[str, Any]) -> dict[str, Any]:
     start, end = flight["departureAirport"], flight["arrivalAirport"]

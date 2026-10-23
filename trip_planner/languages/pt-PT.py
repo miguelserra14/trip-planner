@@ -249,6 +249,10 @@ TEXTS = {
     "note_flights_beaten": 'O transporte terrestre foi consultado para {checked} voos. Os outros {skipped} ficaram de fora porque nenhum podia bater a opção recomendada: o bilhete, com o transporte mais barato visto para os seus aeroportos, já custa mais.',
     "warn_flights_not_checked": "O transporte terrestre só foi consultado para os {checked} voos mais baratos; {skipped} voos mais caros não foram avaliados.",
     "warn_flight_gaps": "A lista de voos pode estar incompleta em {count} ponto(s), ver o relatório completo.",
+    "warn_not_on_sale": "A {source} vende cerca de {days} dias antes: as viagens {side} em {day} ainda não estão à venda. A partir de {from_day} já se pode saber se há transporte à hora pretendida.",
+    "sale_side_to": "para {airport}",
+    "sale_side_from": "de {airport}",
+    "not_on_sale_line": "{source}, {side} em {day}: ainda não está à venda (vende cerca de {days} dias antes).",
     "warn_program_errors": "{count} voo(s) ficaram de fora porque o programa falhou neles, não porque não servem: ver os voos rejeitados no relatório completo.",
     "warn_recommendation_differs": "Aviso de integridade: este texto, escrito por um modelo, refere a opção {model}, mas as regras calculadas em código recomendam a opção {rules}. Confia na tabela.",
     # ---- reliability grades and sources

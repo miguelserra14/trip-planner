@@ -13,6 +13,7 @@ from trip_planner.agents.coordinator import COORDINATOR_MODELS
 from trip_planner.config import ROOT, USER_AGENT
 from trip_planner.places import airport_from, geocode, load_airports, Place, road_hours
 from trip_planner.sources import airlines, fares, google_flights, kiwi, timetables, web
+from trip_planner.sources.operators import elron, flixbus, mav, oebb, regiojet, trenitalia
 from trip_planner.utils import message_text
 
 async def check_setup() -> int:
@@ -81,7 +82,7 @@ async def check_setup() -> int:
             await transit.close()
 
     def flixbus() -> str:
-        city = fares.flixbus_city(antwerp.english_name, antwerp.latitude, antwerp.longitude, 25)
+        city = flixbus.flixbus_city(antwerp.english_name, antwerp.latitude, antwerp.longitude, 25)
         if not city:
             raise RuntimeError("Antwerp was not found")
         return "Antwerp found"
@@ -98,11 +99,11 @@ async def check_setup() -> int:
     def operator_prices() -> str:
         # A departure taken from each operator's own search must come back with its price
         answered = [name for name, check in (
-            ("ÖBB", lambda: fares.http.get(f"{fares.OEBB}/domain/v4/init").raise_for_status().json()["accessToken"]),
-            ("Trenitalia", lambda: fares.http.get(f"{fares.TRENITALIA}/locations/search", params={"name": "Roma Termini", "limit": 1}).raise_for_status().json()[0]["id"]),
-            ("MÁV", lambda: fares.http.post(f"{fares.MAV}/GetStationList", json={}, headers=fares.MAV_SESSION).raise_for_status().json()["stations"][0]),
-            ("Elron", lambda: fares.http.get(f"{fares.ELRON}/originstops").raise_for_status().json()[0]),
-            ("RegioJet", lambda: fares.http.get(f"{fares.REGIOJET}/consts/locations").raise_for_status().json()[0]),
+            ("ÖBB", lambda: fares.http.get(f"{oebb.OEBB}/domain/v4/init").raise_for_status().json()["accessToken"]),
+            ("Trenitalia", lambda: fares.http.get(f"{trenitalia.TRENITALIA}/locations/search", params={"name": "Roma Termini", "limit": 1}).raise_for_status().json()[0]["id"]),
+            ("MÁV", lambda: fares.http.post(f"{mav.MAV}/GetStationList", json={}, headers=mav.MAV_SESSION).raise_for_status().json()["stations"][0]),
+            ("Elron", lambda: fares.http.get(f"{elron.ELRON}/originstops").raise_for_status().json()[0]),
+            ("RegioJet", lambda: fares.http.get(f"{regiojet.REGIOJET}/consts/locations").raise_for_status().json()[0]),
             ("exchange rates", lambda: fares.in_eur(1000, "HUF") or 1 / 0),
         ) if not isinstance(attempt(check), Exception)]
         if len(answered) < 4:

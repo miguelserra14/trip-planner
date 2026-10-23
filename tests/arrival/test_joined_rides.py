@@ -23,7 +23,7 @@ def join(published: list, monkeypatch) -> list:
     async def station_point(self, name, near):
         return STATION
 
-    async def plan(self, start, end, day, minutes, arrive_by, zones, to_airport, known, **options):
+    async def plan(self, start, end, day, minutes, **options):
         return [{"leave": timetables.to_minutes(leave), "arrive": timetables.to_minutes(arrive),
                  "steps": [{"time": leave, "arrive": arrive, "line": "Ulcinj to Podgorica", "agency": "", "from": "Airport", "to": "Main Bus Station",
                             "rail": False, "coach": False, "km": 12}]} for leave, arrive in published if timetables.to_minutes(leave) >= minutes]

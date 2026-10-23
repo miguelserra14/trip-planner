@@ -85,7 +85,8 @@ class Asked(timetables.Timetables):
 
 def ask(to_airport: bool) -> tuple:
     transit = Asked()
-    found = asyncio.run(transit.plan((0.0, 0.0), (0.1, 0.1), DAY, 12 * 60, True, ("UTC", "UTC"), to_airport, True))
+    found = asyncio.run(transit.plan((0.0, 0.0), (0.1, 0.1), DAY, 12 * 60, arrive_by=True, zones=("UTC", "UTC"), to_airport=to_airport,
+                                     terminal_known=True))
     return transit.asked[0], found
 
 def test_without_a_choice_the_question_is_the_same_as_ever():

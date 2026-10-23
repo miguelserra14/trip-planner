@@ -67,7 +67,8 @@ def read(answer: dict, to_airport: bool) -> list[tuple]:
         async def get(path, params):
             return answer
         client.get = get
-        found = await client.plan((0.0, 0.0), (1.0, 1.0), DAY, 12 * 60, False, ("UTC", "UTC"), to_airport, True, modes="BUS")
+        found = await client.plan((0.0, 0.0), (1.0, 1.0), DAY, 12 * 60, arrive_by=False, zones=("UTC", "UTC"), to_airport=to_airport,
+                                  terminal_known=True, modes="BUS")
         await client.close()
         return [(connection["leave"], connection["arrive"]) for connection in found]
     return asyncio.run(work())

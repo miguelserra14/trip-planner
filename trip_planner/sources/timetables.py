@@ -407,7 +407,7 @@ class Timetables:
             keep_airport_stops(airport["code"], terminal, stops)
         return stops
 
-    async def plan(self, start: tuple | str, end: tuple | str, day: str, minutes: int, arrive_by: bool, zones: tuple,
+    async def plan(self, start: tuple | str, end: tuple | str, day: str, minutes: int, *, arrive_by: bool, zones: tuple,
                    to_airport: bool, terminal_known: bool, modes: str = "", stop_walk: int = 0,
                    city_walk: int | None = None, any_way: bool = False) -> list[dict[str, Any]]:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
@@ -487,15 +487,17 @@ class Timetables:
         # The answer is checked, not trusted: a connection the traveller does not accept is dropped here
         connections = [connection for connection in connections if any_way or ground_choice.accepts(connection, to_airport)]
         if not connections and not modes and city_walk < settings.wide_city_walk_minutes * 60:
-            return await self.plan(start, end, day, minutes, arrive_by, zones, to_airport, terminal_known, modes, stop_walk,
-                                   settings.wide_city_walk_minutes * 60, any_way)
+            return await self.plan(start, end, day, minutes, arrive_by=arrive_by, zones=zones, to_airport=to_airport,
+                                   terminal_known=terminal_known, modes=modes, stop_walk=stop_walk,
+                                   city_walk=settings.wide_city_walk_minutes * 60, any_way=any_way)
         return connections
 
     async def is_covered(self, start: tuple | str, end: tuple | str, day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
         """Whether any timetable covers a route: is there a connection in the middle of the day, by any vehicle?"""
         key = (start, end, day)
         if key not in self.probes:   # several flights ask about the same route at once: they share the answer
-            self.probes[key] = asyncio.ensure_future(self.plan(start, end, day, 11 * 60, False, zones, to_airport, terminal_known, any_way=True))
+            self.probes[key] = asyncio.ensure_future(self.plan(start, end, day, 11 * 60, arrive_by=False, zones=zones, to_airport=to_airport,
+                                                               terminal_known=terminal_known, any_way=True))
         return bool(await self.probes[key])
 
     def answer(self, options: list[dict[str, Any]], service: str, day: str) -> dict[str, Any]:
@@ -580,7 +582,8 @@ class Timetables:
             stretch = self.stretch(origin, hub["name"], hub, 0, city, at)
             target, walk = (stops or [(airport, 0)])[0]
             try:
-                found = await self.plan(at, target, service, at_terminal, True, zones, True, known, GROUND_MODES, walk)
+                found = await self.plan(at, target, service, at_terminal, arrive_by=True, zones=zones, to_airport=True,
+                                        terminal_known=known, modes=GROUND_MODES, stop_walk=walk)
             except httpx.HTTPStatusError:
                 continue
             if found:
@@ -592,7 +595,8 @@ class Timetables:
             at = (hub["lat"], hub["lon"])
             stretch = self.stretch(hub["name"], code, hub, 0, at, airport)
             try:
-                found = await self.plan(city, at, service, at_terminal - stretch["minutes"], True, zones, True, True, GROUND_MODES)
+                found = await self.plan(city, at, service, at_terminal - stretch["minutes"], arrive_by=True, zones=zones,
+                                        to_airport=True, terminal_known=True, modes=GROUND_MODES)
             except httpx.HTTPStatusError:
                 continue
             if found:
@@ -614,7 +618,7 @@ class Timetables:
             stretch = self.stretch(hub["name"], destination, hub, 0, at, city)
             start, walk = (stops or [(airport, 0)])[0]
             try:
-                found = await self.onward(start, at, service, ready, zones, known, GROUND_MODES, walk)
+                found = await self.onward(start, at, service, ready, zones=zones, terminal_known=known, modes=GROUND_MODES, stop_walk=walk)
             except httpx.HTTPStatusError:
                 continue
             if found:
@@ -626,7 +630,7 @@ class Timetables:
             at = (hub["lat"], hub["lon"])
             stretch = self.stretch(code, hub["name"], hub, ready, airport, at)
             try:
-                found = await self.onward(at, city, service, ready + stretch["minutes"], zones, True, GROUND_MODES)
+                found = await self.onward(at, city, service, ready + stretch["minutes"], zones=zones, terminal_known=True, modes=GROUND_MODES)
             except httpx.HTTPStatusError:
                 continue
             if found:
@@ -651,20 +655,21 @@ class Timetables:
             # The connections that arrive last before the limit. If none of them leaves within the times the traveller
             # accepts, also the ones that leave first after the earliest of those times and the ones that leave in the
             # last LAST_RIDES_MINUTES before the latest, to be sure nothing suitable exists.
-            found = list(await self.plan(start, target, service, at_terminal, True, zones, True, known, modes, walk))
+            ask = lambda minutes, arrive_by, modes: self.plan(start, target, service, minutes, arrive_by=arrive_by, zones=zones, to_airport=True,
+                                                              terminal_known=known, modes=modes, stop_walk=walk)
+            found = list(await ask(at_terminal, True, modes))
             if modes and not any(map(fits, found)):
-                found += await self.plan(start, target, service, at_terminal, True, zones, True, known, "", walk)
+                found += await ask(at_terminal, True, "")
             if not any(map(fits, found)):
                 key = (start, target, service)   # the same question for every flight of that airport and day: asked once
                 if key not in self.first_rides:
-                    self.first_rides[key] = asyncio.ensure_future(self.plan(start, target, service, earliest, False, zones, True, known, "", walk))
+                    self.first_rides[key] = asyncio.ensure_future(ask(earliest, False, ""))
                 found += await self.first_rides[key]
                 if latest < at_terminal:
                     # A flight late in the day: the connections that arrive last all leave after the traveller's latest
                     # time, and the first ones of the day would leave the traveller waiting for hours at the airport
                     if key not in self.last_rides:
-                        self.last_rides[key] = asyncio.ensure_future(
-                            self.plan(start, target, service, max(earliest, latest - LAST_RIDES_MINUTES), False, zones, True, known, "", walk))
+                        self.last_rides[key] = asyncio.ensure_future(ask(max(earliest, latest - LAST_RIDES_MINUTES), False, ""))
                     found += await self.last_rides[key]
             return found
 
@@ -692,7 +697,7 @@ class Timetables:
         last_call = to_minutes(flight["departure_time"]) - current.SETTINGS.airport_floor_minutes
         return self.answer([c for c in found if c["arrive"] <= max(at_terminal, last_call)], service, flight["date"])
 
-    async def onward(self, airport: tuple | str, end: tuple, service: str, ready: int, zones: tuple, known: bool,
+    async def onward(self, airport: tuple | str, end: tuple, service: str, ready: int, *, zones: tuple, terminal_known: bool,
                      modes: str = "", stop_walk: int = 0) -> list[dict[str, Any]]:
         """The connections leaving an airport from a time on. One request serves every flight that lands while
         its answer still applies: several flights land at the same airport within a couple of hours."""
@@ -701,7 +706,8 @@ class Timetables:
             for asked_from, good_until, found in self.windows.setdefault(key, []):
                 if asked_from <= ready <= good_until:
                     return [c for c in found if c["leave"] >= ready]
-            found = await self.plan(airport, end, service, ready, False, zones, False, known, modes, stop_walk)
+            found = await self.plan(airport, end, service, ready, arrive_by=False, zones=zones, to_airport=False,
+                                    terminal_known=terminal_known, modes=modes, stop_walk=stop_walk)
             leaves = sorted(c["leave"] for c in found)
             # A full answer stops somewhere, and later connections exist beyond it: it is only reused up to its
             # second-to-last connection. A short answer is everything left that day, so it serves any later time.
@@ -712,18 +718,16 @@ class Timetables:
     async def leaving(self, start: tuple | str, walk: int, end: tuple, service: str, ready: int, zones: tuple,
                       known: bool) -> list[dict[str, Any]]:
         """The connections that leave one point or one stop of an airport from a time on."""
+        ask = lambda modes: self.onward(start, end, service, ready, zones=zones, terminal_known=known, modes=modes, stop_walk=walk)
         # Free trains: look for trains first, a paid coach is only worth it when no train is left that day
         if current.SETTINGS.free_trains_at_destination:
-            return (await self.onward(start, end, service, ready, zones, known, NO_COACH_MODES, walk)
-                    or await self.onward(start, end, service, ready, zones, known, "", walk))
+            return await ask(NO_COACH_MODES) or await ask("")
         # An answer is the first connections to leave, and trains leave so often that they fill it: the coaches,
         # a few a day, are asked for on their own. Chains of local buses are left out, a coach is what is looked for.
         # Not by train only: there is no coach to look for. Not by bus only: then the first answer has nothing but buses.
         if ground_choice.side(False)[0] != "any":
-            return await self.onward(start, end, service, ready, zones, known, "", walk)
-        found, by_road = await asyncio.gather(
-            self.onward(start, end, service, ready, zones, known, "", walk),
-            self.onward(start, end, service, ready, zones, known, ROAD_MODES, walk))
+            return await ask("")
+        found, by_road = await asyncio.gather(ask(""), ask(ROAD_MODES))
         return found + [c for c in by_road if any(step["coach"] for step in c["steps"])]
 
     async def from_airport(self, airport: tuple, end: tuple, flight: dict[str, Any], zones: tuple, known: bool,
@@ -821,8 +825,8 @@ async def join_published_ends(timetables: "Timetables", ground: dict[str, Any], 
                 for ride in arriving:
                     after = to_minutes(coach_of(ride, True)["arrive"]) + TRANSFER_MINUTES
                     try:
-                        found = await timetables.plan(point, spots[code], service, after, False, zone_pair, True, known[code],
-                                                      city_walk=STATION_WALK_SECONDS)
+                        found = await timetables.plan(point, spots[code], service, after, arrive_by=False, zones=zone_pair, to_airport=True,
+                                                      terminal_known=known[code], city_walk=STATION_WALK_SECONDS)
                     except httpx.HTTPError:
                         continue
                     fit = [c for c in found if c["leave"] >= after and c["arrive"] <= at_terminal]
@@ -830,8 +834,8 @@ async def join_published_ends(timetables: "Timetables", ground: dict[str, Any], 
             else:
                 ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes
                 try:
-                    connections = await timetables.plan(spots[code], point, service, ready, False, zone_pair, False, known[code],
-                                                        city_walk=STATION_WALK_SECONDS)
+                    connections = await timetables.plan(spots[code], point, service, ready, arrive_by=False, zones=zone_pair, to_airport=False,
+                                                        terminal_known=known[code], city_walk=STATION_WALK_SECONDS)
                 except httpx.HTTPError:
                     continue
                 # Before each coach, the published connection that leaves the airport last and still reaches it

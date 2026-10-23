@@ -145,14 +145,26 @@ class TripSettings:
     def __post_init__(self):
         """Check every setting and put it in one form. Whatever is wrong raises SettingError, saying which setting
         and why, in the traveller's language. Nothing is checked later: a setting that passes here can be used."""
-        # The language first: the reasons below are written in it
+        self.check_language()   # first: the reasons of the others are written in it
+        self.check_types()
+        self.check_places()
+        self.check_dates()
+        self.check_choices()
+        self.check_times()
+        self.check_combinations()
+
+    def refusal(self, key: str, **values) -> SettingError:
+        return SettingError(self.language, key, **values)
+
+    def check_language(self) -> None:
         languages = {code.lower(): code for code in LANGUAGES} | {code.split("-")[0].lower(): code for code in LANGUAGES}
         if not isinstance(self.language, str) or self.language.strip().lower() not in languages:
             raise SettingError(REFERENCE, "bad_choice", setting="language", value=self.language, choices=", ".join(LANGUAGES))
         self.language = languages[self.language.strip().lower()]
-        fail = lambda key, **values: SettingError(self.language, key, **values)
 
-        # Each setting in the type it was declared with: a number typed as text is read, anything else is refused
+    def check_types(self) -> None:
+        """Each setting in the type it was declared with: a number typed as text is read, anything else is refused."""
+        fail = self.refusal
         for setting in fields(self):
             name, kind, value = setting.name, setting.type, getattr(self, setting.name)
             if kind is bool:
@@ -179,13 +191,15 @@ class TripSettings:
                     raise fail("bad_list", setting=name, value=value)
                 setattr(self, name, [entry.strip() for entry in entries if entry.strip()])
 
-        # The two cities
+    def check_places(self) -> None:
         if not self.origin or not self.destination:
-            raise fail("place_required")
+            raise self.refusal("place_required")
         if plain(self.origin) == plain(self.destination):
-            raise fail("same_place", place=self.origin)
+            raise self.refusal("same_place", place=self.origin)
 
-        # The dates: real days, from today on, no further than airlines sell, in order and without repeats
+    def check_dates(self) -> None:
+        """Real days, from today on, no further than airlines sell, in order and without repeats."""
+        fail = self.refusal
         if not self.dates:
             raise fail("dates_required")
         today, days = date.today(), set()
@@ -203,18 +217,21 @@ class TripSettings:
             raise fail("too_many_dates", count=len(days), maximum=MAX_DATES)
         self.dates = [f"{day:%d/%m/%Y}" for day in sorted(days)]
 
-        # The choices
+    def check_choices(self) -> None:
         self.min_reliability = self.min_reliability.upper()
         if self.min_reliability not in GRADES:
-            raise fail("bad_choice", setting="min_reliability", value=self.min_reliability, choices=", ".join(GRADES))
+            raise self.refusal("bad_choice", setting="min_reliability", value=self.min_reliability, choices=", ".join(GRADES))
         for names, choices in ((("departure_scale", "arrival_scale"), SCALES), (("to_airport_by", "from_airport_by"), CHOICES)):
             for name in names:
                 setattr(self, name, getattr(self, name).lower())
                 if getattr(self, name) not in choices:
-                    raise fail("bad_choice", setting=name, value=getattr(self, name), choices=", ".join(choices))
+                    raise self.refusal("bad_choice", setting=name, value=getattr(self, name), choices=", ".join(choices))
 
-        # The times, all as HH:MM. A day runs from 00:00 to 23:59, so a limit "by 00:00" can only mean the end of the
-        # day: read as its start it would leave no time at all. An empty time means no limit.
+    def check_times(self) -> None:
+        """The times, all as HH:MM. A day runs from 00:00 to 23:59, so a limit "by 00:00" can only mean the end of the
+        day: read as its start it would leave no time at all. An empty time means no limit."""
+        fail = self.refusal
+
         def clock(name: str, when_empty: str) -> str:
             written = getattr(self, name).lower().replace(".", ":").replace(" ", "")
             if re.fullmatch(r"[0-9]{1,2}h?", written):
@@ -244,7 +261,9 @@ class TripSettings:
         if self.earliest_flight_minutes >= 24 * 60:
             raise fail("no_flight_catchable", earliest=self.earliest_leave, minutes=self.min_airport_minutes)
 
-        # Settings that only make sense together
+    def check_combinations(self) -> None:
+        """Settings that only make sense together."""
+        fail = self.refusal
         self.ideal_airport_minutes = max(self.ideal_airport_minutes, self.min_airport_minutes)
         self.airport_floor_minutes = min(self.airport_floor_minutes, self.min_airport_minutes)
         self.wide_city_walk_minutes = max(self.wide_city_walk_minutes, self.city_walk_minutes)

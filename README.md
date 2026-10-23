@@ -41,12 +41,25 @@ by this order of importance:
 An option that breaks a requirement higher in the list always comes after one that only breaks lower ones. The
 dates, the airports you allowed and what the real timetables say are never given up.
 
+### How far the result can be trusted
+
+- A typical timetable (🟢) is that of the same weekday of a nearer week. Holidays and the timetable change of
+  mid-December make the day itself different: confirm those connections before booking.
+- When an operator that can be read by code (FlixBus, ALSA) runs other rides on the day of the trip but not the one
+  a timetable of another week shows, that connection is dropped: it does not run that day.
+- Part of a total may be an estimate (a model's price, or one from the distance). The total then shows in brackets
+  what the option may really cost, and the options that cannot be told apart on price are said to be tied.
+- Whether the lights deserved it can be measured: every report keeps the vehicles of its options next to it (`.json`),
+  and `main.py --verify` asks again, once the day of the trip is on sale or published, whether each one ran. Run it
+  in the week before the trips: it counts, by light and by source, the vehicles that ran and the ones that did not.
+
 ### From the command line
 
 ```
 env\.venv\Scripts\python main.py              the window
 env\.venv\Scripts\python main.py --terminal   no window: the trip in settings.py, questions asked in the terminal
 env\.venv\Scripts\python main.py --check      check the services
+env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/verify.py)
 ```
 
 ### Languages
@@ -110,7 +123,7 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 | `resources/terminals.json` | Where the passenger terminal of every airport is, from OpenStreetMap, worked out once so that a search does not depend on it. `python main.py --terminals all` works it out again |
 | `resources/operators/` | What the coach and train operators' booking systems need and do not give with each answer, one file per operator (see the README there) |
 | `resources/timezones.json` | Cache of time zones, filled as trips are planned |
-| `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted |
+| `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted. Next to each, its log (`.log`) and the vehicles of its options for `--verify` (`.json`) |
 | `reports/saved/` | The reports you chose to keep, with **Keep this report** in the window. Never deleted |
 
 ## How the code is organised

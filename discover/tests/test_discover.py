@@ -294,6 +294,7 @@ def test_the_airports_are_the_ones_with_most_routes_not_only_the_closest(monkeyp
     # The routes of today, when read, come before the ones of 2014: Ostend flies to more places now
     today = {"OST": {"routes": [{"to": f"X{number:02d}", "airline": "TUI", "seasonal": False} for number in range(90)], "checked": "", "article": ""}}
     monkeypatch.setattr(finder.flown, "routes", lambda codes, day, say=print, extract=None: {code: today[code] for code in codes if code in today})
+    monkeypatch.setattr(finder.flown, "within", lambda routes, place, km, airports: routes)   # made-up destinations, all within reach
     assert [airport["code"] for airport in finder.departure_airports(PLACE)] == ["BRU", "CRL", "OST"]
     monkeypatch.setattr(finder, "route_counts", lambda: None)
     monkeypatch.setattr(finder.flown, "routes", lambda codes, day, say=print, extract=None: {})

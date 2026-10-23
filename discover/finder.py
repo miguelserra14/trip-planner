@@ -27,7 +27,7 @@ MAX_CANDIDATES = 10      # airports whose routes of today are read to choose the
 # The destinations flown from the traveller's airports (flown.py) that no answer gave are asked of Kiwi once more,
 # by name: this many at a time (Kiwi answers 15, one per city), in at most GAP_REQUESTS requests, counted in the
 # day's limit as the others
-GAP_BATCH = 12
+GAP_BATCH = 15
 GAP_REQUESTS = 8
 COUNTRIES_KM = 3500      # Kiwi is asked for the countries with a large airport this close to the city: Europe and around it
 # Kiwi gives at most 15 flights per request. Asked with every airline, Ryanair filled most of them (77% of the ones to
@@ -171,7 +171,8 @@ def departure_airports(place: Place, today: date | None = None, say=print, curre
     near = airports_near(place, RADIUS_KM, airlines_only=True)
     old = route_counts() or {}
     candidates = sorted(near, key=lambda airport: (-old.get(airport["code"], 0), airport["km"]))[:MAX_CANDIDATES]
-    now = flown.counts(flown.routes([airport["code"] for airport in candidates], today or date.today(), say)) if current else {}
+    read = flown.routes([airport["code"] for airport in candidates], today or date.today(), say) if current else {}
+    now = flown.counts(flown.within(read, place, COUNTRIES_KM, load_airports()))   # the destinations a map looks for
     count = lambda airport: now.get(airport["code"], old.get(airport["code"], 0))
     chosen = sorted(candidates, key=lambda airport: (-count(airport), airport["km"]))[:MAX_AIRPORTS]
     return sorted(chosen, key=lambda airport: airport["km"])
@@ -192,7 +193,8 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     may give, kiwi_requests the most requests to Kiwi this map may make."""
     today = date.today()
     departures = await asyncio.to_thread(departure_airports, place, today, say)
-    routes_flown = await asyncio.to_thread(flown.routes, [airport["code"] for airport in departures], today, say)
+    routes_flown = flown.within(await asyncio.to_thread(flown.routes, [airport["code"] for airport in departures], today, say),
+                                place, COUNTRIES_KM, load_airports())
     if not departures:
         raise ValueError(f"No airport within {RADIUS_KM} km of {place.label}.")
     for airport in departures:
@@ -220,7 +222,7 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     flights = [flight for answer in answers for flight in answer]
     with_ryanair = {search["from"] for search in searches if search["source"] == "Ryanair" and search["answered"]}
 
-    countries, left_out, allowed, refusal = [], [], 0, []
+    countries, left_out, allowed, refusal, asked_by_name = [], [], 0, [], set()
     if not fast:
         day = today.isoformat()
         allowed = max(0, min(kiwi_requests, KIWI_DAILY - kiwi_used(day)))
@@ -264,6 +266,7 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
             batches = [wanted[start:start + GAP_BATCH] for start in range(0, len(wanted), GAP_BATCH)]
             room = max(0, min(GAP_REQUESTS, KIWI_DAILY - kiwi_used(day)))
             gap_asks = [(codes, excluded, batch) for batch in batches for codes, excluded in groups][:room]
+            asked_by_name = {code for _, _, batch in gap_asks for code in batch}
             if gap_asks:
                 say(f"Kiwi: {len(wanted)} destinations flown from these airports were in no answer, asked again by name "
                     f"({len(gap_asks)} requests)")
@@ -295,5 +298,6 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     return Found(place, days, departures, destinations, flights, searches, left_out, kiwi=bool(countries),
                  kiwi_options=options if countries else "", kiwi_allowed=allowed, kiwi_refused=refusal[0] if refusal else "",
                  centres=centres, rides=found_rides,
-                 coverage=flown.coverage(routes_flown, flown.seen_codes(routes_flown, {flight["to"] for flight in flights}, airports), with_ryanair),
+                 coverage=flown.coverage(routes_flown, flown.seen_codes(routes_flown, {flight["to"] for flight in flights}, airports), with_ryanair,
+                                         asked_by_name),
                  flown=routes_flown)

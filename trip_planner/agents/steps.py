@@ -9,7 +9,7 @@ from typing import Any
 
 from langchain.messages import HumanMessage
 
-from trip_planner import current, ground_choice
+from trip_planner import current, ground_choice, verify
 from trip_planner.agents import subagents
 from trip_planner.config import LIGHTS
 from trip_planner.itineraries import selection
@@ -323,7 +323,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                         itinerary["booking"]["url"] = airlines.airline_site(itinerary["flight"].get("carrier", ""), itinerary["flight"]["airline"])
                 report = "\n\n".join(part for part in (no_flight_fits, render_closest(shown, warnings)) if part)
                 return {
-                    "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 1,
+                    "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 1, "verify": verify.record(shown),
                     "message": f"{report}\n\nNo itinerary respects every requirement. The options above are the closest ones, each "
                         "breaking at least one requirement. By the order of requirements, option 1 is the closest."}
             message = "No itinerary respects the hard constraints. Rejected flights:\n" + "\n".join(rejected[:12])
@@ -350,6 +350,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
         "rejected": rejected + not_worth_it,
         "warnings": warnings,
         "recommended": number,
+        "verify": verify.record(shown),   # the vehicles of the options shown, kept next to the report for --verify
         "message": f"{report}\n\nThe rules recommend option {number}."}
 
 # The steps of a trip, in order. Each one needs the result of the one before.

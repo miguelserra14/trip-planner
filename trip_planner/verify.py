@@ -80,7 +80,7 @@ async def in_timetable(vehicle: dict[str, Any], transit: timetables.Timetables) 
     leave = to_minutes(vehicle["time"])
     found = await transit.get("plan", {
         "fromPlace": vehicle["from_id"], "toPlace": vehicle["to_id"], "time": local_to_utc(day, max(leave - SAME_MINUTES, 0), zone),
-        "arriveBy": "false", "numItineraries": 5, "maxTransfers": 0, "transitModes": vehicle.get("mode") or timetables.GROUND_MODES})
+        "arriveBy": "false", "numItineraries": 5, "transitModes": vehicle.get("mode") or timetables.GROUND_MODES})   # maxTransfers=0 finds nothing there
     rides = [[leg for leg in itinerary["legs"] if leg["mode"] != "WALK"] for itinerary in found.get("itineraries") or []]
     starts = [utc_to_local(legs[0]["startTime"], zone) for legs in rides if len(legs) == 1]
     if any(start_day == day and abs(minutes - leave) <= SAME_MINUTES for start_day, minutes in starts):

@@ -1,5 +1,6 @@
 """The report saved to reports/: everything behind the recommendation. The settings, what each step found and
 where it came from, what was discarded and why, how long each step took, and the final result."""
+import json
 import re
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,10 @@ def render_log() -> str:
 def log_of(report: Path) -> Path:
     """The file of the log that goes with a report."""
     return report.with_suffix(".log")
+
+def vehicles_of(report: Path) -> Path:
+    """The file that goes with a report with the vehicles of the options it shows, for python main.py --verify."""
+    return report.with_suffix(".json")
 
 def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     """Everything behind the recommendation: the settings, what each step found and where it came from,
@@ -150,6 +155,8 @@ def save_report(response: dict[str, Any], recommendation: str) -> Path:
     path.parent.mkdir(exist_ok=True)
     path.write_text(render_full_report(response, recommendation), encoding="utf-8")
     log_of(path).write_text(render_log(), encoding="utf-8")
+    if response.get("verify"):
+        vehicles_of(path).write_text(json.dumps(response["verify"], ensure_ascii=False, indent=1), encoding="utf-8")
     REQUESTS.clear()
     remove_old_reports()
     return path
@@ -161,6 +168,7 @@ def remove_old_reports() -> None:
     for old in reports[:-current.SETTINGS.recent_reports]:
         old.unlink(missing_ok=True)
         log_of(old).unlink(missing_ok=True)
+        vehicles_of(old).unlink(missing_ok=True)
 
 def keep_report(path: Path, keep: bool) -> Path:
     """Move a report to saved/ to keep it, or back among the recent ones, with its log. Returns where the report
@@ -169,6 +177,7 @@ def keep_report(path: Path, keep: bool) -> Path:
     if target != path and path.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
         path.replace(target)
-        if log_of(path).exists():
-            log_of(path).replace(log_of(target))
+        for other in (log_of, vehicles_of):
+            if other(path).exists():
+                other(path).replace(other(target))
     return target

@@ -156,14 +156,18 @@ def coverage_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     seen = found.coverage
     note = (f"{seen['found']} of the {seen['flown']} destinations flown from {', '.join(seen['airports'])} (their Wikipedia articles) "
             f"were found on these days. {seen['ryanair_no_fare']} more are flown by Ryanair only, whose own answer, which has every fare it "
-            f"sells, had none to them those days. The {len(seen['missing'])} below were asked of Kiwi once more by name and still not found: "
-            f"no flight those days ({len(seen['missing_seasonal'])} are seasonal), or one Kiwi does not sell. The airline's own site may have it.")
+            f"sells, had none to them those days. {len(seen['missing'])} are below, not found: "
+            + (f"{len(seen['missing']) - len(seen['not_asked'])} were asked of Kiwi once more by name and not found either, no flight those "
+               f"days or one Kiwi does not sell; " if len(seen['missing']) > len(seen['not_asked']) else "")
+            + (f"{len(seen['not_asked'])} were not asked by name, beyond the requests a map may make: they may have flights. "
+               if seen.get("not_asked") else "")
+            + f"{len(seen['missing_seasonal'])} of them are seasonal. The airline's own site may have them.")
     gaps = {code: routes for code, routes in flown.missing(found.flown, set(), set()).items() if code in seen["missing"]}
     rows = [[code, (airports.get(code) or {}).get("city") or (airports.get(code) or {}).get("name", code), country_of(code, airports),
              ", ".join(sorted({route["airline"] for route in routes})), ", ".join(sorted({route["from"] for route in routes})),
-             "seasonal" if code in seen["missing_seasonal"] else "all year"]
+             "seasonal" if code in seen["missing_seasonal"] else "all year", "no" if code in seen.get("not_asked", []) else "yes"]
             for code, routes in sorted(gaps.items(), key=lambda item: (country_of(item[0], airports), item[0]))]
-    return section("Destinations flown from here, not found", ["Code", "Destination", "Country", "Airlines", "From", "Flown"], rows, note)
+    return section("Destinations flown from here, not found", ["Code", "Destination", "Country", "Airlines", "From", "Flown", "Asked by name"], rows, note)
 
 def breakdown(found: Found) -> list[dict[str, Any]]:
     airports = load_airports()

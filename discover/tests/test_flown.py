@@ -26,8 +26,9 @@ The following airlines operate regular scheduled and charter flights at Brussels
 
 def test_the_table_is_read_and_the_seasonal_routes_told_apart():
     rows = flown.table_rows(ARTICLE)
-    assert rows[0] == ("Air Corsica", [("Ajaccio Napoleon Bonaparte Airport", True), ("Bastia – Poretta Airport", True)])
-    assert rows[1] == ("Wizz Air", [("Henri Coandă International Airport", False), ("Skopje International Airport", False), ("Burgas Airport", True)])
+    assert rows[0] == ("Air Corsica", [("Ajaccio Napoleon Bonaparte Airport", True, "Ajaccio"), ("Bastia – Poretta Airport", True, "Bastia")])
+    assert rows[1] == ("Wizz Air", [("Henri Coandă International Airport", False, "Bucharest–Otopeni"),
+                                    ("Skopje International Airport", False, "Skopje"), ("Burgas Airport", True, "Burgas")])
     assert flown.table_rows("An article with no table.") == []
 
 def test_a_link_becomes_an_airport_by_wikidata_or_by_its_name(monkeypatch):
@@ -40,9 +41,11 @@ ROUTES = {"CRL": {"routes": [{"to": "OTP", "airline": "Wizz Air", "seasonal": Fa
                              {"to": "BGY", "airline": "Ryanair", "seasonal": False}, {"to": "LGW", "airline": "Wizz Air", "seasonal": False},
                              {"to": "EIN", "airline": "TUI", "seasonal": False}], "checked": "", "article": ""},
           "EIN": {"routes": [{"to": "OTP", "airline": "Wizz Air", "seasonal": False}], "checked": "", "article": ""}}
-AIRPORTS = {code: {"code": code, "country": country, "city": city} for code, country, city in
-            (("OTP", "RO", "Bucharest"), ("BOJ", "BG", "Burgas"), ("BGY", "IT", "Bergamo"), ("LGW", "GB", "London"), ("STN", "GB", "London, Essex"),
-             ("EIN", "NL", "Eindhoven"), ("CRL", "BE", "Charleroi"))}
+AIRPORTS = {code: {"code": code, "country": country, "city": city, "latitude": latitude, "longitude": longitude}
+            for code, country, city, latitude, longitude in
+            (("OTP", "RO", "Bucharest", 44.57, 26.08), ("BOJ", "BG", "Burgas", 42.57, 27.51), ("BGY", "IT", "Bergamo", 45.67, 9.7),
+             ("LGW", "GB", "London", 51.15, -0.19), ("STN", "GB", "London, Essex", 51.88, 0.24), ("EIN", "NL", "Eindhoven", 51.45, 5.37),
+             ("CRL", "BE", "Charleroi", 50.46, 4.45))}
 
 def test_a_destination_is_missed_only_when_no_answer_gave_it_or_its_city():
     seen = flown.seen_codes(ROUTES, {"STN"}, AIRPORTS)   # London by Stansted
@@ -91,7 +94,36 @@ def test_the_map_lists_the_destinations_flown_and_not_found_with_their_airlines(
     from discover import breakdown
     seen = flown.seen_codes(ROUTES, {"STN", "OTP"}, AIRPORTS)
     found = finder.Found(Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40), Days("2026-11-12", "2026-11-19"), [], [], [], [],
-                         flown=ROUTES, coverage=flown.coverage(ROUTES, seen, {"CRL"}))
+                         flown=ROUTES, coverage=flown.coverage(ROUTES, seen, {"CRL"}, asked={"BOJ"}))
     part = breakdown.coverage_section(found, AIRPORTS)
-    assert part["rows"] == [["BOJ", "Burgas", "BG", "Wizz Air", "CRL", "seasonal"]]
+    assert part["rows"] == [["BOJ", "Burgas", "BG", "Wizz Air", "CRL", "seasonal", "yes"]]
     assert part["note"].startswith("2 of the 4 destinations flown from CRL, EIN")
+
+def test_a_link_wikidata_does_not_know_is_found_by_its_city_or_its_airports_name():
+    airports = {"BCN": {"name": "Josep Tarradellas Barcelona-El Prat Airport", "city": "Barcelona", "large": True, "latitude": 41.3, "longitude": 2.08},
+                "BLA": {"name": "General José Antonio Anzoategui International Airport", "city": "Barcelona", "large": True, "latitude": 10.1, "longitude": -64.7},
+                "IST": {"name": "İstanbul Airport", "city": "Istanbul", "large": True, "latitude": 41.26, "longitude": 28.74},
+                "SAW": {"name": "Sabiha Gökçen International Airport", "city": "Pendik, Istanbul", "large": True, "latitude": 40.9, "longitude": 29.31}}
+    cities = {}
+    for code, airport in airports.items():
+        cities.setdefault(flown.plain(flown.access.city_name(airport)), []).append(code)
+    eindhoven = (51.45, 5.37)
+    assert flown.by_text("Barcelona", "Barcelona–El Prat Airport", airports, cities, eindhoven) == "BCN"   # not Venezuela's
+    assert flown.by_text("Istanbul–Sabiha Gökçen", "Istanbul–Sabiha Gökçen", airports, cities, eindhoven) == "SAW"
+    assert flown.by_text("Nowhere", "Nowhere Field", airports, cities, eindhoven) is None
+
+def test_the_routes_a_map_looks_for_are_the_ones_within_its_reach():
+    airports = {"BCN": {"latitude": 41.3, "longitude": 2.08}, "BKK": {"latitude": 13.69, "longitude": 100.75}}
+    routes = {"AMS": {"routes": [{"to": "BCN", "airline": "KLM", "seasonal": False}, {"to": "BKK", "airline": "KLM", "seasonal": False}]}}
+    near = flown.within(routes, Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40), 3500, airports)
+    assert [route["to"] for route in near["AMS"]["routes"]] == ["BCN"]
+
+def test_a_destination_not_asked_by_name_is_said_to_maybe_have_flights():
+    found = flown.coverage(ROUTES, flown.seen_codes(ROUTES, set(), AIRPORTS), ryanair={"CRL"}, asked={"OTP"})
+    assert found["missing"] == ["BOJ", "LGW", "OTP"] and found["not_asked"] == ["BOJ", "LGW"]
+
+def test_the_article_of_an_airport_comes_before_the_one_of_its_station(monkeypatch):
+    monkeypatch.setattr(flown.access, "sparql", lambda query: [
+        {"iata": "DUS", "article": "https://en.wikipedia.org/wiki/D%C3%BCsseldorf_Airport"},
+        {"iata": "DUS", "article": "https://en.wikipedia.org/wiki/D%C3%BCsseldorf_Airport_station"}])
+    assert flown.articles(["DUS"]) == {"DUS": "https://en.wikipedia.org/wiki/D%C3%BCsseldorf_Airport"}

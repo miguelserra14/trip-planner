@@ -18,7 +18,7 @@ from typing import Any, Callable
 from urllib.parse import unquote
 
 from discover import access
-from trip_planner.places import load_airports
+from trip_planner.places import distance_km, load_airports
 from trip_planner.utils import plain
 
 CACHE = Path(__file__).parent / "cache"
@@ -50,7 +50,7 @@ def table_rows(text: str) -> list[tuple]:
         destinations, seasonal = [], False
         # The cell, cut where "Seasonal:" or "Charter:" begins: every link after it is flown part of the year only
         for part in SEASONAL.split(cells[1]):
-            destinations += [(title_of(match.group(2)), seasonal) for match in LINK.finditer(part)]
+            destinations += [(title_of(match.group(2)), seasonal, match.group(1)) for match in LINK.finditer(part)]
             seasonal = True
         rows.append((airline, destinations))
     return rows
@@ -62,7 +62,12 @@ def articles(codes: list) -> dict[str, str]:
       ?airport wdt:P238 ?iata .
       ?article schema:about ?airport ; schema:isPartOf <https://en.wikipedia.org/> .
     }""" % " ".join(f'"{code}"' for code in codes if re.fullmatch(r"[A-Z0-9]{3}", code))
-    return {row["iata"]: row["article"] for row in access.sparql(query)}
+    # A code can be on more than the airport: DUS is also Düsseldorf Airport's railway station. The airport's article first
+    airport_first = lambda url: ("airport" not in title_of(url).lower(), "station" in title_of(url).lower())
+    found: dict[str, str] = {}
+    for row in sorted(access.sparql(query), key=lambda row: airport_first(row["article"]), reverse=True):
+        found[row["iata"]] = row["article"]
+    return found
 
 def codes_of(titles: list) -> dict[str, str]:
     """The IATA code of the airport of each article title: from Wikidata, otherwise from an airport of that name."""
@@ -86,12 +91,53 @@ def codes_of(titles: list) -> dict[str, str]:
             found[title] = by_name[plain(title)]
     return found
 
-def read_routes(article: str, extract: Callable[[str], str]) -> list[dict[str, Any]]:
-    """The routes of one airport's article: [{"to", "airline", "seasonal"}]."""
+GENERIC_WORDS = {"airport", "international", "aeroporto", "aeropuerto", "aeroport", "aéroport", "flughafen", "lotnisko", "regional",
+                 "the", "de", "di", "del", "da", "la", "le", "of"}
+
+def words(text: str) -> set:
+    """The words of an airport's name that tell it apart: not "International Airport"."""
+    return {word for word in re.findall(r"[a-z0-9]+", plain(text)) if word not in GENERIC_WORDS and len(word) > 1}
+
+def by_text(text: str, title: str, airports: dict[str, Any], cities: dict[str, list], near: tuple = ()) -> str | None:
+    """The airport of a link Wikidata does not know (a redirect: "Barcelona–El Prat Airport"), from the link's text,
+    a city and maybe which of its airports ("Rome–Fiumicino", "Istanbul–Sabiha Gökçen"), or else from the words of
+    the title. Two cities of one name: the one nearer the airport flown from (near), Barcelona in Spain from
+    Eindhoven, not in Venezuela. None when it is not one airport for sure."""
+    city, which = (re.split(r"\s*[–—]\s*", text, maxsplit=1) + [""])[:2]
+    found = cities.get(plain(city), [])
+    if which:
+        found = [code for code in found if words(which) <= words(f"{airports[code]['name']} {airports[code].get('city', '')}")]
+        if not found:   # the city of the database is another: the airport's own name says it
+            found = [code for code, airport in airports.items() if words(which) and words(which) <= words(airport["name"])]
+    elif len(found) > 1:
+        found = [code for code in found if airports[code].get("large")] or found
+    if len(found) > 1 and near:
+        found = [min(found, key=lambda code: distance_km(*near, airports[code]["latitude"], airports[code]["longitude"]))]
+    if len(found) == 1:
+        return found[0]
+    named = [code for code, airport in airports.items() if words(title) and words(title) <= words(airport["name"])]
+    return named[0] if len(named) == 1 else None
+
+def read_routes(article: str, extract: Callable[[str], str], near: tuple = ()) -> list[dict[str, Any]]:
+    """The routes of one airport's article, near being where that airport is: [{"to", "airline", "seasonal"}]."""
     rows = table_rows(extract(article))
-    codes = codes_of([title for _, destinations in rows for title, _ in destinations])
+    codes = codes_of([title for _, destinations in rows for title, _, _ in destinations])
+    airports = load_airports()
+    cities: dict[str, list] = {}
+    for code, airport in airports.items():
+        cities.setdefault(plain(access.city_name(airport)), []).append(code)
+    for _, destinations in rows:
+        for title, _, text in destinations:
+            if title not in codes and (code := by_text(text, title, airports, cities, near)):
+                codes[title] = code
     return [{"to": codes[title], "airline": airline, "seasonal": seasonal}
-            for airline, destinations in rows for title, seasonal in destinations if title in codes]
+            for airline, destinations in rows for title, seasonal, _ in destinations if title in codes]
+
+def within(flown: dict[str, dict[str, Any]], place, km: float, airports: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The routes to destinations within km of a place: the ones a map looks for. Kiwi is asked for the countries
+    that near, so a route to Bangkok counted as missed would only say the map is not what it is not meant to be."""
+    near = lambda code: code in airports and distance_km(place.latitude, place.longitude, airports[code]["latitude"], airports[code]["longitude"]) <= km
+    return {code: {**entry, "routes": [route for route in entry["routes"] if near(route["to"])]} for code, entry in flown.items()}
 
 def routes(codes: list, today: date, say: Callable = print, extract: Callable | None = None) -> dict[str, dict[str, Any]]:
     """The routes flown from each airport, by code: {"routes", "article", "checked"}; kept ROUTES_DAYS. An airport
@@ -112,7 +158,8 @@ def routes(codes: list, today: date, say: Callable = print, extract: Callable | 
             if code not in pages:
                 continue
             try:
-                found = read_routes(pages[code], extract)
+                airport = load_airports().get(code) or {}
+                found = read_routes(pages[code], extract, (airport["latitude"], airport["longitude"]) if airport else ())
             except Exception as error:
                 say(f"[discover] the routes of {code} could not be read: {type(error).__name__}")
                 continue
@@ -145,11 +192,11 @@ def seen_codes(flown: dict[str, dict[str, Any]], answered: set, airports: dict[s
     destinations = {route["to"] for entry in flown.values() for route in entry["routes"]}
     return {code for code in destinations if code in answered or (code in airports and access.city_key(airports[code]) in cities)}
 
-def coverage(flown: dict[str, dict[str, Any]], seen: set, ryanair: set) -> dict[str, Any]:
+def coverage(flown: dict[str, dict[str, Any]], seen: set, ryanair: set, asked: set = frozenset()) -> dict[str, Any]:
     """How much of what is flown from the traveller's airports the map found, by destination:
     {"flown", "found", "ryanair_no_fare" (Ryanair's own answer had no fare to it those days: nothing missed),
-     "missing" (asked and not found: no flight those days, or one the sources do not sell), "missing_seasonal",
-     "airports"}."""
+     "missing" (not found), "missing_seasonal", "not_asked" (the missing ones not asked of Kiwi by name: beyond the
+     requests a map may make, so they may have flights), "airports"}. asked is the destinations asked by name."""
     mine = set(flown)
     all_year: dict[str, bool] = {}   # destination -> flown all year from at least one of the airports
     for entry in flown.values():
@@ -160,4 +207,5 @@ def coverage(flown: dict[str, dict[str, Any]], seen: set, ryanair: set) -> dict[
     lost = sorted(code for code in all_year if code not in seen and code in gaps)
     return {"flown": len(all_year), "found": sum(code in seen for code in all_year),
             "ryanair_no_fare": sum(code not in seen and code not in gaps for code in all_year),
-            "missing": lost, "missing_seasonal": [code for code in lost if not all_year[code]], "airports": sorted(flown)}
+            "missing": lost, "missing_seasonal": [code for code in lost if not all_year[code]],
+            "not_asked": [code for code in lost if code not in asked], "airports": sorted(flown)}

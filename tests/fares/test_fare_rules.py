@@ -3,7 +3,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from trip_planner.itineraries.legs import estimated_price, price_with_tickets
+from trip_planner.itineraries.estimates import estimated_price
+from trip_planner.itineraries.legs import price_with_tickets
 from trip_planner.sources import fares
 from trip_planner.sources.operators import alsa, flixbus, movelia, obilet, rede_expressos
 from trip_planner.places import Place

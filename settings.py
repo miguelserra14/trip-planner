@@ -32,7 +32,7 @@ SETTINGS = TripSettings(
     small_estimate_eur=5.0,     # an estimated price up to this (a metro ticket) is kept even with allow_estimated_prices=False
     unverified_price_factor=2.0,  # an estimated price counts as this many times itself next to a real one, so a guess only
                                   # beats a real price when it is clearly cheaper
-    # Timetables (trip_planner/sources/timetables.py)
+    # Timetables (trip_planner/sources/timetables/)
     city_walk_minutes=40,       # walking accepted between the city centre and the first or last stop (not counted in the trip)
     wide_city_walk_minutes=90,  # ... tried when nothing is found with the walk above, where a city's own transport is not published
     airport_walk_minutes=20,    # walking accepted between the terminal and a stop (counted in the trip)

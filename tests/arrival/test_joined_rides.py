@@ -1,10 +1,12 @@
 """An operator's coach that leaves from the city of the airport, joined to a published connection between the
 airport and the coach station, on made-up answers: no network. Where nothing is published, the estimated way stays,
-measured by road to the station itself (timetables.join_published_ends)."""
+measured by road to the station itself (timetables/joined.py)."""
 import asyncio
 from datetime import date, timedelta
 
 from trip_planner.sources import timetables
+from trip_planner.sources.timetables import joined
+from trip_planner.utils import to_minutes
 
 AIRPORT, STATION = (42.36, 19.25), (42.43, 19.26)   # Podgorica airport and its coach station
 DAY = (date.today() + timedelta(days=3)).isoformat()
@@ -15,7 +17,7 @@ def coach_ride(leave: str, arrive: str) -> dict:
                  "coach": False, "km": 14, "estimated": True, "minutes": 50}
     coach = {"time": leave, "arrive": arrive, "line": "Royal Travel", "agency": "Royal Travel", "from": "Podgorica Bus Station",
              "to": "Kotor", "rail": False, "coach": True, "km": 80}
-    return {"grade": "C", "source": "Obilet", "service_day": DAY, "leave": timetables.to_minutes(leave) - 50, "arrive": timetables.to_minutes(arrive),
+    return {"grade": "C", "source": "Obilet", "service_day": DAY, "leave": to_minutes(leave) - 50, "arrive": to_minutes(arrive),
             "price_eur": 14.0, "confirmed_eur": 11.0, "estimated_km": 14, "notes": ["estimated"], "steps": [estimated, coach], "urls": []}
 
 def join(published: list, monkeypatch) -> list:
@@ -24,13 +26,13 @@ def join(published: list, monkeypatch) -> list:
         return STATION
 
     async def plan(self, start, end, day, minutes, **options):
-        return [{"leave": timetables.to_minutes(leave), "arrive": timetables.to_minutes(arrive),
+        return [{"leave": to_minutes(leave), "arrive": to_minutes(arrive),
                  "steps": [{"time": leave, "arrive": arrive, "line": "Ulcinj to Podgorica", "agency": "", "from": "Airport", "to": "Main Bus Station",
-                            "rail": False, "coach": False, "km": 12}]} for leave, arrive in published if timetables.to_minutes(leave) >= minutes]
+                            "rail": False, "coach": False, "km": 12}]} for leave, arrive in published if to_minutes(leave) >= minutes]
     monkeypatch.setattr(timetables.Timetables, "station_point", station_point)
     monkeypatch.setattr(timetables.Timetables, "plan", plan)
-    monkeypatch.setattr(timetables, "by_road", lambda point, hubs: [{**hub, "road_km": 11.0, "road_minutes": 16.0} for hub in hubs])
-    monkeypatch.setattr(timetables, "reference_day", lambda day: day)
+    monkeypatch.setattr(joined, "by_road", lambda point, hubs: [{**hub, "road_km": 11.0, "road_minutes": 16.0} for hub in hubs])
+    monkeypatch.setattr(joined, "reference_day", lambda day: day)
     rides = [coach_ride("15:45", "17:55"), coach_ride("07:05", "09:10")]
     ground = {"operators": {}, "operators_from": {"TGD": {DAY: rides}}}
     flight = {"id": "F", "date": DAY, "departure_airport": "LIS", "arrival_airport": "TGD", "arrival_time": "12:30", "departure_time": "09:00"}
@@ -48,7 +50,7 @@ def test_a_published_bus_to_the_station_and_the_coach_are_one_ride(monkeypatch):
     joined = [ride for ride in rides if not ride.get("estimated_km")]
     assert len(joined) == 1   # the coach of 07:05 leaves before the flight lands: nothing to join it to
     ride = joined[0]
-    assert ride["grade"] == "A" and ride["leave"] == timetables.to_minutes("13:34")   # the bus that leaves last and still makes it
+    assert ride["grade"] == "A" and ride["leave"] == to_minutes("13:34")   # the bus that leaves last and still makes it
     assert [step["line"] for step in ride["steps"]] == ["Ulcinj to Podgorica", "Royal Travel"]
     assert ride["price_eur"] > 11.0 and not ride["notes"]
 
@@ -56,4 +58,4 @@ def test_with_nothing_published_the_estimate_is_measured_by_road_to_the_station(
     rides = join([], monkeypatch)
     assert all(ride.get("estimated_km") == 11 for ride in rides) and len(rides) == 2
     stretch = rides[0]["steps"][0]
-    assert stretch["minutes"] == 16 + timetables.STATION_WAIT_MINUTES and rides[0]["leave"] == timetables.to_minutes("15:45") - stretch["minutes"]
+    assert stretch["minutes"] == 16 + joined.STATION_WAIT_MINUTES and rides[0]["leave"] == to_minutes("15:45") - stretch["minutes"]

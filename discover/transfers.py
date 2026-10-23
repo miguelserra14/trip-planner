@@ -21,7 +21,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-from trip_planner.itineraries.legs import MAX_PLAUSIBLE_EUR_PER_KM, ROAD_FACTOR
+from trip_planner.itineraries.estimates import ROAD_FACTOR
+from trip_planner.itineraries.legs import MAX_PLAUSIBLE_EUR_PER_KM
 from trip_planner.places import airport_from, Place
 from trip_planner.utils import message_text, plain
 

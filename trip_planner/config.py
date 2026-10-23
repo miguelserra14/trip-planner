@@ -121,7 +121,7 @@ class TripSettings:
     small_estimate_eur: float = 5.0       # an estimated price up to this (a metro ticket) is accepted even with allow_estimated_prices=False
     unverified_price_factor: float = 2.0  # a price that is a guess counts as this many times itself next to a real one,
                                           # so that it only beats a real price when it clearly would
-    # Timetables (sources/timetables.py)
+    # Timetables (sources/timetables/)
     city_walk_minutes: int = 40           # walking allowed between the city centre and the first or last stop. Not counted in the trip
     wide_city_walk_minutes: int = 90      # ... tried when nothing is found with the walk above: where the timetables lack a city's
                                           # own transport (Athens's metro), the station is further than that on foot

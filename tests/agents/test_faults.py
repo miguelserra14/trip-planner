@@ -14,6 +14,7 @@ from trip_planner.agents import steps
 from trip_planner.itineraries.legs import Rejected
 from trip_planner.report import full
 from trip_planner.sources import timetables
+from trip_planner.sources.timetables import airport_stops
 
 FLIGHT = {"id": "F1", "price_eur": 50.0, "departure_airport": "OPO", "arrival_airport": "BRU"}
 
@@ -113,20 +114,20 @@ TERMINAL = [41.24, -8.67]
 
 @pytest.fixture
 def stops_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(timetables, "AIRPORT_STOPS_FILE", tmp_path / "airport_stops.json")
-    monkeypatch.setattr(timetables, "AIRPORT_STOPS", {})
+    monkeypatch.setattr(airport_stops, "AIRPORT_STOPS_FILE", tmp_path / "airport_stops.json")
+    monkeypatch.setattr(airport_stops, "AIRPORT_STOPS", {})
 
 def test_the_stops_of_an_airport_are_asked_for_once(stops_file):
     transit = Asked()
     first = asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
     again = asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
     assert first == again == [("station", 5)] and transit.times == 1
-    assert '"XXX"' in timetables.AIRPORT_STOPS_FILE.read_text(encoding="utf-8")
+    assert '"XXX"' in airport_stops.AIRPORT_STOPS_FILE.read_text(encoding="utf-8")
 
 def test_old_stops_and_stops_of_another_terminal_are_asked_for_again(stops_file):
     transit = Asked()
     asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
-    timetables.AIRPORT_STOPS["XXX"]["read"] = (date.today() - timedelta(days=timetables.AIRPORT_STOPS_DAYS + 1)).isoformat()
+    airport_stops.AIRPORT_STOPS["XXX"]["read"] = (date.today() - timedelta(days=airport_stops.AIRPORT_STOPS_DAYS + 1)).isoformat()
     asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
     assert transit.times == 2
     asyncio.run(transit.airport_stops(AIRPORT, [41.25, -8.66]))   # the terminal was located somewhere else since

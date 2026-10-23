@@ -6,6 +6,7 @@ from datetime import date, timedelta
 
 from trip_planner import current
 from trip_planner.sources import timetables
+from trip_planner.sources.timetables import client
 
 AIRPORT, CITY, STATION = (44.53, 11.29), (44.69, 10.84), (44.65, 10.93)   # Bologna airport, Campogalliano, Modena
 DAY = (date.today() + timedelta(days=3)).isoformat()
@@ -23,17 +24,17 @@ def lookup(road_km: float, monkeypatch) -> dict:
             return [{"name": "Modena", "stopId": "it-trenitalia_1", "lat": STATION[0], "lon": STATION[1], "modes": ["REGIONAL_RAIL"]}]
         reaches_station = params["toPlace"] == f"{STATION[0]},{STATION[1]}"
         return bus("12:10", "12:40") if reaches_station else {"itineraries": []}   # nothing reaches the town itself
-    monkeypatch.setattr(timetables, "by_road", lambda point, hubs: [
+    monkeypatch.setattr(client, "by_road", lambda point, hubs: [
         {**hub, "road_km": road_km, "road_minutes": 15} for hub in hubs if road_km <= current.SETTINGS.max_estimate_km])
 
     async def work() -> dict:
-        client = timetables.Timetables()
-        client.get = get
+        transit = timetables.Timetables()
+        transit.get = get
         flight = {"id": "F", "date": DAY, "arrival_airport": "BLQ", "arrival_time": "11:00"}
-        found = await client.from_airport(AIRPORT, CITY, flight, ("UTC", "UTC"), True)
-        await client.close()
+        found = await transit.from_airport(AIRPORT, CITY, flight, ("UTC", "UTC"), True)
+        await transit.close()
         return found
-    monkeypatch.setattr(timetables, "reference_day", lambda day: day)
+    monkeypatch.setattr(client, "reference_day", lambda day: day)
     return asyncio.run(work())
 
 def test_the_published_part_goes_to_the_station_and_the_rest_is_estimated(monkeypatch):

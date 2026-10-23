@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from trip_planner import current
+from trip_planner.itineraries.estimates import estimated_minutes, estimated_price, ROAD_FACTOR
 from trip_planner.places import distance_km, Place
 from trip_planner.texts import tr
 from trip_planner.utils import plain, to_minutes, to_time
@@ -18,7 +19,7 @@ from trip_planner.sources.operators.base import in_eur
 # session, and the journeys come as JSON. Its places are named in Turkish ("Ohri", "Burgaz"), each with its country.
 # The airports of Turkey and of Bucharest are places of their own; elsewhere a coach leaves from the city, and the
 # way between the airport and the city's coach station, in no timetable, is estimated as in a mixed leg
-# (timetables.py): up to max_estimate_km, and the option is then not verified (C).
+# (sources/timetables/client.py): up to max_estimate_km, and the option is then not verified (C).
 OBILET = "https://www.obilet.com"
 OBILET_BROWSER = {"User-Agent": "Mozilla/5.0", "X-Requested-With": "XMLHttpRequest", "Accept": "application/json"}   # it refuses a program
 OBILET_COUNTRIES = {"TR": "", "ME": "karadag", "MK": "makedonya", "XK": "kosova", "AL": "arnavutluk", "BA": "bosna-hersek",
@@ -85,7 +86,6 @@ def obilet_rides(city: Place, airport: dict[str, Any], day: str, to_airport: boo
     price in EUR. From the airport's own place first; when it has none, or nothing leaves from it, from the coach
     station of the airport's city, with the way between the two estimated. Returns None when it does not know the
     city, or neither the airport nor the airport's city."""
-    from trip_planner.itineraries.legs import ROAD_FACTOR   # legs.py reads this module: imported when used
     from trip_planner.places import geocode
     if airport["country"] not in OBILET_COUNTRIES:
         return None
@@ -121,7 +121,6 @@ def obilet_search(town: dict[str, Any], station: dict[str, Any], stretch_km: flo
     """Its journeys between the traveller's town and a place at the airport's end, as rides. stretch_km is the way,
     in no timetable, between that place and the airport: 0 when the place is the airport. names are the town's own
     names, to know its stops."""
-    from trip_planner.itineraries.legs import ROAD_FACTOR, estimated_minutes, estimated_price
     start, end = (town, station) if to_airport else (station, town)
     page = f"{OBILET}/seferler/{start['id']}-{end['id']}/{day}"
     if not OBILET_SESSION.get("opened"):

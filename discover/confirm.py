@@ -1,5 +1,5 @@
 """The cheapest destinations of the map checked in the real timetables, with the planner's own code: the ways to
-and from the airports of each flight, at the hour of that flight (timetables.py, fares.py, legs.py). No model is
+and from the airports of each flight, at the hour of that flight (sources/timetables/, fares.py, legs.py). No model is
 asked: what no timetable covers keeps its estimate, grade C.
 
 A way checked can end three ways:

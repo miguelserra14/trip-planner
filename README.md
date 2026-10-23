@@ -142,7 +142,13 @@ trip_planner/
 │   ├── flight_search.py   the flight search: every route, on Kiwi first, then on Google Flights
 │   ├── kiwi.py            flights from Kiwi
 │   ├── google_flights.py  flights from Google Flights, when Kiwi does not answer
-│   ├── timetables.py      published timetables (Transitous) and airport terminals
+│   ├── timetables/        published timetables (Transitous), one module per part
+│   │   ├── lookup.py          ground_transport_for: the ground transport of every flight, where a search starts
+│   │   ├── client.py          Timetables: the requests, and the mixed legs where no timetable reaches one end
+│   │   ├── joined.py          an operator's coach joined to a published connection to its station
+│   │   ├── airport_stops.py   airport terminals (OpenStreetMap) and the stops travellers use there
+│   │   ├── days.py            which day is read for a travel date, and the local time of each place
+│   │   └── modes.py           the kinds of vehicle asked for
 │   ├── fares.py           which operator prices which vehicle, and the operators that list rides (FARE_SOURCES, RIDE_SOURCES)
 │   ├── operators/         one module per operator's booking system (FlixBus, ALSA, Movelia, Obilet...) and the city tariffs
 │   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
@@ -155,6 +161,7 @@ trip_planner/
 │   └── state.py           what each agent keeps between steps
 ├── itineraries/       code that decides the result
 │   ├── legs.py            ground legs: real connection or checked estimate
+│   ├── estimates.py       time and price estimated from the distance, where nothing better is known
 │   ├── ranking.py         hard constraints, cost, ranking
 │   └── selection.py       which flights get their ground transport looked up: the ones that can still win
 ├── report/            the Markdown reports

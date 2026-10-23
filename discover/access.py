@@ -24,7 +24,7 @@ import httpx
 
 from discover import transfers
 from trip_planner.config import USER_AGENT
-from trip_planner.itineraries.legs import estimated_minutes, estimated_price
+from trip_planner.itineraries.estimates import estimated_minutes, estimated_price
 from trip_planner.places import airport_from, ask_nominatim, distance_km, load_airports, move_to_centre, place_of, Place, settlement
 from trip_planner.utils import plain
 

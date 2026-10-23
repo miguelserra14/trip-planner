@@ -65,6 +65,7 @@ class Found:
     kiwi: bool = True                                # whether Kiwi was asked at all
     kiwi_allowed: int = KIWI_REQUESTS                # the requests to Kiwi this map could make: its limit, or what was left of the day's
     kiwi_refused: str = ""                           # what Kiwi said when it refused a request: the ones after it were not sent
+    kiwi_why: str = ""                               # why Kiwi was not asked at all, for the page; empty when it was, or with fast
     centres: dict[str, Place] = field(default_factory=dict)        # the centre of the city of each destination airport
     rides: dict[tuple, list] = field(default_factory=dict)         # the operators' rides on the traveller's side (rides.py)
     flown: dict[str, dict] = field(default_factory=dict)          # the routes flown today from the traveller's airports (flown.py)
@@ -227,11 +228,12 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     flights = [flight for answer in answers for flight in answer]
     with_ryanair = {search["from"] for search in searches if search["source"] == "Ryanair" and search["answered"]}
 
-    countries, left_out, allowed, refusal, asked_by_name = [], [], 0, [], set()
+    countries, left_out, allowed, refusal, asked_by_name, kiwi_why = [], [], 0, [], set(), ""
     if not fast:
         day = today.isoformat()
         allowed = max(0, min(kiwi_requests, KIWI_DAILY - kiwi_used(day)))
         if kiwi.kiwi_search is None:
+            kiwi_why = "Kiwi did not answer when the map was made"
             say("Kiwi is not available: only Ryanair's destinations are on the map.")
         else:
             near = countries_near(place, {airport["code"] for airport in departures})
@@ -242,6 +244,8 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
                 say(f"Kiwi: {len(countries)} countries from {' and '.join('+'.join(codes) for codes, _ in groups)}"
                     + (f", for {len(runs)} runs of days" if len(runs) > 1 else "") + f", {len(countries) * len(groups) * len(runs)} requests")
             else:
+                kiwi_why = (f"Kiwi was asked {KIWI_DAILY} times today already, the most the maps ask it in a day so that it does not refuse "
+                            "the planner too; it is asked again tomorrow")
                 say(f"Kiwi was asked {KIWI_DAILY} times today already: only Ryanair's destinations are on the map.")
             turn = asyncio.Semaphore(KIWI_AT_ONCE)
 
@@ -301,7 +305,7 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     found_rides = await asyncio.to_thread(operator_rides.look_up, place, departures, operator_rides.wanted_for(cheapest, departures), say)
     destinations = one_per_city([with_access(flight, place, centres, today, found_rides) for flight in cheapest], airports, centres)
     return Found(place, days, departures, destinations, flights, searches, left_out, kiwi=bool(countries),
-                 kiwi_options=options if countries else "", kiwi_allowed=allowed, kiwi_refused=refusal[0] if refusal else "",
+                 kiwi_options=options if countries else "", kiwi_allowed=allowed, kiwi_refused=refusal[0] if refusal else "", kiwi_why=kiwi_why,
                  centres=centres, rides=found_rides,
                  coverage=flown.coverage(routes_flown, flown.seen_codes(routes_flown, {flight["to"] for flight in flights}, airports), with_ryanair,
                                          asked_by_name),

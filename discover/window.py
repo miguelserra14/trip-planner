@@ -220,7 +220,9 @@ class DiscoverWindow:
                 elif kind == "opened":
                     webbrowser.open(text)
                     self.again_button.configure(state="normal")
+                    why = self.session.found.kiwi_why if self.session and self.session.found else ""
                     self.say(f"The map is open in your browser ({text}). "
+                             + (f"Only Ryanair's flights are on it: {why}. " if why else "")
                              + ("The cheapest destinations are being looked up in the timetables: the map updates itself."
                                 if self.look_up.get() else "Keep this window open while you use it."))
                 elif kind == "done":

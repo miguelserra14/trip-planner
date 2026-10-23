@@ -123,7 +123,7 @@ def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport
     data = {"origin": {"name": found.place.label, "lat": found.place.latitude, "lon": found.place.longitude},
             "days": str(found.days), "round_trip": found.days.round_trip, "sources": sources, "airport_minutes": airport_minutes,
             "long_wait": LONG_WAIT_MINUTES, "early_hour": EARLY_AIRPORT_HOUR, "late_hour": LATE_LANDING_HOUR, "token": token,
-            "max_lookups": max_lookups, "state": map_state(found, sections, running, 0, airport_minutes, landing_minutes)}
+            "max_lookups": max_lookups, "kiwi_why": found.kiwi_why, "state": map_state(found, sections, running, 0, airport_minutes, landing_minutes)}
     title = f"Discover from {found.place.english_name}"
     return PAGE.replace("__DATA__", as_script({**data, "title": title})).replace("__TITLE__", title)
 
@@ -147,6 +147,7 @@ PAGE = """<!doctype html>
   #status.running { background: #fff4d6; border-color: #e0a100; } #status.done { background: #e6f4ea; border-color: #1e8e3e; }
   #status.lost { background: #fde7e9; border-color: #b3261e; }
   @media (prefers-color-scheme: dark) { #status.running { background: #3d3519; } #status.done { background: #1e3325; } #status.lost { background: #3d1f1f; } }
+  #status p.kiwi { margin: 0 0 4px; font-weight: 600; color: #b3261e; } @media (prefers-color-scheme: dark) { #status p.kiwi { color: #ff8a80; } }
   #status strong { margin-right: 6px; } #status .pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e0a100;
     margin-right: 8px; animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.25; } }
   @media (prefers-reduced-motion: reduce) { #status .pulse { animation: none; } }
@@ -359,6 +360,8 @@ function describeStatus() {
   const missing = (state.coverage || {}).missing || [];
   status.replaceChildren();
   status.className = lost ? "lost" : state.running ? "running" : "done";
+  if (data.kiwi_why)   // only Ryanair's flights: the first thing to know about this map
+    add(status, "p", "Only Ryanair's flights are on this map: " + data.kiwi_why + ".", "kiwi");
   document.title = (state.running && !lost ? "⏳ " : "") + data.title;
   if (state.running && !lost) {
     add(status, "span", undefined, "pulse");

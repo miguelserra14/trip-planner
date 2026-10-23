@@ -22,7 +22,7 @@ def plain(text: str) -> str:
     """Lowercase text without accents, to compare names written in different ways."""
     return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower().strip()
 
-# Progress lines and results are printed in the terminal, unless something else asked for them: the window (gui.py)
+# Progress lines and results are printed in the terminal, unless something else asked for them: the window (gui/window.py)
 # puts its own functions here, under "say" and "show".
 LISTENERS: dict = {}
 

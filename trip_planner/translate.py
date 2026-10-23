@@ -4,7 +4,7 @@
     python main.py --add-language it       write languages/it.py, translated from English by a model
     python main.py --remove-language it    delete languages/it.py
 
-The window does the same with its Languages button (gui.py), through `add`, `remove` and `refresh`.
+The window does the same with its Languages button (gui/dialogs.py), through `add`, `remove` and `refresh`.
 
 Adding a language that is already there only fills in the texts it is missing, so it is also how to bring every
 language up to date after new texts were written in en.py: python main.py --add-language all"""

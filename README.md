@@ -169,11 +169,16 @@ trip_planner/
 │   ├── full.py            the full report saved to reports/
 │   └── formatting.py      tables, grades and sources
 ├── planner.py         plans one trip from start to finish, follow-up questions
-├── gui.py             the window: form, airport list, progress, result, questions
+├── gui/               the window: form, airport list, progress, result, questions
+│   ├── window.py          the main window, and the work it hands to the planner's thread
+│   ├── output.py          the text where the progress and the result are written
+│   ├── advanced.py        the advanced settings
+│   ├── dialogs.py         which place a name means, the calendar, the languages
+│   └── style.py           colours, fonts and the styles of the widgets
 └── check.py           the --check of every outside service
 ```
 
-A trip goes through them in this order: `main.py` → `gui.py` (or the terminal) → `planner.py` runs the three steps (`agents/steps.py`) →
+A trip goes through them in this order: `main.py` → `gui/` (or the terminal) → `planner.py` runs the three steps (`agents/steps.py`) →
 each step reads `sources/` → `itineraries/` checks and ranks → `report/` writes the result, shown at once → the coordinator
 (`agents/coordinator.py`) is asked once for the recommendation in words. Without a model the result is still shown.
 

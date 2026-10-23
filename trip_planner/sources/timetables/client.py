@@ -320,11 +320,16 @@ class Timetables:
 
     async def covers(self, city: tuple, airport: tuple, stops: list[tuple], day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
         """Whether any timetable covers the way between the city and an airport at all: to or from the airport's first
-        stop, or its point on the map (is_covered)."""
+        stop, or its point on the map (is_covered). A stop the timetables refuse says nothing: the point on the map
+        still does."""
         for end, _ in [*stops[:1], (airport, 0)]:
             start, finish = (city, end) if to_airport else (end, city)
-            if await self.is_covered(start, finish, day, zones, to_airport, terminal_known):
-                return True
+            try:
+                if await self.is_covered(start, finish, day, zones, to_airport, terminal_known):
+                    return True
+            except httpx.HTTPStatusError:
+                if not isinstance(end, str):
+                    raise   # the point on the map itself was refused: not a stop that is gone, a failure of the service
         return False
 
     def answer(self, options: list[Connection], service: str, day: str) -> Answer:

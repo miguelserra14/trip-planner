@@ -1,5 +1,9 @@
 """The rules of the arrival leg on small made-up inputs: no service, no checkpoint."""
+import asyncio
 import math
+from datetime import date, timedelta
+
+import httpx
 
 from trip_planner import places
 from trip_planner.config import TripSettings
@@ -141,3 +145,43 @@ def test_the_town_inside_a_municipality_of_its_name_is_not_another_place(monkeyp
     bovec = [result("municipality", 0.53, 46.356, 13.614, "Bovec, Slovenia"), result("town", 0.50, 46.338, 13.552, "Bovec, 5230, Slovenia")]
     monkeypatch.setitem(places.SEARCHES, "bovec", bovec)
     assert [label for label, place in places.meanings("Bovec")] == ["Bovec, Slovenia"]
+
+# ---------------------------------------------------------------- a stop the timetables no longer know
+DAY = (date.today() + timedelta(days=3)).isoformat()
+
+def refusing_the_stop(bus: bool) -> timetables.Timetables:
+    """The timetables, refusing every request about the airport's stop as one they no longer know. Between points on
+    the map they answer with one bus at midday when bus, with nothing otherwise."""
+    transit = timetables.Timetables()
+
+    async def get(path, params):
+        if path != "plan":
+            return []   # no station near either point: no mixed leg either
+        if "," not in params["fromPlace"] or "," not in params["toPlace"]:
+            raise httpx.HTTPStatusError("unknown stop", request=httpx.Request("GET", "https://api.transitous.org"), response=httpx.Response(400))
+        leg = {"mode": "BUS", "startTime": f"{DAY}T11:00:00Z", "endTime": f"{DAY}T12:00:00Z",
+               "from": {"name": "A", "lat": 0.0, "lon": 0.0}, "to": {"name": "B", "lat": 0.1, "lon": 0.1}}
+        return {"itineraries": [{"startTime": leg["startTime"], "endTime": leg["endTime"], "legs": [leg]}] if bus else []}
+    transit.get = get
+    return transit
+
+def test_a_stop_the_timetables_refuse_does_not_hide_the_point_on_the_map():
+    transit = refusing_the_stop(bus=True)
+
+    async def work() -> bool:
+        try:
+            return await transit.covers((0.0, 0.0), (0.1, 0.1), [("stop", 5)], DAY, ("UTC", "UTC"), True, True)
+        finally:
+            await transit.close()
+    assert asyncio.run(work())
+
+def test_a_refused_stop_with_nothing_at_the_point_is_a_way_no_timetable_covers():
+    transit = refusing_the_stop(bus=False)
+    flight = {"id": "F", "date": DAY, "departure_airport": "XXX", "departure_time": "15:00"}
+
+    async def work() -> dict:
+        try:
+            return await transit.to_airport((0.0, 0.0), (0.1, 0.1), flight, ("UTC", "UTC"), True, [("stop", 5)])
+        finally:
+            await transit.close()
+    assert asyncio.run(work()) == timetables.NOT_COVERED

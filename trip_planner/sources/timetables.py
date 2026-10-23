@@ -15,6 +15,7 @@ import math
 import random
 import re
 import time
+from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -85,6 +86,21 @@ def utc_to_local(moment: str, zone: str) -> tuple:
     """A UTC time from the timetable as (yyyy-mm-dd, minutes since midnight) on the local clock."""
     local = datetime.fromisoformat(moment.replace("Z", "+00:00")).astimezone(ZoneInfo(zone))
     return local.date().isoformat(), local.hour * 60 + local.minute
+
+def minutes_since(day: str, moment: str, zone: str) -> int:
+    """A UTC time from the timetable in minutes since the midnight day starts with, on the local clock: below 0 on
+    the evening before, above 24 hours in the night after."""
+    local_day, minutes = utc_to_local(moment, zone)
+    return minutes + (date.fromisoformat(local_day) - date.fromisoformat(day)).days * 24 * 60
+
+def day_bounds(to_airport: bool) -> tuple[int, int]:
+    """The earliest a connection may leave and the latest it may arrive, in minutes since the midnight its day starts
+    with. Up to night_minutes across a midnight: towards the airport from the evening before, and from it into the
+    night after, if the traveller accepts arriving on a later day."""
+    settings = current.SETTINGS
+    first_leave = -settings.night_minutes if to_airport else 0
+    last_arrive = 24 * 60 + (settings.night_minutes if not to_airport and settings.next_day_arrivals else 0)
+    return first_leave, last_arrive
 
 # Where the passenger terminal of each airport is, or null where OpenStreetMap has none. Worked out once for every
 # airport (python main.py --terminals) and kept in the repository: a search only asks for an airport that is not here.
@@ -297,10 +313,8 @@ def by_road(point: tuple, hubs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def fastest(through: list[list[dict[str, Any]]], to_airport: bool) -> list[dict[str, Any]]:
     """Of the connections through several stations, those through the station that gives the shortest trip.
     The estimated stretch makes a connection longer: it must still start and end within the times plan accepts."""
-    settings = current.SETTINGS
-    first_leave = -settings.night_minutes if to_airport else 0
-    last_arrive = 24 * 60 + (settings.night_minutes if not to_airport and settings.next_day_arrivals else 0)
-    through = [kept for kept in ([c for c in found if first_leave <= c["leave"] and c["arrive"] < last_arrive] for found in through) if kept]
+    first_leave, last_arrive = day_bounds(to_airport)
+    through =[kept for kept in ([c for c in found if first_leave <= c["leave"] and c["arrive"] < last_arrive] for found in through) if kept]
     return min(through, key=lambda found: min(c["arrive"] - c["leave"] for c in found), default=[])
 # Mixed legs. Where no published timetable joins an airport and its city (the buses of Campogalliano, of Debrecen
 # airport, of Nafplio are not published), the published part goes as far as it can: to the station nearest to the
@@ -310,6 +324,72 @@ HUBS_TRIED = 3                   # stations tried as the end of the published pa
                                  # stops. The one that gives the shortest trip is kept: the nearest station can be across a
                                  # mountain (Kotor)
 SAME_HUB_KM = 0.5                # stops this close are one station (each platform and each operator has its own)
+
+def estimated_stretch(start: str, end: str, hub: dict[str, Any], start_at: tuple, end_at: tuple) -> dict[str, Any]:
+    """The estimated part of a mixed leg, as one step of it but with no times yet (with_stretch gives them): between
+    start and end, one of which is the station hub. As long as by road, when the road is known, plus the time getting
+    a bus or a taxi; at least what the straight line gives."""
+    from trip_planner.itineraries.legs import ESTIMATE_FIXED_MINUTES, estimated_minutes, ROAD_FACTOR   # legs.py reads this module
+    road_km = hub.get("road_km", hub["km"] * ROAD_FACTOR)
+    minutes = max(estimated_minutes(hub["km"]), round(hub.get("road_minutes", 0)) + ESTIMATE_FIXED_MINUTES)
+    return {"line": tr("estimated_stretch"), "agency": "", "from": web.clean_text(start, 60), "to": web.clean_text(end, 60),
+            "rail": False, "coach": False, "from_id": "", "to_id": "", "from_at": list(start_at), "to_at": list(end_at),
+            "km": round(road_km / ROAD_FACTOR), "road_km": round(road_km), "estimated": True, "minutes": minutes}
+
+def with_stretch(found: list[dict[str, Any]], stretch: dict[str, Any], before: bool, start: str, end: str) -> list[dict[str, Any]]:
+    """Published connections with the estimated stretch between start and end before or after each one, timed to
+    meet it: it ends when the connection leaves, or starts when it arrives."""
+    minutes = stretch["minutes"]
+    note = tr("note_estimated_stretch", km=stretch["road_km"], start=start, end=end)
+    joined = []
+    for connection in found:
+        if before:
+            step = {"time": to_time(connection["leave"] - minutes), "arrive": to_time(connection["leave"]), **stretch}
+            joined.append({**connection, "leave": connection["leave"] - minutes, "steps": [step, *connection["steps"]],
+                           "estimated_km": stretch["road_km"], "notes": [note]})
+        else:
+            step = {"time": to_time(connection["arrive"]), "arrive": to_time(connection["arrive"] + minutes), **stretch}
+            joined.append({**connection, "arrive": connection["arrive"] + minutes, "steps": [*connection["steps"], step],
+                           "estimated_km": stretch["road_km"], "notes": [note]})
+    return joined
+
+def box_around(point: tuple | list, km: float) -> dict[str, str]:
+    """The corners of a square of about km around a point, as the timetables' map of stops asks for them. A degree
+    of latitude is about 111 km; a degree of longitude is shorter away from the equator."""
+    reach = km / 111
+    wide = reach / max(0.2, math.cos(math.radians(point[0])))
+    return {"min": f"{point[0] - reach},{point[1] - wide}", "max": f"{point[0] + reach},{point[1] + wide}"}
+
+def step_of(leg: dict[str, Any], zones: tuple) -> dict[str, Any]:
+    """One vehicle of a connection the timetables found, as the planner keeps it."""
+    return {
+        "time": to_time(utc_to_local(leg["startTime"], leg["from"].get("tz") or zones[0])[1]),
+        "arrive": to_time(utc_to_local(leg["endTime"], leg["to"].get("tz") or zones[1])[1]),
+        "line": web.clean_text(leg.get("displayName") or leg.get("routeShortName") or leg["mode"].replace("_", " ").title(), 40),
+        "agency": web.clean_text(leg.get("agencyName") or "", 60),
+        "from": web.clean_text(leg["from"]["name"], 60), "to": web.clean_text(leg["to"]["name"], 60),
+        "rail": is_rail(leg["mode"]), "coach": leg["mode"] == "COACH", "mode": leg["mode"],
+        # What an operator needs to recognise the two stops when it is asked for the price (fares.py)
+        "from_id": leg["from"].get("stopId") or "", "to_id": leg["to"].get("stopId") or "",
+        "from_at": [leg["from"]["lat"], leg["from"]["lon"]], "to_at": [leg["to"]["lat"], leg["to"]["lon"]],
+        "km": round(distance_km(leg["from"]["lat"], leg["from"]["lon"], leg["to"]["lat"], leg["to"]["lon"])),
+    }
+
+async def unless_refused(asking: Awaitable[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+    """The connections a request finds, or none when the timetables refuse it: a stop or a station they no longer know."""
+    try:
+        return await asking
+    except httpx.HTTPStatusError:
+        return []
+
+async def first_found(ends: list[tuple], ask: Callable[[tuple | str, int], Awaitable[list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+    """The connections of the first end of an airport that has any: each of its stops (see airport_stops), then its
+    point on the map. ends are (stop or point, minutes on foot from the terminal)."""
+    for end, walk in ends:
+        found = await unless_refused(ask(end, walk))
+        if found:
+            return found
+    return []
 
 def asked(path: str, params: dict[str, Any]) -> str:
     """A request to the timetables in a few words, for the log of the run."""
@@ -394,10 +474,7 @@ class Timetables:
 
     async def stops_around(self, airport: dict[str, Any], terminal: list[float] | None) -> list[dict[str, Any]]:
         """Every stop the timetables know within AIRPORT_STOP_KM of an airport's terminal, or of its airfield."""
-        centre = terminal or (airport["latitude"], airport["longitude"])
-        reach = AIRPORT_STOP_KM / 111   # in degrees of latitude. A degree of longitude is shorter away from the equator
-        wide = reach / max(0.2, math.cos(math.radians(centre[0])))
-        return await self.get("map/stops", {"min": f"{centre[0] - reach},{centre[1] - wide}", "max": f"{centre[0] + reach},{centre[1] + wide}"})
+        return await self.get("map/stops", box_around(terminal or (airport["latitude"], airport["longitude"]), AIRPORT_STOP_KM))
 
     async def airport_stops(self, airport: dict[str, Any], terminal: list[float] | None) -> list[tuple]:
         """The stops travellers use at an airport, see choose_airport_stops. Asked for once, then kept."""
@@ -444,6 +521,7 @@ class Timetables:
         if ground_choice.max_transfers(to_airport) is not None and not any_way:
             params["maxTransfers"] = ground_choice.max_transfers(to_airport)
         found = await self.get("plan", params)
+        first_leave, last_arrive = day_bounds(to_airport)
         connections = []
         for itinerary in found.get("itineraries") or []:
             legs = [leg for leg in itinerary["legs"] if leg["mode"] != "WALK"]
@@ -453,34 +531,17 @@ class Timetables:
             # found when the terminal is known, a fixed time otherwise.
             first = itinerary["startTime"] if (terminal_known or from_stop) and not to_airport else legs[0]["startTime"]
             last = itinerary["endTime"] if (terminal_known or to_stop) and to_airport else legs[-1]["endTime"]
-            start_day, leave = utc_to_local(first, zones[0])
-            end_day, arrive = utc_to_local(last, zones[1])
-            leave += (date.fromisoformat(start_day) - date.fromisoformat(day)).days * 24 * 60
-            arrive += (date.fromisoformat(end_day) - date.fromisoformat(day)).days * 24 * 60
+            leave, arrive = minutes_since(day, first, zones[0]), minutes_since(day, last, zones[1])
             if from_stop:
                 leave -= stop_walk
             elif to_stop:
                 arrive += stop_walk
             elif not terminal_known:
                 leave, arrive = (leave, arrive + AIRFIELD_WALK_MINUTES) if to_airport else (leave - AIRFIELD_WALK_MINUTES, arrive)
-            first_leave = -settings.night_minutes if to_airport else 0
-            last_arrive = 24 * 60 + (settings.night_minutes if not to_airport and settings.next_day_arrivals else 0)
             if not first_leave <= leave < arrive < last_arrive or leave >= 24 * 60:
                 continue
             connections.append({
-                "leave": leave, "arrive": arrive,
-                "steps": [{
-                    "time": to_time(utc_to_local(leg["startTime"], leg["from"].get("tz") or zones[0])[1]),
-                    "arrive": to_time(utc_to_local(leg["endTime"], leg["to"].get("tz") or zones[1])[1]),
-                    "line": web.clean_text(leg.get("displayName") or leg.get("routeShortName") or leg["mode"].replace("_", " ").title(), 40),
-                    "agency": web.clean_text(leg.get("agencyName") or "", 60),
-                    "from": web.clean_text(leg["from"]["name"], 60), "to": web.clean_text(leg["to"]["name"], 60),
-                    "rail": is_rail(leg["mode"]), "coach": leg["mode"] == "COACH", "mode": leg["mode"],
-                    # What an operator needs to recognise the two stops when it is asked for the price (fares.py)
-                    "from_id": leg["from"].get("stopId") or "", "to_id": leg["to"].get("stopId") or "",
-                    "from_at": [leg["from"]["lat"], leg["from"]["lon"]], "to_at": [leg["to"]["lat"], leg["to"]["lon"]],
-                    "km": round(distance_km(leg["from"]["lat"], leg["from"]["lon"], leg["to"]["lat"], leg["to"]["lon"])),
-                } for leg in legs],
+                "leave": leave, "arrive": arrive, "steps": [step_of(leg, zones) for leg in legs],
                 # Operator links come from the timetable feed the operator published
                 "urls": list(dict.fromkeys(url for url in (web.secure_url(leg.get("agencyUrl")) for leg in legs) if url)),
             })
@@ -499,6 +560,15 @@ class Timetables:
             self.probes[key] = asyncio.ensure_future(self.plan(start, end, day, 11 * 60, arrive_by=False, zones=zones, to_airport=to_airport,
                                                                terminal_known=terminal_known, any_way=True))
         return bool(await self.probes[key])
+
+    async def covers(self, city: tuple, airport: tuple, stops: list[tuple], day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
+        """Whether any timetable covers the way between the city and an airport at all: to or from the airport's first
+        stop, or its point on the map (is_covered)."""
+        for end, _ in [*stops[:1], (airport, 0)]:
+            start, finish = (city, end) if to_airport else (end, city)
+            if await self.is_covered(start, finish, day, zones, to_airport, terminal_known):
+                return True
+        return False
 
     def answer(self, options: list[dict[str, Any]], service: str, day: str) -> dict[str, Any]:
         """What was found for one side of a flight. day is the day the traveller is there, service the day read.
@@ -521,9 +591,7 @@ class Timetables:
         limit = current.SETTINGS.max_estimate_km
         found: list[dict[str, Any]] = []
         for km in [radius for radius in HUB_RADII_KM if radius < limit] + [limit]:
-            reach = km / 111
-            wide = reach / max(0.2, math.cos(math.radians(point[0])))
-            stops = await self.get("map/stops", {"min": f"{point[0] - reach},{point[1] - wide}", "max": f"{point[0] + reach},{point[1] + wide}"})
+            stops = await self.get("map/stops", box_around(point, km))
             ground = []
             for stop in stops:
                 stop = {**stop, "km": distance_km(point[0], point[1], stop["lat"], stop["lon"])}
@@ -545,28 +613,6 @@ class Timetables:
         self.hub_cache[key] = found
         return found
 
-    def stretch(self, start: str, end: str, hub: dict[str, Any], at: int, start_at: tuple, end_at: tuple) -> dict[str, Any]:
-        """The estimated part of a mixed leg, as one step of it: between start and the station hub, leaving at `at`.
-        As long as by road, when the road is known, plus the time getting a bus or a taxi; at least what the
-        straight line gives."""
-        from trip_planner.itineraries.legs import ESTIMATE_FIXED_MINUTES, estimated_minutes, ROAD_FACTOR   # legs.py reads this module
-        road_km = hub.get("road_km", hub["km"] * ROAD_FACTOR)
-        minutes = max(estimated_minutes(hub["km"]), round(hub.get("road_minutes", 0)) + ESTIMATE_FIXED_MINUTES)
-        return {"time": to_time(at), "arrive": to_time(at + minutes), "line": tr("estimated_stretch"), "agency": "",
-                "from": web.clean_text(start, 60), "to": web.clean_text(end, 60), "rail": False, "coach": False,
-                "from_id": "", "to_id": "", "from_at": list(start_at), "to_at": list(end_at),
-                "km": round(road_km / ROAD_FACTOR), "road_km": round(road_km), "estimated": True, "minutes": minutes}
-
-    def mixed(self, connection: dict[str, Any], stretch: dict[str, Any], before: bool, start: str, end: str) -> dict[str, Any]:
-        """A published connection with the estimated stretch before or after it."""
-        minutes = stretch["minutes"]
-        note = tr("note_estimated_stretch", km=stretch["road_km"], start=start, end=end)
-        if before:
-            return {**connection, "leave": connection["leave"] - minutes, "steps": [stretch, *connection["steps"]],
-                    "estimated_km": stretch["road_km"], "notes": [note]}
-        return {**connection, "arrive": connection["arrive"] + minutes, "steps": [*connection["steps"], stretch],
-                "estimated_km": stretch["road_km"], "notes": [note]}
-
     async def mixed_to_airport(self, city: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool,
                                stops: list[tuple], service: str, at_terminal: int) -> list[dict[str, Any]]:
         """Mixed connections to the airport: the stretch from the city to the nearest station when the city is the
@@ -576,32 +622,23 @@ class Timetables:
             return []   # the estimated stretch is by road: not a trip by train
         origin = current.TRIP.origin.local_name if current.TRIP else tr("origin")
         code = flight["departure_airport"]
+        target, walk = (stops or [(airport, 0)])[0]
         options: list[list[dict[str, Any]]] = []   # the connections through each station
         for hub in await self.hubs(city):   # the city first: its own buses are the ones most often not published
             at = (hub["lat"], hub["lon"])
-            stretch = self.stretch(origin, hub["name"], hub, 0, city, at)
-            target, walk = (stops or [(airport, 0)])[0]
-            try:
-                found = await self.plan(at, target, service, at_terminal, arrive_by=True, zones=zones, to_airport=True,
-                                        terminal_known=known, modes=GROUND_MODES, stop_walk=walk)
-            except httpx.HTTPStatusError:
-                continue
+            found = await unless_refused(self.plan(at, target, service, at_terminal, arrive_by=True, zones=zones, to_airport=True,
+                                                   terminal_known=known, modes=GROUND_MODES, stop_walk=walk))
             if found:
-                options.append([self.mixed(c, {**stretch, "time": to_time(c["leave"] - stretch["minutes"]), "arrive": to_time(c["leave"])},
-                                           True, origin, hub["name"]) for c in found])
+                options.append(with_stretch(found, estimated_stretch(origin, hub["name"], hub, city, at), True, origin, hub["name"]))
         if options:
             return fastest(options, True)
         for hub in await self.hubs(airport):
             at = (hub["lat"], hub["lon"])
-            stretch = self.stretch(hub["name"], code, hub, 0, at, airport)
-            try:
-                found = await self.plan(city, at, service, at_terminal - stretch["minutes"], arrive_by=True, zones=zones,
-                                        to_airport=True, terminal_known=True, modes=GROUND_MODES)
-            except httpx.HTTPStatusError:
-                continue
+            stretch = estimated_stretch(hub["name"], code, hub, at, airport)
+            found = await unless_refused(self.plan(city, at, service, at_terminal - stretch["minutes"], arrive_by=True, zones=zones,
+                                                   to_airport=True, terminal_known=True, modes=GROUND_MODES))
             if found:
-                options.append([self.mixed(c, {**stretch, "time": to_time(c["arrive"]), "arrive": to_time(c["arrive"] + stretch["minutes"])},
-                                           False, hub["name"], code) for c in found])
+                options.append(with_stretch(found, stretch, False, hub["name"], code))
         return fastest(options, True)
 
     async def mixed_from_airport(self, airport: tuple, city: tuple, flight: dict[str, Any], zones: tuple, known: bool,
@@ -612,31 +649,24 @@ class Timetables:
             return []   # the estimated stretch is by road: not a trip by train
         destination = current.TRIP.destination.local_name if current.TRIP else tr("destination")
         code = flight["arrival_airport"]
+        start, walk = (stops or [(airport, 0)])[0]
         options: list[list[dict[str, Any]]] = []   # the connections through each station
         for hub in await self.hubs(city):
             at = (hub["lat"], hub["lon"])
-            stretch = self.stretch(hub["name"], destination, hub, 0, at, city)
-            start, walk = (stops or [(airport, 0)])[0]
-            try:
-                found = await self.onward(start, at, service, ready, zones=zones, terminal_known=known, modes=GROUND_MODES, stop_walk=walk)
-            except httpx.HTTPStatusError:
-                continue
+            found = await unless_refused(self.onward(start, at, service, ready, zones=zones, terminal_known=known, modes=GROUND_MODES,
+                                                     stop_walk=walk))
             if found:
-                options.append([self.mixed(c, {**stretch, "time": to_time(c["arrive"]), "arrive": to_time(c["arrive"] + stretch["minutes"])},
-                                           False, hub["name"], destination) for c in found])
+                options.append(with_stretch(found, estimated_stretch(hub["name"], destination, hub, at, city), False, hub["name"], destination))
         if options:
             return fastest(options, False)
         for hub in await self.hubs(airport):
             at = (hub["lat"], hub["lon"])
-            stretch = self.stretch(code, hub["name"], hub, ready, airport, at)
-            try:
-                found = await self.onward(at, city, service, ready + stretch["minutes"], zones=zones, terminal_known=True, modes=GROUND_MODES)
-            except httpx.HTTPStatusError:
-                continue
+            stretch = estimated_stretch(code, hub["name"], hub, airport, at)
+            found = await unless_refused(self.onward(at, city, service, ready + stretch["minutes"], zones=zones, terminal_known=True,
+                                                     modes=GROUND_MODES))
             if found:
                 # The traveller leaves the terminal when the estimated stretch has to start, to be at the station in time
-                options.append([self.mixed(c, {**stretch, "time": to_time(c["leave"] - stretch["minutes"]), "arrive": to_time(c["leave"])},
-                                           True, code, hub["name"]) for c in found])
+                options.append(with_stretch(found, stretch, True, code, hub["name"]))
         return fastest(options, False)
 
     async def to_airport(self, start: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool,
@@ -673,22 +703,11 @@ class Timetables:
                     found += await self.last_rides[key]
             return found
 
-        found: list[dict[str, Any]] = []
-        for target, walk in [*stops, (airport, 0)]:
-            try:
-                found = await reaching(target, walk)
-            except httpx.HTTPStatusError:
-                continue   # a stop the planner no longer knows: the next one, or the point on the map
-            if found:
-                break
-        if not found:
-            for target, walk in [*stops[:1], (airport, 0)]:
-                if await self.is_covered(start, target, service, zones, True, known):
-                    break
-            else:
-                found = await self.mixed_to_airport(start, airport, flight, zones, known, stops, service, at_terminal)
-                if not found:
-                    return dict(NOT_COVERED)
+        found = await first_found([*stops, (airport, 0)], reaching)
+        if not found and not await self.covers(start, airport, stops, service, zones, True, known):
+            found = await self.mixed_to_airport(start, airport, flight, zones, known, stops, service, at_terminal)
+            if not found:
+                return dict(NOT_COVERED)
         if not found:
             # The timetables cover the route, but not the way the traveller chose to make it
             return {**self.answer([], service, flight["date"]), "choice_excluded": ground_choice.restricted(True)}
@@ -736,22 +755,11 @@ class Timetables:
         Asked for from the airport's stops (see airport_stops), and from the point on the map when they give nothing."""
         service = reference_day(landing_day(flight))
         ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes   # earliest time walking out of the terminal
-        found: list[dict[str, Any]] = []
-        for start, walk in [*stops, (airport, 0)]:
-            try:
-                found = await self.leaving(start, walk, end, service, ready, zones, known)
-            except httpx.HTTPStatusError:
-                continue   # a stop the planner no longer knows: the next one, or the point on the map
-            if found:
-                break
-        if not found:
-            for start, walk in [*stops[:1], (airport, 0)]:
-                if await self.is_covered(start, end, service, zones, False, known):
-                    break
-            else:
-                found = await self.mixed_from_airport(airport, end, flight, zones, known, stops, service, ready)
-                if not found:
-                    return dict(NOT_COVERED)
+        found = await first_found([*stops, (airport, 0)], lambda start, walk: self.leaving(start, walk, end, service, ready, zones, known))
+        if not found and not await self.covers(end, airport, stops, service, zones, False, known):
+            found = await self.mixed_from_airport(airport, end, flight, zones, known, stops, service, ready)
+            if not found:
+                return dict(NOT_COVERED)
         if not found:
             # The timetables cover the route, but not the way the traveller chose to make it
             return {**self.answer([], service, landing_day(flight)), "choice_excluded": ground_choice.restricted(False)}

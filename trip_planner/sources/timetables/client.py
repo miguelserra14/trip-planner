@@ -15,6 +15,7 @@ from trip_planner.config import ROOT, USER_AGENT
 from trip_planner.ground_choice import is_rail
 from trip_planner.itineraries.estimates import ESTIMATE_FIXED_MINUTES, estimated_minutes, ROAD_FACTOR
 from trip_planner.places import distance_km, ROADS_URL
+from trip_planner.shapes import Answer, Connection, Step
 from trip_planner.sources import web
 from trip_planner.sources.timetables.airport_stops import (AIRFIELD_WALK_MINUTES, AIRFIELD_WALK_SECONDS, AIRPORT_STOP_KM,
                                                          choose_airport_stops, keep_airport_stops, known_airport_stops)
@@ -47,7 +48,7 @@ def box_around(point: tuple | list, km: float) -> dict[str, str]:
     wide = reach / max(0.2, math.cos(math.radians(point[0])))
     return {"min": f"{point[0] - reach},{point[1] - wide}", "max": f"{point[0] + reach},{point[1] + wide}"}
 
-def step_of(leg: dict[str, Any], zones: tuple) -> dict[str, Any]:
+def step_of(leg: dict[str, Any], zones: tuple) -> Step:
     """One vehicle of a connection the timetables found, as the planner keeps it."""
     return {
         "time": to_time(utc_to_local(leg["startTime"], leg["from"].get("tz") or zones[0])[1]),
@@ -62,14 +63,14 @@ def step_of(leg: dict[str, Any], zones: tuple) -> dict[str, Any]:
         "km": round(distance_km(leg["from"]["lat"], leg["from"]["lon"], leg["to"]["lat"], leg["to"]["lon"])),
     }
 
-async def unless_refused(asking: Awaitable[list[dict[str, Any]]]) -> list[dict[str, Any]]:
+async def unless_refused(asking: Awaitable[list[Connection]]) -> list[Connection]:
     """The connections a request finds, or none when the timetables refuse it: a stop or a station they no longer know."""
     try:
         return await asking
     except httpx.HTTPStatusError:
         return []
 
-async def first_found(ends: list[tuple], ask: Callable[[tuple | str, int], Awaitable[list[dict[str, Any]]]]) -> list[dict[str, Any]]:
+async def first_found(ends: list[tuple], ask: Callable[[tuple | str, int], Awaitable[list[Connection]]]) -> list[Connection]:
     """The connections of the first end of an airport that has any: each of its stops (see airport_stops), then its
     point on the map. ends are (stop or point, minutes on foot from the terminal)."""
     for end, walk in ends:
@@ -120,14 +121,14 @@ def by_road(point: tuple, hubs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             kept.append({**hub, "road_km": road_km, "road_minutes": duration / 60})
     return kept
 
-def fastest(through: list[list[dict[str, Any]]], to_airport: bool) -> list[dict[str, Any]]:
+def fastest(through: list[list[Connection]], to_airport: bool) -> list[Connection]:
     """Of the connections through several stations, those through the station that gives the shortest trip.
     The estimated stretch makes a connection longer: it must still start and end within the times plan accepts."""
     first_leave, last_arrive = day_bounds(to_airport)
     through =[kept for kept in ([c for c in found if first_leave <= c["leave"] and c["arrive"] < last_arrive] for found in through) if kept]
     return min(through, key=lambda found: min(c["arrive"] - c["leave"] for c in found), default=[])
 
-def estimated_stretch(start: str, end: str, hub: dict[str, Any], start_at: tuple, end_at: tuple) -> dict[str, Any]:
+def estimated_stretch(start: str, end: str, hub: dict[str, Any], start_at: tuple, end_at: tuple) -> Step:
     """The estimated part of a mixed leg, as one step of it but with no times yet (with_stretch gives them): between
     start and end, one of which is the station hub. As long as by road, when the road is known, plus the time getting
     a bus or a taxi; at least what the straight line gives."""
@@ -137,7 +138,7 @@ def estimated_stretch(start: str, end: str, hub: dict[str, Any], start_at: tuple
             "rail": False, "coach": False, "from_id": "", "to_id": "", "from_at": list(start_at), "to_at": list(end_at),
             "km": round(road_km / ROAD_FACTOR), "road_km": round(road_km), "estimated": True, "minutes": minutes}
 
-def with_stretch(found: list[dict[str, Any]], stretch: dict[str, Any], before: bool, start: str, end: str) -> list[dict[str, Any]]:
+def with_stretch(found: list[Connection], stretch: Step, before: bool, start: str, end: str) -> list[Connection]:
     """Published connections with the estimated stretch between start and end before or after each one, timed to
     meet it: it ends when the connection leaves, or starts when it arrives."""
     minutes = stretch["minutes"]
@@ -242,7 +243,7 @@ class Timetables:
 
     async def plan(self, start: tuple | str, end: tuple | str, day: str, minutes: int, *, arrive_by: bool, zones: tuple,
                    to_airport: bool, terminal_known: bool, modes: str = "", stop_walk: int = 0,
-                   city_walk: int | None = None, any_way: bool = False) -> list[dict[str, Any]]:
+                   city_walk: int | None = None, any_way: bool = False) -> list[Connection]:
         """Connections between two points on one day, leaving after a time or arriving before it. The time is
         on the clock of the end point when arrive_by, otherwise of the start point. modes limits the kinds of
         vehicle, empty for everything on the ground.
@@ -326,7 +327,7 @@ class Timetables:
                 return True
         return False
 
-    def answer(self, options: list[dict[str, Any]], service: str, day: str) -> dict[str, Any]:
+    def answer(self, options: list[Connection], service: str, day: str) -> Answer:
         """What was found for one side of a flight. day is the day the traveller is there, service the day read.
         A connection with a stretch estimated from the distance (a mixed leg) is not verified as a whole (C)."""
         grade = "A" if service == day else "B"
@@ -370,7 +371,7 @@ class Timetables:
         return found
 
     async def mixed_to_airport(self, city: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool,
-                               stops: list[tuple], service: str, at_terminal: int) -> list[dict[str, Any]]:
+                               stops: list[tuple], service: str, at_terminal: int) -> list[Connection]:
         """Mixed connections to the airport: the stretch from the city to the nearest station when the city is the
         place no timetable reaches, or from the station to the terminal when the airport is. One request per station
         (HUBS_TRIED on each side at most), and only for a route no timetable covers."""
@@ -398,7 +399,7 @@ class Timetables:
         return fastest(options, True)
 
     async def mixed_from_airport(self, airport: tuple, city: tuple, flight: dict[str, Any], zones: tuple, known: bool,
-                                 stops: list[tuple], service: str, ready: int) -> list[dict[str, Any]]:
+                                 stops: list[tuple], service: str, ready: int) -> list[Connection]:
         """Mixed connections from the airport: to the station nearest to the city when the city is the place no
         timetable reaches, or from the terminal to the nearest station when the airport is."""
         if not ground_choice.road_allowed(False):
@@ -426,7 +427,7 @@ class Timetables:
         return fastest(options, False)
 
     async def to_airport(self, start: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool,
-                         stops: list[tuple] = ()) -> dict[str, Any]:
+                         stops: list[tuple] = ()) -> Answer:
         """Connections from the origin city that reach the terminal in time for a flight.
         Asked for up to the airport's stops (see airport_stops), and up to the point on the map when they give nothing."""
         service = reference_day(flight["date"])
@@ -436,7 +437,7 @@ class Timetables:
         earliest, latest = to_minutes(current.SETTINGS.earliest_leave), to_minutes(current.SETTINGS.latest_leave)
         fits = lambda c: earliest <= c["leave"] <= latest and c["arrive"] <= at_terminal
 
-        async def reaching(target: tuple | str, walk: int) -> list[dict[str, Any]]:
+        async def reaching(target: tuple | str, walk: int) -> list[Connection]:
             """The connections that reach one point or one stop of the airport."""
             # The connections that arrive last before the limit. If none of them leaves within the times the traveller
             # accepts, also the ones that leave first after the earliest of those times and the ones that leave in the
@@ -473,7 +474,7 @@ class Timetables:
         return self.answer([c for c in found if c["arrive"] <= max(at_terminal, last_call)], service, flight["date"])
 
     async def onward(self, airport: tuple | str, end: tuple, service: str, ready: int, *, zones: tuple, terminal_known: bool,
-                     modes: str = "", stop_walk: int = 0) -> list[dict[str, Any]]:
+                     modes: str = "", stop_walk: int = 0) -> list[Connection]:
         """The connections leaving an airport from a time on. One request serves every flight that lands while
         its answer still applies: several flights land at the same airport within a couple of hours."""
         key = (airport, end, service, modes)
@@ -491,7 +492,7 @@ class Timetables:
             return [c for c in found if c["leave"] >= ready]
 
     async def leaving(self, start: tuple | str, walk: int, end: tuple, service: str, ready: int, zones: tuple,
-                      known: bool) -> list[dict[str, Any]]:
+                      known: bool) -> list[Connection]:
         """The connections that leave one point or one stop of an airport from a time on."""
         ask = lambda modes: self.onward(start, end, service, ready, zones=zones, terminal_known=known, modes=modes, stop_walk=walk)
         # Free trains: look for trains first, a paid coach is only worth it when no train is left that day
@@ -506,7 +507,7 @@ class Timetables:
         return found + [c for c in by_road if any(step["coach"] for step in c["steps"])]
 
     async def from_airport(self, airport: tuple, end: tuple, flight: dict[str, Any], zones: tuple, known: bool,
-                           stops: list[tuple] = ()) -> dict[str, Any]:
+                           stops: list[tuple] = ()) -> Answer:
         """Connections from the arrival airport to the destination that the traveller can catch after landing.
         Asked for from the airport's stops (see airport_stops), and from the point on the map when they give nothing."""
         service = reference_day(landing_day(flight))

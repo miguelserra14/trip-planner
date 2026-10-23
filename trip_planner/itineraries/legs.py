@@ -6,6 +6,7 @@ from typing import Any
 
 from trip_planner import current, ground_choice
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price, MIN_TICKET_EUR, ROAD_FACTOR, step_price
+from trip_planner.shapes import Answer, Connection
 from trip_planner.sources import fares, timetables
 from trip_planner.texts import tr
 from trip_planner.utils import to_minutes, to_time
@@ -37,7 +38,7 @@ def model_price(price_eur: float, known: bool, km: float | None, country: str = 
         raise Rejected(tr("reject_price_unknown"))
     return price, "estimate"
 
-def real_options_text(options: list[dict[str, Any]]) -> str:
+def real_options_text(options: list[Connection]) -> str:
     """A few real connections, for the reason an itinerary is rejected."""
     shown = sorted({(option["leave"], option["arrive"]) for option in options})[:5]
     return ", ".join(f"{to_time(leave)} -> {to_time(arrive)}" for leave, arrive in shown) or tr("none")
@@ -48,7 +49,7 @@ MAX_PRICED = 3       # connections of a leg whose tickets are read in one round
 PRICING_ROUNDS = 2   # a second round when the real prices put a connection that was not read ahead
 KNOWN_PRICES = ("operator", "free", "tariff", "operator_typical")   # kinds of price that are not a guess
 
-def best_on_real_prices(candidates: list[dict[str, Any]], key: Callable, day: str, free_trains: bool) -> dict[str, Any]:
+def best_on_real_prices(candidates: list[Connection], key: Callable, day: str, free_trains: bool) -> Connection:
     """The best of the connections of a leg by key, once the tickets of the ones in front were read for day.
     A connection its operator says does not run that day is dropped (price_with_tickets). Raises Rejected when
     every connection was dropped."""
@@ -79,7 +80,7 @@ def estimate_allowed(airport: str, to_airport: bool) -> None:
     if km is None or km > current.SETTINGS.max_estimate_km:
         raise Rejected(tr("reject_estimate_too_far", airport=airport, km="?" if km is None else km, limit=current.SETTINGS.max_estimate_km))
 
-def accepted(options: list[dict[str, Any]], airport: str, to_airport: bool) -> list[dict[str, Any]]:
+def accepted(options: list[Connection], airport: str, to_airport: bool) -> list[Connection]:
     """Only the connections the traveller accepts (ground_choice.py), checked again here whatever their source.
     Raises Rejected when there were some and none is accepted."""
     chosen = [o for o in options if ground_choice.accepts(o, to_airport)]
@@ -94,7 +95,7 @@ def leave_window(flight: dict[str, Any]) -> tuple[int, int, int]:
             to_minutes(flight["departure_time"]) - settings.min_airport_minutes)
 
 def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dict[str, Any] | None,
-                   closest: bool = False, priced: bool = False) -> dict[str, Any]:
+                   closest: bool = False, priced: bool = False) -> Connection:
     """How the traveller gets to the departure airport: a real connection when one is published, otherwise the
     model's estimate. Raises Rejected with the reason when the flight cannot be caught.
     closest=True also accepts a real connection outside the times the traveller leaves at, or one that leaves less
@@ -116,8 +117,8 @@ def to_airport_leg(flight: dict[str, Any], ground: dict[str, Any], transfer: dic
         raise Rejected(missed_flight_reason(real, flight))
     return model_to_airport(flight, transfer)
 
-def to_airport_options(flight: dict[str, Any], rides: list[dict[str, Any]] | None, timetable: dict[str, Any],
-                       transfer: dict[str, Any] | None) -> list[dict[str, Any]]:
+def to_airport_options(flight: dict[str, Any], rides: list[Connection] | None, timetable: Answer,
+                       transfer: dict[str, Any] | None) -> list[Connection]:
     """The real connections to the departure airport, each with its price: the operators' rides, and the timetable's
     connections priced vehicle by vehicle (free trains) or with the model's price, else an estimate."""
     airport, settings = flight["departure_airport"], current.SETTINGS
@@ -136,7 +137,7 @@ def to_airport_options(flight: dict[str, Any], rides: list[dict[str, Any]] | Non
         real += [{**option, "kind": "timetable", "country": country_of(airport), "price_eur": price, "price_kind": price_kind} for option in timetable["options"]]
     return accepted(real, airport, True)
 
-def best_to_airport(real: list[dict[str, Any]], flight: dict[str, Any], closest: bool, priced: bool) -> dict[str, Any] | None:
+def best_to_airport(real: list[Connection], flight: dict[str, Any], closest: bool, priced: bool) -> Connection | None:
     """The real connection to take for a flight: the best of those that leave within the traveller's times and reach
     the terminal in time, or with closest the one that breaks the least. None when none will do."""
     settings = current.SETTINGS
@@ -164,7 +165,7 @@ def best_to_airport(real: list[dict[str, Any]], flight: dict[str, Any], closest:
                                                  max(earliest - o["leave"], o["leave"] - latest, 0), *preference(o)))
     return None
 
-def missed_flight_reason(real: list[dict[str, Any]], flight: dict[str, Any]) -> str:
+def missed_flight_reason(real: list[Connection], flight: dict[str, Any]) -> str:
     """Why no real connection reaches the airport in time, with the ones that come closest: the last ones that reach
     the airport in time but leave outside the window, and the first ones that leave inside it but arrive too late."""
     earliest, latest, at_terminal = leave_window(flight)
@@ -174,7 +175,7 @@ def missed_flight_reason(real: list[dict[str, Any]], flight: dict[str, Any]) -> 
     return tr("reject_no_real_connection", airport=flight["departure_airport"], earliest=current.SETTINGS.earliest_leave,
               latest=current.SETTINGS.latest_leave, limit=to_time(at_terminal), real=real_options_text(in_time + in_window or real))
 
-def model_to_airport(flight: dict[str, Any], transfer: dict[str, Any] | None) -> dict[str, Any]:
+def model_to_airport(flight: dict[str, Any], transfer: dict[str, Any] | None) -> Connection:
     """The model's estimate of the way to the airport (grade C), the only one left when no timetable covers it."""
     airport, settings = flight["departure_airport"], current.SETTINGS
     earliest, latest, at_terminal = leave_window(flight)
@@ -202,7 +203,7 @@ def model_to_airport(flight: dict[str, Any], transfer: dict[str, Any] | None) ->
         "urls": [transfer["operator_url"]] if transfer.get("operator_url") else [], "notes": notes,
     }
 
-def price_with_tickets(leg: dict[str, Any], day: str, free_trains: bool) -> None:
+def price_with_tickets(leg: Connection, day: str, free_trains: bool) -> None:
     """Replace the estimated price of a connection read from a timetable with what its operators sell it for
     (fares.py), vehicle by vehicle. Vehicles no operator priced keep their estimate from the distance.
     day is the day the traveller makes this leg. The leg then says under "tickets" what was found, and under
@@ -236,7 +237,7 @@ def price_with_tickets(leg: dict[str, Any], day: str, free_trains: bool) -> None
         leg["confirmed_by"] = list(dict.fromkeys(ticket["operator"] for ticket in found))
 
 def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict[str, Any] | None,
-                     closest: bool = False, priced: bool = False) -> dict[str, Any]:
+                     closest: bool = False, priced: bool = False) -> Connection:
     """How the traveller gets from the arrival airport to the destination. Same rules as to_airport_leg.
     closest=True also accepts a real connection that arrives outside the window asked for: the nearest to it.
     priced=True reads the operators' tickets before choosing between connections (best_on_real_prices)."""
@@ -254,7 +255,7 @@ def from_airport_leg(flight: dict[str, Any], ground: dict[str, Any], route: dict
 def arrives_in_window(minutes: int) -> bool:
     return current.SETTINGS.earliest_arrival_minutes <= minutes <= current.SETTINGS.latest_arrival_minutes
 
-def from_airport_options(flight: dict[str, Any], rides: list[dict[str, Any]], timetable: dict[str, Any]) -> list[dict[str, Any]]:
+def from_airport_options(flight: dict[str, Any], rides: list[Connection], timetable: Answer) -> list[Connection]:
     """The real connections from the arrival airport, each with its price: the operators' rides, and the timetable's
     connections priced vehicle by vehicle."""
     airport, settings = flight["arrival_airport"], current.SETTINGS
@@ -268,8 +269,8 @@ def from_airport_options(flight: dict[str, Any], rides: list[dict[str, Any]], ti
         option.setdefault("price_kind", "estimate" if option["price_eur"] else "free")
     return options
 
-def best_from_airport(options: list[dict[str, Any]], flight: dict[str, Any], timetable: dict[str, Any], closest: bool,
-                      priced: bool) -> dict[str, Any]:
+def best_from_airport(options: list[Connection], flight: dict[str, Any], timetable: Answer, closest: bool,
+                      priced: bool) -> Connection:
     """The real connection to take after landing: the best of those that arrive within the traveller's window, or
     with closest the nearest to it, with the next ones that leave and the best of the other kind of vehicle."""
     settings = current.SETTINGS
@@ -301,7 +302,7 @@ def best_from_airport(options: list[dict[str, Any]], flight: dict[str, Any], tim
             "other": min(others, key=value) if others else None,
             "other_by_coach": not by_coach(best)}
 
-def model_from_airport(flight: dict[str, Any], route: dict[str, Any] | None) -> dict[str, Any]:
+def model_from_airport(flight: dict[str, Any], route: dict[str, Any] | None) -> Connection:
     """The model's estimate of the way from the airport (grade C), the only one left when no timetable covers it:
     the airport link, then a train when the destination is not the airport's own city."""
     airport, settings = flight["arrival_airport"], current.SETTINGS

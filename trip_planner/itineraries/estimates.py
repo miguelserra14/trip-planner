@@ -1,6 +1,6 @@
 """Estimates from the distance: how long a ground stretch takes and what it costs where nothing better is known.
 Kept apart from legs.py because the timetables and the operators use them too, and legs.py reads both."""
-from typing import Any
+from trip_planner.shapes import Step
 
 ROAD_FACTOR = 1.3                 # a real trip is about this much longer than the straight line
 ESTIMATE_SPEED_KMH = 70           # door-to-door speed of public transport, changes included
@@ -41,7 +41,7 @@ def eur_per_km(country: str, coach: bool = False) -> float:
 def estimated_price(km: float, country: str = "", coach: bool = False) -> float:
     return max(MIN_TICKET_EUR, float(round(km * ROAD_FACTOR * eur_per_km(country, coach))))
 
-def step_price(step: dict[str, Any], free_trains: bool, country: str = "") -> float:
+def step_price(step: Step, free_trains: bool, country: str = "") -> float:
     """The price of one vehicle of a timetable connection. Timetables give no prices: a train is free for the
     travellers who said so, and everything else is estimated from the distance."""
     if step["rail"] and free_trains:

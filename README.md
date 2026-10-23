@@ -137,6 +137,7 @@ trip_planner/
 ├── translate.py       adds, removes and checks languages
 ├── dates.py           travel dates as travellers write them
 ├── utils.py           times, text, progress lines, timings
+├── shapes.py          what the dicts passed between modules hold: a vehicle, a connection, a side of a flight
 ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
 ├── sources/           where the data comes from, one module per outside service
 │   ├── flight_search.py   the flight search: every route, on Kiwi first, then on Google Flights

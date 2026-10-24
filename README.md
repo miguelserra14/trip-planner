@@ -60,6 +60,7 @@ env\.venv\Scripts\python main.py              the window
 env\.venv\Scripts\python main.py --terminal   no window: the trip in settings.py, questions asked in the terminal
 env\.venv\Scripts\python main.py --check      check the services
 env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/tools/verify.py)
+env\.venv\Scripts\python main.py --prices     ask again the ground prices of the reports read over a day ago (trip_planner/tools/prices.py)
 ```
 
 ### Languages
@@ -181,7 +182,8 @@ trip_planner/
 │   └── style.py           colours, fonts and the styles of the widgets
 └── tools/             the maintenance commands of main.py
     ├── check.py           --check: whether every outside service answers
-    └── verify.py          --verify: whether the connections of the kept reports really ran
+    ├── verify.py          --verify: whether the connections of the kept reports really ran
+    └── prices.py          --prices and Refresh prices: the ground prices over a day old, asked again before booking
 ```
 
 A trip goes through them in this order: `main.py` → `gui/` (or the terminal) → `planner.py` runs the three steps (`agents/steps.py`) →
@@ -218,6 +220,9 @@ The **results** are not, and cannot be. Each run reads live data, so two runs a 
 trips:
 
 - Flight prices (Kiwi, Ryanair) and coach prices (FlixBus, Rede Expressos, Movelia, Obilet) change by the hour.
+  A report keeps when its prices were read: once they are over 24 hours old, **Refresh prices** in the window (or
+  `--prices`) asks the operators' booking systems again for the ground prices of its options, and adds what changed
+  at the end of the report. The flights are not asked again.
 - The models (Gemini) do not answer the same way twice. They only write the recommendation and the unverified
   estimates (grade C): flights, timetables, checks and ranking are computed by code.
 - Timetables come from the week of the run, for the same weekday as the travel date.

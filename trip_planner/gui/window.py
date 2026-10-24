@@ -63,6 +63,7 @@ class TripWindow:
         self.boxes: dict[str, tk.BooleanVar] = {}
         self.events: queue.Queue = queue.Queue()
         self.advice = ""
+        self.stale: list = []   # the reports whose ground prices are too old to believe (tools/prices.py)
         self.manager: LanguageManager | None = None   # the list of languages, while it is open
         self.advanced: AdvancedSettings | None = None  # the advanced settings, while they are open
         current.SETTINGS = settings
@@ -90,6 +91,7 @@ class TripWindow:
         self.root.geometry(f"{width}x{min(max(820, self.root.winfo_reqheight()), self.root.winfo_screenheight() - 120)}")
         self.root.after(100, self.poll)
         self.root.after(200, self.load)
+        self.root.after(300, self.watch_prices)
 
     def load(self) -> None:
         """Load the search behind the window, once it is on the screen. What fails here is usually a key missing
@@ -132,6 +134,8 @@ class TripWindow:
         self.ask_button.pack(side="left")
         self.report_button = ttk.Button(bottom, text=tr("ui_open_report"), command=self.open_report)
         self.report_button.pack(side="left", padx=(8, 0))
+        self.prices_button = ttk.Button(bottom, text=tr("ui_prices"), command=self.refresh_prices, state="disabled")
+        self.prices_button.pack(side="left", padx=(8, 0))
         self.keep = tk.BooleanVar(value=False)
         self.keep_box = ttk.Checkbutton(bottom, text=tr("ui_keep_report"), variable=self.keep, command=self.keep_report)
         self.keep_box.pack(side="left", padx=(10, 0))
@@ -270,6 +274,7 @@ class TripWindow:
         for widget, key in ((self.question_label, "ui_question"), (self.ask_button, "ui_ask"),
                             (self.report_button, "ui_open_report"), (self.keep_box, "ui_keep_report")):
             widget.configure(text=tr(key))
+        self.show_prices()
         if self.places is not None and self.airports.winfo_ismapped():
             ticked = {code: box.get() for code, box in self.boxes.items()}
             self.build_airports(self.places)
@@ -398,6 +403,37 @@ class TripWindow:
         self.output.clear()
         self.start(work(), tr("ui_checking"))
 
+    def watch_prices(self) -> None:
+        """Look for reports whose ground prices are too old to believe, once a minute: a price a day old may be stale
+        whether the window was left open or the report was kept. Looked for on another thread: it reads every report."""
+        def work() -> None:
+            try:
+                from trip_planner.tools import prices
+                self.events.put(("stale", prices.stale_reports()))
+            except Exception:
+                self.events.put(("say", traceback.format_exc()))
+        threading.Thread(target=work, daemon=True).start()
+        self.root.after(60_000, self.watch_prices)
+
+    def show_prices(self) -> None:
+        """The button to ask the prices again says how many reports need it, and can only be used when one does."""
+        if self.stale:
+            self.prices_button.configure(text=tr("ui_prices_count", count=len(self.stale)), state="disabled" if self.running else "normal")
+        else:
+            self.prices_button.configure(text=tr("ui_prices"), state="disabled")
+
+    def refresh_prices(self) -> None:
+        """Ask again the ground prices of the options of every report whose prices are too old (tools/prices.py)."""
+        if self.running or not self.stale:
+            return
+        stale = list(self.stale)
+
+        async def work() -> None:
+            from trip_planner.tools import prices
+            self.events.put(("show", await asyncio.to_thread(prices.refresh, stale)))
+            self.events.put(("prices", len(stale)))
+        self.start(work(), tr("ui_prices_refreshing"))
+
     def keep_report(self) -> None:
         """The box was ticked or unticked: the report of the last trip moves to saved/, or back to the recent ones."""
         if not planned() or planned()[-1].get("report") is None:
@@ -512,6 +548,12 @@ class TripWindow:
                     self.done(" ".join(
                         tr("ui_language_added", name=TEXTS[code].get("language_name", code))
                         + (f" ({tr('ui_language_incomplete', count=left)})" if left else "") for code, left in value.items()))
+                elif kind == "stale":   # the reports whose ground prices are too old to believe
+                    self.stale = value
+                    self.show_prices()
+                elif kind == "prices":   # how many reports had their ground prices asked again
+                    self.stale = []
+                    self.done(tr("ui_prices_done", count=value))
                 elif kind in ("answered", "checked"):
                     self.done("")
                 elif kind == "failed":
@@ -544,6 +586,7 @@ class TripWindow:
             self.progress.stop()
             self.progress.pack_forget()
         self.asking(bool(planned()) and not running)
+        self.show_prices()
         if self.manager is not None:
             self.manager.draw()
 

@@ -6,6 +6,7 @@ Add a language, translated by a model:            python main.py --add-language 
 Remove a language:                                python main.py --remove-language it
 Locate the terminal of every airport again:       python main.py --terminals all   (once a year is plenty)
 Check whether the connections shown really ran:   python main.py --verify          (see trip_planner/tools/verify.py)
+Ask again the ground prices over a day old:        python main.py --prices          (see trip_planner/tools/prices.py)
 
 In the window the trip is typed in a form that starts with what is in settings.py. In the terminal each trip lists
 its airports and asks which ones to drop, and after the result it takes follow-up questions, until an empty line."""
@@ -74,6 +75,12 @@ if __name__ == "__main__":
         from trip_planner.tools import verify
         current.SETTINGS = SETTINGS   # some operators read the limits of a trip
         sys.exit(verify.main())
+    if "--prices" in arguments:
+        from settings import SETTINGS
+        from trip_planner import current
+        from trip_planner.tools import prices
+        current.SETTINGS = SETTINGS   # the operators read the limits of a trip, and the texts its language
+        sys.exit(prices.main())
     if "--terminals" in arguments:
         from trip_planner.sources import timetables
         sys.exit(1 if timetables.fill_terminals(again="all" in arguments) else 0)

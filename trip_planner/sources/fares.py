@@ -16,7 +16,7 @@ from typing import Any
 from trip_planner.utils import logged
 from trip_planner.sources.operators.alsa import ALSA_STOP, alsa_fare
 from trip_planner.sources.operators import movelia, obilet, rede_expressos
-from trip_planner.sources.operators.base import agency, FareSource, http, in_eur, NotOnSale, NotRunning, TARIFF_DAYS, TIMEOUT, Trip  # noqa: F401 (used by other modules)
+from trip_planner.sources.operators.base import agency, FareSource, http, in_eur, NotOnSale, NotRunning, RATES, TARIFF_DAYS, TIMEOUT, Trip  # noqa: F401 (used by other modules)
 from trip_planner.sources.operators.elron import elron_fare
 from trip_planner.sources.operators.flixbus import flixbus_fare, flixbus_rides
 from trip_planner.sources.operators.mav import mav_fare
@@ -99,6 +99,15 @@ def fare(source: FareSource, trip: Trip) -> float | None:
     with LOCK:
         CACHE[key] = price
     return price
+
+def forget_prices() -> None:
+    """Forget every price and every answer of the operators so far, and the exchange rates: whatever is asked next is
+    asked again. Prices change by the hour, and these are only kept for one search (see tools/prices.py)."""
+    with LOCK:
+        CACHE.clear()
+        NOT_RUNNING.clear()
+    movelia.MOVELIA_SEARCHES.clear()
+    RATES.clear()
 
 def trip_of(steps: list[dict[str, Any]], positions: list[int], day: str) -> Trip:
     """The ticket asked of an operator for a run of its vehicles (runs), on one day."""

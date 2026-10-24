@@ -14,7 +14,7 @@ far each light deserves to be trusted."""
 import asyncio
 import json
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -47,20 +47,27 @@ def vehicles(leg: dict[str, Any], day: str) -> list[dict[str, Any]]:
 
 def record(itineraries: list[dict[str, Any]]) -> dict[str, Any]:
     """What --verify needs of the options a report shows: their ground vehicles, with the light of their connection.
-    A connection an operator sold between the city and the airport (fares.RIDE_SOURCES) is asked of it again as a whole."""
+    A connection an operator sold between the city and the airport (fares.RIDE_SOURCES) is asked of it again as a whole.
+    With the prices of each leg and when they were read, to ask them again before booking (tools/prices.py)."""
     options = []
     for number, itinerary in enumerate(itineraries, start=1):
         flight, legs = itinerary["flight"], []
         for side, leg, day in (("to", itinerary["to"], flight["date"]), ("from", itinerary["from"], landing_day(flight))):
-            kept = {"side": side, "grade": leg["grade"], "kind": leg["kind"], "day": day, "vehicles": vehicles(leg, day)}
+            kept = {"side": side, "grade": leg["grade"], "kind": leg["kind"], "day": day, "vehicles": vehicles(leg, day),
+                    "price_eur": leg["price_eur"], "price_kind": leg["price_kind"],
+                    "confirmed_eur": leg.get("confirmed_eur", leg["price_eur"] if leg["price_kind"] == "operator" else 0.0),
+                    "tickets": [{key: ticket.get(key) for key in ("positions", "operator", "price_eur", "travel_day", "tariff")}
+                                for ticket in leg.get("tickets") or []]}
             if leg["kind"] == "operator" and leg.get("source") in fares.RIDE_SOURCES:
                 airport = flight["departure_airport"] if side == "to" else flight["arrival_airport"]
                 city = current.TRIP.origin if side == "to" else current.TRIP.destination
                 kept |= {"source": leg["source"], "leave": leg["leave"], "arrive": leg["arrive"], "city": asdict(city),
                          "airport": current.TRIP.airport(airport)}
             legs.append(kept)
-        options.append({"number": number, "flight": flight["id"], "legs": legs})
-    return {"trip": f"{current.SETTINGS.origin} -> {current.SETTINGS.destination}", "options": options}
+        options.append({"number": number, "flight": flight["id"], "route": flight.get("route", ""), "date": flight["date"],
+                        "flight_price": itinerary.get("flight_price"), "total": itinerary.get("total_cost"), "legs": legs})
+    return {"trip": f"{current.SETTINGS.origin} -> {current.SETTINGS.destination}", "prices_read": datetime.now().isoformat(timespec="minutes"),
+            "options": options}
 
 # ---------------------------------------------------------------- asking again
 

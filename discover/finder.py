@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from discover import access, flown, transfers
+from discover import access, flown, ground, transfers
 from discover import rides as operator_rides
 from discover.routes import known_routes, route_counts
 from discover.sources import Days, kiwi_destinations, ryanair_destinations
@@ -73,6 +73,7 @@ class Found:
     discarded: list[dict[str, Any]] = field(default_factory=list)  # ways the timetables showed cannot be made, with "reason"
     lookups: list[dict[str, Any]] = field(default_factory=list)    # every city looked up in the timetables (confirm.py)
     confirm_stop: str = ""                           # why the lookups stopped, in words; empty while they run or before
+    by_ground: list[dict[str, Any]] = field(default_factory=list)  # cities no flight goes to, by train or coach only (ground.py)
 
 def kiwi_used(today: str) -> int:
     """The requests to Kiwi the maps made today."""
@@ -304,7 +305,9 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     await asyncio.to_thread(transfers.look_up, codes, airports, centres, access.voyages(codes), today, say)
     found_rides = await asyncio.to_thread(operator_rides.look_up, place, departures, operator_rides.wanted_for(cheapest, departures), say)
     destinations = one_per_city([with_access(flight, place, centres, today, found_rides) for flight in cheapest], airports, centres)
-    return Found(place, days, departures, destinations, flights, searches, left_out, kiwi=bool(countries),
+    # The trains and coaches with no published prices that go to the same cities: their timetables only, to compare
+    by_ground = await asyncio.to_thread(ground.look_up, place, days, destinations, centres, airports, today, say)
+    return Found(place, days, departures, destinations, flights, searches, left_out, kiwi=bool(countries), by_ground=by_ground,
                  kiwi_options=options if countries else "", kiwi_allowed=allowed, kiwi_refused=refusal[0] if refusal else "", kiwi_why=kiwi_why,
                  centres=centres, rides=found_rides,
                  coverage=flown.coverage(routes_flown, flown.seen_codes(routes_flown, {flight["to"] for flight in flights}, airports), with_ryanair,

@@ -1,9 +1,14 @@
 """Small pieces shared by the reports: tables, grades and sources in the traveller's language."""
+import re
 from datetime import date
 from typing import Any
 
-from trip_planner.trip.trip_settings import LIGHTS
+from trip_planner.trip.trip_settings import GRADES, LIGHTS
 from trip_planner.texts import tr
+
+TIMELINE_SQUARES = 24   # how many squares the line of an option takes in the Markdown; the window draws it to scale
+# The colour of each part of that line: the grade of its schedule, or None for a wait
+SQUARES = {**dict(zip(GRADES, "🟦🟩🟧")), None: "⬜"}
 
 def table(header: list[str], rows: list[list[Any]]) -> list[str]:
     """A Markdown table. Pipes inside a cell would break it, so they are replaced."""
@@ -80,3 +85,30 @@ def steps_text(leg: dict[str, Any]) -> str:
         + (f", {step['agency']}" if step.get("agency") and step["agency"] != step["line"] else "")
         for step in leg["steps"]
     )
+
+def timeline(points: list[tuple[str, str]], parts: list[tuple[str | None, int]]) -> str:
+    """An option as one line from start to end: at each point where something changes, its time and place, and
+    between two points squares in proportion to the minutes, coloured by the grade of that part. A part gets one
+    square however short it is, so that every point stays apart. points has one more item than parts."""
+    total = sum(max(0, minutes) for _, minutes in parts) or 1
+    counts = [max(1, round(TIMELINE_SQUARES * max(0, minutes) / total)) for _, minutes in parts]
+    pieces = []
+    for number, (time, place) in enumerate(points):
+        pieces.append(f"**{time}** {place}".rstrip())
+        if number < len(parts):
+            pieces.append(SQUARES[parts[number][0]] * counts[number])
+    return " ".join(pieces)
+
+def read_timeline(line: str) -> tuple[list[tuple[str, str]], list[tuple[str | None, int]]] | None:
+    """The points and parts of a line written by timeline(), each part with its grade and its squares; None for any
+    other line. The window draws it from these."""
+    if not line.startswith("**") or not any(square in line for square in SQUARES.values()):
+        return None
+    pieces = re.split("((?:" + "|".join(SQUARES.values()) + ")+)", line)
+    points = [re.fullmatch(r"\s*\*\*(.+?)\*\*\s*(.*?)\s*", piece) for piece in pieces[0::2]]
+    grades = {square: grade for grade, square in SQUARES.items()}
+    runs = pieces[1::2]
+    if not all(points) or any(len(set(run)) > 1 for run in runs):   # two colours with no point between them: not ours
+        return None
+    parts = [(grades[run[0]], len(run)) for run in runs]
+    return [(point[1], point[2]) for point in points], parts

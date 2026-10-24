@@ -5,7 +5,8 @@ from typing import Any
 from trip_planner import current
 from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.itineraries.ranking import price_range, REQUIREMENTS, tied_on_price
-from trip_planner.report.formatting import arriving, at_destination, day_text, leaving, grade_text, leg_source, price_source, price_text, steps_text, table
+from trip_planner.report.formatting import (arriving, at_destination, day_text, leaving, grade_text, leg_source, price_source, price_text,
+                                             steps_text, table, timeline)
 from trip_planner.texts import tr
 from trip_planner.utils import as_duration, to_time
 
@@ -15,6 +16,18 @@ def total_text(itinerary: dict[str, Any]) -> str:
         return f"{itinerary['total_cost']:.0f} EUR"
     lowest, highest = price_range(itinerary)
     return f"{itinerary['total_cost']:.0f} EUR ({lowest:.0f}-{highest:.0f})"
+
+def option_timeline(itinerary: dict[str, Any]) -> str:
+    """The option as a line from home to the destination: the times where something changes, and each part in the
+    colour of how sure its times are. The flight's times come from Kiwi for the day (A); waiting has no colour."""
+    flight, to_leg, from_leg = itinerary["flight"], itinerary["to"], itinerary["from"]
+    town = lambda written: written.split(",")[0].strip()   # "Coimbra, Portugal" is Coimbra on the line
+    return timeline(
+        [(leaving(itinerary), town(current.SETTINGS.origin)), (itinerary["at_airport_time"], flight["departure_airport"]),
+         (flight["departure_time"], "✈"), (at_destination(flight["arrival_time"], flight), flight["arrival_airport"]),
+         (to_time(from_leg["leave"]), ""), (arriving(itinerary), town(current.SETTINGS.destination))],
+        [(to_leg["grade"], to_leg["arrive"] - to_leg["leave"]), (None, itinerary["airport_wait"]), ("A", flight["duration_minutes"]),
+         (None, itinerary["wait_after_landing"]), (from_leg["grade"], from_leg["arrive"] - from_leg["leave"])])
 
 def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
     """One option, step by step: its cost, how reliable each part is, the times and where to book."""
@@ -26,6 +39,8 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
     lines += [
         "",
         f"### {tr('option')} {number}: {flight['route']}, {date.fromisoformat(flight['date']).strftime('%d/%m')}, {itinerary['total_cost']:.0f} EUR",
+        "",
+        option_timeline(itinerary),
         "",
         tr("cost_line", flight=f"{itinerary['flight_price']:.0f}", to=f"{to_leg['price_eur']:.0f}", back=f"{from_leg['price_eur']:.0f}",
            total=f"{itinerary['total_cost']:.0f}", duration=as_duration(itinerary["total_minutes"])),
@@ -118,6 +133,8 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
         tr("legend_time", table=current.SETTINGS.extra_hours_table(current.SETTINGS.tiebreak_eur_per_hour)),
         "",
         tr("legend_grades"),
+        "",
+        tr("legend_timeline"),
     ]
     tied = tied_on_price(itineraries)
     if tied:
@@ -150,6 +167,8 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
         *(f"{number}. {tr('near_order_' + kind, floor=current.SETTINGS.airport_floor_minutes)}" for number, kind in enumerate(REQUIREMENTS, start=1)),
         "",
         tr("near_rule"),
+        "",
+        tr("legend_timeline"),
         "",
         *table(
             [tr("col_option"), tr("col_date"), tr("col_route"), tr("col_total"), tr("col_leave"), tr("col_arrive"),

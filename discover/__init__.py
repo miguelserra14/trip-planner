@@ -32,6 +32,11 @@ name: one put in env/.env as WIKIMEDIA_CONTACT is sent to Wikidata, and nothing 
 time, until no destination left can change them (confirm.py): with the planner's own code, without its models.
 What a lookup finds is remembered by airport for the next maps, so each map makes the next ones more exact.
 
+The trains and coaches whose operators give no prices to programs (BlaBlaCar Bus, DB, SNCF, Eurostar...) are read
+from their published timetables (ground.py, Transitous, grade B, never a price): next to a city a flight goes to, and
+as cities of their own, a hollow ring on the map, when no flight goes there. Above the map, filters (flights, those
+cities by train or by coach, the total, the hours on board, the country) hide what the traveller does not want to see.
+
 Kiwi is shared with the planner, so it is asked politely (finder.py): never again in a map after it refused a
 request, and at most KIWI_DAILY times a day by all the maps together.
 

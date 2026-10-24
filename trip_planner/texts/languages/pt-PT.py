@@ -309,6 +309,7 @@ TEXTS = {
     "col_confirmed": "Preço confirmado",
     "legend_time": "\"Tempo a mais\" é a diferença para a opção mais rápida, e o valor desse tempo segue as tuas preferências ({table}). É recomendada a opção com a menor soma de custo total e valor do tempo a mais.",
     "legend_grades": "\"Horários\" é a pior cor entre as ligações terrestres da opção: 🔵 confirmado para o dia da viagem, 🟢 horário típico do mesmo dia da semana, 🟠 não verificado. \"Preço confirmado\" é a parte do total lida do sistema do próprio operador.",
+    "legend_timeline": "A linha no início de cada opção vai da partida à chegada, à escala do tempo: cada parte tem a cor da fiabilidade dos seus horários (🔵 confirmado, 🟢 horário típico, 🟠 não verificado) e ⬜ é tempo de espera.",
     "price_tie": "No preço, as opções {options} não se distinguem: parte dos totais é uma estimativa, que pode ser até {factor} vezes maior ou menor (entre parênteses, o que podem custar de facto). Confirma essas partes antes de escolher entre elas pelo preço.",
     "not_cheapest": "A opção recomendada não é a mais barata: custa mais {extra} EUR, mas poupa {saved}, que para ti valem {worth} EUR.",
     # ---- one option

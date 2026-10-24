@@ -113,7 +113,7 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
     codes |= {other["to"] for flight in points for other in flight.get("also", [])} | {gone["to"] for gone in found.discarded}
     return {"version": version, "running": running, "points": points, "names": {code: airports[code]["name"] for code in codes if code in airports},
             "discarded": found.discarded, "lookups": found.lookups, "confirm_stop": found.confirm_stop, "sections": sections,
-            "coverage": found.coverage}
+            "coverage": found.coverage, "by_ground": found.by_ground}
 
 def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120, token: str = "",
              running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes) -> str:
@@ -161,12 +161,20 @@ PAGE = """<!doctype html>
   #rows tr { cursor: pointer; } #rows tr:hover, #rows tr.picked { background: var(--pick); }
   .wrap { overflow-x: auto; } #tiles { margin: 4px 16px; color: var(--muted); }
   #detail pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px 8px; border: 1px solid var(--line); }
+  #filters { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 6px 16px 10px; border-top: 1px solid var(--line); }
+  #filters label { white-space: nowrap; } #filters input[type=range] { width: 140px; vertical-align: middle; }
+  #filters .count { color: var(--muted); }
 </style></head><body>
 <header><h1 id="title"></h1><p id="about"></p><p id="status"></p><p class="legend" id="legend"></p></header>
+<div id="filters"></div>
 <div id="map"></div>
 <p id="tiles" hidden></p>
 <section id="detail" hidden></section>
 <div class="wrap"><table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="by-ground" hidden><h2>With no flight: straight by train or coach</h2>
+<p class="note">Cities no flight of the map goes to, reached straight from the traveller's city by the operators that do not give their prices
+to programs. Timetables only (grade B), seen over a week: no price, so they are not ranked with the flights. Check the price on the operator's site.</p>
+<div class="wrap"><table><thead><tr id="ground-head"></tr></thead><tbody id="ground-rows"></tbody></table></div></div>
 <div id="discarded"></div>
 <h2>What was searched</h2>
 <div id="sections"></div>
@@ -183,6 +191,9 @@ const when = (date, time) => time + " on " + day(date);
 const hours = minutes => (minutes >= 1440 ? Math.floor(minutes / 1440) + "d " : "") + Math.floor(minutes % 1440 / 60) + "h" + String(minutes % 60).padStart(2, "0");
 // The time in the city of a return trip, as 48h (2 nights); "about" when a way in or out was not looked up
 const stayText = s => s ? (s.estimated ? "about " : "") + Math.round(s.minutes / 60) + "h (" + s.nights + (s.nights === 1 ? " night)" : " nights)") : "";
+// " · also by train" or "by coach" or both, when a train or coach goes there with no flight (ground.py)
+const groundText = p => p.ground && p.ground.length
+  ? " · also by " + [...new Set(p.ground.map(option => option.mode))].sort().reverse().join(" or ") : "";
 const between = (date1, time1, date2, time2) => Math.round((new Date(date2 + "T" + time2) - new Date(date1 + "T" + time1)) / 60000);
 const before = (date, time, minutes) => { const moment = new Date(new Date(date + "T" + time) - minutes * 60000);
   const two = number => String(number).padStart(2, "0");
@@ -193,6 +204,11 @@ document.getElementById("title").textContent = (data.round_trip ? "Cheapest retu
 const legend = document.getElementById("legend");
 colours.forEach((colour, i) => { const dot = document.createElement("span"); dot.style.background = colour; legend.append(dot, i === 0 ? "cheapest" : i === colours.length - 1 ? "dearest" : ""); });
 legend.append(" · a dark ring: every way to and from the airports looked up in the timetables");
+const GROUND_COLOUR = "#7a4fd6";   // a city reached by train or coach only: no price, so none of the price colours
+if ((state.by_ground || []).length) {
+  const ring = document.createElement("span"); ring.style.border = "2px solid " + GROUND_COLOUR; ring.style.width = ring.style.height = "6px";
+  legend.append(ring, "no flight, straight by train or coach (no price)");
+}
 const map = L.map("map").setView([data.origin.lat, data.origin.lon], 4);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 12, attribution: "© OpenStreetMap"}).addTo(map)
   .once("tileerror", () => { const note = document.getElementById("tiles"); note.hidden = false;
@@ -270,6 +286,49 @@ function describeAccess(parent, p) {
   }
 }
 
+// The trains and coaches that go straight to a city (ground.py): their timetable, the way back, and where to see the
+// price, which the map does not have
+function describeGround(panel, options) {
+  const list = add(panel, "ul");
+  for (const option of options) {
+    const times = option.times.slice(0, 4).join(", ") + (option.times.length > 4 ? " and " + (option.times.length - 4) + " more" : "");
+    const item = add(list, "li", option.operator + " (" + option.mode + ") from " + option.from_stop + " at " + times + " (local time; seen on "
+        + option.weekdays.join(", ") + "), about " + hours(option.minutes) + " to " + option.stop + ". ");
+    if (option.back === null) item.append("The way back could not be looked up. ");
+    else if (option.back) item.append(option.back.times.length
+        ? "Back, straight, from " + option.stop + ": " + option.back.times.slice(0, 4).join(", ") + (option.back.times.length > 4 ? " and more" : "")
+          + " (about " + hours(option.back.minutes) + "). "
+        : "No straight " + option.operator + " back on " + (option.back.days > 1 ? "the first " + option.back.days + " days to come back on" : day(option.back.day)) + ". ");
+    else if (data.round_trip) item.append("The way back was not looked up: a map asks for a few only, the quickest first. ");
+    item.append("Timetable, grade " + option.grade + ". " + option.operator + " does not give its prices to programs: compare it on ");
+    const site = add(item, "a", option.site.replace("https://", ""));
+    if (option.site.startsWith("https://")) { site.href = option.site; site.target = "_blank"; site.rel = "noopener noreferrer"; }
+    item.append(".");
+  }
+}
+
+// A city no flight goes to, reached straight by train or coach: its options only, with no price and no planner
+function explainGround(g, scroll) {
+  picked = "~" + g.key;
+  const panel = document.getElementById("detail");
+  panel.replaceChildren();
+  panel.hidden = false;
+  const close = add(panel, "button", "Close", "close");
+  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); };
+  add(panel, "h2", data.origin.name + " → " + g.name);
+  add(panel, "p", "No flight of the map goes here: " + g.modes.join(" and ") + " only, straight from " + data.origin.name + ", about " + hours(g.minutes)
+      + " the quickest. These are timetables (grade B), with no price: the map does not rank them with the flights.", "muted");
+  describeGround(panel, g.ground);
+  add(panel, "h4", "Links");
+  const anchor = add(add(add(panel, "ul", undefined, "links"), "li"), "a", "From " + data.origin.name + " to " + g.name + " by public transport");
+  anchor.href = "https://www.google.com/maps/dir/?" + new URLSearchParams({api: 1, origin: data.origin.name, destination: g.ground[0].stop, travelmode: "transit"});
+  anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
+  if (line) line.remove();
+  line = L.polyline([[data.origin.lat, data.origin.lon], [g.lat, g.lon]], {color: GROUND_COLOUR, weight: 2, dashArray: "4 6"}).addTo(map);
+  document.querySelectorAll("#rows tr, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === picked));
+  if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
+}
+
 function explain(p, scroll) {
   picked = p.to;
   const panel = document.getElementById("detail");
@@ -285,6 +344,10 @@ function explain(p, scroll) {
   if (p.also && p.also.length)
     add(panel, "p", "Also to " + p.name + ": " + p.also.map(other => place(other.to) + " from " + other.from + ", " + eur(other.total_eur)
         + (other.access && other.access.every(leg => leg.looked_up) ? " (looked up)" : " (estimated)")).join("; ") + ".", "muted");
+  if (p.ground && p.ground.length) {   // trains and coaches to the same city, with no flight: timetables only (ground.py), never a price
+    add(panel, "h4", "Also with no flight");
+    describeGround(panel, p.ground);
+  }
   const warnings = [];
   const warning = add(panel, "div");
   const access = p.access || [];
@@ -313,7 +376,7 @@ function explain(p, scroll) {
   describePlan(panel, p);
   if (line) line.remove();
   line = L.polyline([[data.origin.lat, data.origin.lon], [p.lat, p.lon]], {color: "#1f6fd0", weight: 2, dashArray: "4 6"}).addTo(map);
-  document.querySelectorAll("#rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === p.to));
+  document.querySelectorAll("#rows tr, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === p.to));
   if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
@@ -380,9 +443,112 @@ function describeStatus() {
       + (missing.length ? missing.length + " destinations flown from these airports had no flight found on these days: they are listed under What was searched." : ""));
 }
 
-function render() {
+// What the map and the lists show, chosen above the map, so that a crowded map can be thinned out: a destination
+// left out by a filter is only hidden. price and hours are null for no limit. The price applies to the flights
+// only: a city by train or coach has none, and is shown or hidden by its own boxes.
+const filter = {flights: true, train: true, coach: true, price: null, hours: null, country: "", looked: false};
+const regions = (() => { try { return new Intl.DisplayNames(["en"], {type: "region"}); } catch (error) { return null; } })();
+const countryName = code => { try { return (regions && regions.of(code)) || code; } catch (error) { return code; } };
+const shownFlight = p => filter.flights && (filter.price === null || p.total_eur <= filter.price)
+  && (filter.hours === null || !p.minutes || p.minutes <= filter.hours * 60)
+  && (!filter.country || p.country === filter.country) && (!filter.looked || p.confirmed);
+const shownGround = g => g.modes.some(mode => filter[mode]) && (filter.hours === null || g.minutes <= filter.hours * 60)
+  && (!filter.country || g.country === filter.country);
+
+// The filters, made again when the destinations change (render): their choices are kept in filter
+function describeFilters() {
+  const box = document.getElementById("filters");
+  box.replaceChildren();
+  const byGround = state.by_ground || [];
+  const check = (key, text) => {
+    const label = add(box, "label"), input = add(label, "input");
+    input.type = "checkbox"; input.checked = filter[key];
+    input.onchange = () => { filter[key] = input.checked; draw(); };
+    label.append(" " + text);
+  };
+  // A slider up to the largest value of the map, its last step meaning no limit
+  const slider = (key, top, step, text) => {
+    const label = add(box, "label"), shown = add(label, "span"), input = add(label, "input");
+    input.type = "range"; input.min = step; input.max = top; input.step = step;
+    input.value = filter[key] === null ? top : Math.min(filter[key], top);
+    const say = () => { shown.textContent = text(filter[key]) + " "; };
+    input.oninput = () => { filter[key] = Number(input.value) >= top ? null : Number(input.value); say(); draw(); };
+    say();
+  };
+  check("flights", "Flights");
+  if (byGround.some(g => g.modes.includes("train"))) check("train", "No flight, by train");
+  if (byGround.some(g => g.modes.includes("coach"))) check("coach", "No flight, by coach");
+  const top = Math.max(10, Math.ceil(Math.max(0, ...state.points.map(p => p.total_eur)) / 10) * 10);
+  slider("price", top, 10, value => "Total up to " + (value === null ? "any price" : value + " €"));
+  const longest = Math.max(1, ...state.points.map(p => p.minutes || 0), ...byGround.map(g => g.minutes));
+  slider("hours", Math.ceil(longest / 60), 1, value => "On board up to " + (value === null ? "any time" : value + " h"));
+  const countries = {};
+  for (const p of [...state.points, ...byGround]) if (p.country) countries[p.country] = (countries[p.country] || 0) + 1;
+  const label = add(box, "label", "Country ");
+  const select = add(label, "select");
+  add(select, "option", "all").value = "";
+  for (const code of Object.keys(countries).sort((a, b) => countryName(a).localeCompare(countryName(b))))
+    add(select, "option", countryName(code) + " (" + countries[code] + ")").value = code;
+  if (!countries[filter.country]) filter.country = "";
+  select.value = filter.country;
+  select.onchange = () => { filter.country = select.value; draw(); };
+  check("looked", "Flights looked up in the timetables only");
+  const reset = add(box, "button", "Show all");
+  reset.onclick = () => { Object.assign(filter, {flights: true, train: true, coach: true, price: null, hours: null, country: "", looked: false}); describeFilters(); draw(); };
+  add(box, "span", "", "count").id = "count";
+}
+
+// The dots and the rows that the filters let through. The colours are by the price among every destination, so a
+// filter does not change the colour of a dot.
+function draw() {
   const totals = state.points.map(p => p.total_eur).sort((a, b) => a - b);
   const band = total => Math.min(colours.length - 1, Math.floor(colours.length * totals.filter(t => t < total).length / Math.max(1, totals.length)));
+  markers.clearLayers();
+  rows.replaceChildren();
+  const points = state.points.filter(shownFlight);
+  for (const p of points) {
+    L.circleMarker([p.lat, p.lon], {radius: 7, fillColor: colours[band(p.total_eur)], color: p.confirmed ? "#1d1d1f" : colours[band(p.total_eur)],
+                                    fillOpacity: 0.85, weight: p.confirmed ? 2 : 1})
+      .addTo(markers).bindTooltip(p.name + " · " + eur(p.total_eur) + (p.stay ? " · " + stayText(p.stay) : "") + groundText(p) + (p.confirmed ? " · looked up" : "")).on("click", () => explain(p));
+    const row = rows.insertRow();
+    row.dataset.to = p.to;
+    row.classList.toggle("picked", picked === p.to);
+    row.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
+    for (const [value, number] of [[p.name + " (" + p.to + ")" + groundText(p)], [leg(p, p.from)], [p.back ? leg(p.back, p.back.from) + (p.back.to !== p.from ? " → " + p.back.to : "") : "-"],
+                                   [p.airline + (p.back && p.back.airline !== p.airline ? " / " + p.back.airline : "")],
+                                   [eur(p.price_eur), 1], [eur(p.ground_eur) + " (" + worst(p.access || []) + ")", 1], [eur(p.total_eur), 1], ...(data.round_trip ? [[stayText(p.stay)]] : []),
+                                   [p.confirmed ? "looked up" : (p.access || []).some(leg => leg.looked_up || leg.checked) ? "partly" : "estimated"]]) {
+      const cell = row.insertCell(); cell.textContent = value; if (number) cell.className = "n";
+    }
+  }
+  const byGround = state.by_ground || [];
+  const ground = byGround.filter(shownGround);
+  document.getElementById("by-ground").hidden = !byGround.length;
+  const groundRows = document.getElementById("ground-rows");
+  groundRows.replaceChildren();
+  for (const g of ground) {
+    const by = [...new Set(g.ground.map(option => option.operator))].join(", ");
+    L.circleMarker([g.lat, g.lon], {radius: 6, color: GROUND_COLOUR, weight: 2, fillColor: GROUND_COLOUR, fillOpacity: 0.12})
+      .addTo(markers).bindTooltip(g.name + " · no flight: " + g.modes.join(" or ") + ", " + hours(g.minutes) + " · " + by).on("click", () => explainGround(g));
+    const row = groundRows.insertRow();
+    row.dataset.to = "~" + g.key;
+    row.classList.toggle("picked", picked === row.dataset.to);
+    row.onclick = () => { map.setView([g.lat, g.lon], Math.max(map.getZoom(), 5)); explainGround(g); };
+    const back = g.ground.map(option => option.back).filter(Boolean);
+    for (const value of [g.name, g.modes.join(", "), by, hours(g.minutes),
+                         g.ground[0].times.slice(0, 3).join(", ") + (g.ground[0].times.length > 3 ? " …" : ""),
+                         ...(data.round_trip ? [back.some(way => way.times.length) ? "straight back" : back.length ? "none straight" : "not looked up"] : [])])
+      row.insertCell().textContent = value;
+  }
+  const count = document.getElementById("count");
+  if (count) count.textContent = "Showing " + points.length + " of " + state.points.length + " flights"
+    + (byGround.length ? " and " + ground.length + " of " + byGround.length + " cities with no flight" : "");
+}
+
+const groundHead = document.getElementById("ground-head");
+for (const title of ["City", "By", "Operators", "Quickest", "Leaves at (local)", ...(data.round_trip ? ["Back"] : [])]) add(groundHead, "th", title);
+
+function render() {
   document.getElementById("about").textContent = data.days + " · " + state.points.length + " destinations · " + data.sources + " · click a dot or a row for the trip. "
     + "Flight prices: grade A, as the source gave them when the map was made. To and from the airports: the grade of each way, in the trip.";
   const seen = state.coverage || {};
@@ -391,22 +557,8 @@ function render() {
       + seen.airports.join(", ") + (seen.ryanair_no_fare ? ", and " + seen.ryanair_no_fare + " more are Ryanair's with no fare those days" : "")
       + (seen.missing.length ? "; the " + seen.missing.length + " not found are listed under What was searched." : ".");
   describeStatus();
-  markers.clearLayers();
-  rows.replaceChildren();
-  for (const p of state.points) {
-    L.circleMarker([p.lat, p.lon], {radius: 7, fillColor: colours[band(p.total_eur)], color: p.confirmed ? "#1d1d1f" : colours[band(p.total_eur)],
-                                    fillOpacity: 0.85, weight: p.confirmed ? 2 : 1})
-      .addTo(markers).bindTooltip(p.name + " · " + eur(p.total_eur) + (p.stay ? " · " + stayText(p.stay) : "") + (p.confirmed ? " · looked up" : "")).on("click", () => explain(p));
-    const row = rows.insertRow();
-    row.dataset.to = p.to;
-    row.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
-    for (const [value, number] of [[p.name + " (" + p.to + ")"], [leg(p, p.from)], [p.back ? leg(p.back, p.back.from) + (p.back.to !== p.from ? " → " + p.back.to : "") : "-"],
-                                   [p.airline + (p.back && p.back.airline !== p.airline ? " / " + p.back.airline : "")],
-                                   [eur(p.price_eur), 1], [eur(p.ground_eur) + " (" + worst(p.access || []) + ")", 1], [eur(p.total_eur), 1], ...(data.round_trip ? [[stayText(p.stay)]] : []),
-                                   [p.confirmed ? "looked up" : (p.access || []).some(leg => leg.looked_up || leg.checked) ? "partly" : "estimated"]]) {
-      const cell = row.insertCell(); cell.textContent = value; if (number) cell.className = "n";
-    }
-  }
+  describeFilters();
+  draw();
   const discarded = document.getElementById("discarded");
   discarded.replaceChildren();
   if (state.discarded.length) {
@@ -427,7 +579,9 @@ function render() {
     for (const values of part.rows) { const row = body.insertRow(); values.forEach(value => { row.insertCell().textContent = value; }); }
   }
   const open = picked && state.points.find(p => p.to === picked);
+  const openGround = picked && (state.by_ground || []).find(g => "~" + g.key === picked);
   if (open) explain(open, false);
+  else if (openGround) explainGround(openGround, false);
 }
 
 // While the timetables are looked up, the served page asks for the destinations again

@@ -309,6 +309,7 @@ TEXTS = {
     "col_confirmed": "Confirmed price",
     "legend_time": "\"Extra time\" is the difference to the fastest option, and its value follows your preferences ({table}). The recommended option has the lowest sum of total cost and value of the extra time.",
     "legend_grades": "\"Schedules\" is the worst light among the ground connections of the option: 🔵 confirmed for the travel date, 🟢 typical timetable of the same weekday, 🟠 not verified. \"Confirmed price\" is how much of the total was read from an operator's own system.",
+    "legend_timeline": "The line at the start of each option goes from departure to arrival, to scale: each part has the colour of how sure its times are (🔵 confirmed, 🟢 typical timetable, 🟠 not verified) and ⬜ is time spent waiting.",
     "price_tie": "On price, options {options} cannot be told apart: part of their totals is an estimate, which may be up to {factor} times more or less (what they may really cost is in brackets). Confirm those parts before choosing between them by price.",
     "not_cheapest": "The recommended option is not the cheapest: it costs {extra} EUR more but saves {saved}, which is worth {worth} EUR to you.",
     # ---- one option

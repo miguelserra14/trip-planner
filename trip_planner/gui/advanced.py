@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 # variables, one per setting of TripSettings, so the two never disagree.
 MAIN_SETTINGS = ("origin", "destination", "departure_scale", "arrival_scale", "max_stopovers")
 CHANGES = ("max_changes_to_airport", "max_changes_from_airport")   # shown with how to travel on each side
-NOT_IN_WINDOW = ("dates", "language")   # the calendar and the list of languages hold these two
+NOT_IN_WINDOW = ("dates", "return_dates", "language")   # the two calendars and the list of languages hold these
 
 def shown(name: str, value: Any) -> Any:
     """A setting as the window shows it: a list as text with commas, a whole day without its times, 5.0 as 5."""

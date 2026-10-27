@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Callable
 
 from discover.plan import command
+from trip_planner.texts import tr
 
 ROOT = Path(__file__).parents[1]   # the planner is run from the repository's folder
 HOST = "127.0.0.1"
@@ -41,16 +42,16 @@ class Planner:
             asked = json.loads(body)
             token, key = asked["token"], asked["trip"]
         except (ValueError, KeyError, TypeError):
-            return 400, "not a plan request"
+            return 400, tr("discover_serve_not_plan")
         if not isinstance(token, str) or not secrets.compare_digest(token, self.token):
-            return 403, "not this map's page"
+            return 403, tr("discover_serve_not_this_map")
         if not isinstance(key, str) or key not in self.trips:
-            return 404, "not a trip of this map"
+            return 404, tr("discover_serve_not_a_trip")
         if now - self.opened.get(key, -REPEAT_SECONDS) < REPEAT_SECONDS:
-            return 200, "already opening"
+            return 200, tr("discover_serve_already_opening")
         self.opened[key] = now
         self.start(command(self.trips[key]))
-        return 200, "opening"
+        return 200, tr("discover_serve_opening")
 
 def open_window(arguments: list[str]) -> None:
     """The planner in its own process, in its own group: Ctrl+C on the map's terminal does not close it."""

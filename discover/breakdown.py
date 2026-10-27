@@ -8,11 +8,12 @@ gaps to look into, it does not prove them."""
 from collections import Counter
 from typing import Any
 
-from discover import flown
-from discover.finder import COUNTRIES_KM, Found
+from discover import flown, regions
+from discover.finder import COUNTRIES_KM, Found, KIWI_ANSWER_HOURS
 from discover.routes import airline_names, known_routes
 from trip_planner.trip.places import distance_km, load_airports
 from trip_planner.sources import kiwi
+from trip_planner.texts import tr
 
 NEARBY_KM = 100  # an airport this close to one on the map serves the same city: Stansted and Gatwick are 75 km apart
 
@@ -29,21 +30,23 @@ def requests_section(found: Found) -> dict[str, Any]:
         for start in dict.fromkeys(s["from"] for s in found.searches if s["source"] == source):
             searches = [s for s in found.searches if s["source"] == source and s["from"] == start]
             full = sum(1 for s in searches if source == "Kiwi" and len(s["flights"]) >= kiwi.RESULT_CAP)
+            kept = [s["kept"] for s in searches if s.get("kept")]
             rows.append([source, start.replace(",", "+"), len(searches), sum(not s["answered"] for s in searches), full,
-                         sum(len(s["flights"]) for s in searches), len({f["to"] for s in searches for f in s["flights"]})])
-    return section("Requests", ["Source", "From", "Requests", "No answer", "Full answers", "Flights", "Destinations"], rows,
-                   f"A full answer is one with Kiwi's maximum of {kiwi.RESULT_CAP} flights, one per city: that country may have more cities "
-                   "than it shows. Ryanair answers with all of its destinations at once.")
+                         sum(len(s["flights"]) for s in searches), len({f["to"] for s in searches for f in s["flights"]}),
+                         tr("discover_bd_kept_cell", count=len(kept), read=min(kept).replace("T", " ")) if kept else "-"])
+    kept = sum(1 for s in found.searches if s.get("kept"))
+    return section(tr("discover_bd_requests"), tr("discover_bd_requests_header").split("|"), rows,
+                   tr("discover_bd_requests_note", cap=kiwi.RESULT_CAP)
+                   + (" " + tr("discover_bd_requests_kept", count=kept, hours=KIWI_ANSWER_HOURS) if kept else ""))
 
 def errors_section(found: Found) -> dict[str, Any]:
     """The requests without an answer, by source and error: a failure of the service, a refusal, and an answer
     the code could not read (the service changed) are not the same problem."""
-    errors = Counter((s["source"], s.get("error") or "no answer") for s in found.searches if not s["answered"])
-    note = (f"Kiwi refused a request ({found.kiwi_refused}): the ones after it were not sent, so that it does not refuse "
-            "for longer, the planner included. " if found.kiwi_refused else "")
+    errors = Counter((s["source"], s.get("error") or tr("discover_bd_no_answer")) for s in found.searches if not s["answered"])
+    note = tr("discover_bd_kiwi_refused", error=found.kiwi_refused) + " " if found.kiwi_refused else ""
     if not errors:
-        return section("Requests without an answer", [], [], note + "Every request was answered.")
-    return section("Requests without an answer", ["Source", "Requests", "Error"],
+        return section(tr("discover_bd_errors"), [], [], note + tr("discover_bd_all_answered"))
+    return section(tr("discover_bd_errors"), tr("discover_bd_errors_header").split("|"),
                    [[source, count, error] for (source, error), count in errors.most_common()], note)
 
 def countries_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
@@ -60,15 +63,13 @@ def countries_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
                      sum(len(s["flights"]) >= kiwi.RESULT_CAP for s in searches), len(flights), len({f["to"] for f in flights}),
                      len(airlines), f"{main} {round(100 * count / len(flights)) if flights else 0}%",
                      sum(1 for f in flights if country_of(f["to"], airports) != country)])
-    note = ("The main airline is the one with most of the country's flights: when it has nearly all of them, the other airlines "
-            "to that country may only be dearer, or hidden behind it in a full answer. ")
+    note = tr("discover_bd_countries_note") + " "
     if found.countries_left_out:
-        note += f"Not asked, beyond the {found.kiwi_allowed} requests to Kiwi this map could make: {', '.join(found.countries_left_out)}. "
+        note += tr("discover_bd_left_out", requests=found.kiwi_allowed, countries=", ".join(found.countries_left_out)) + " "
     if found.kiwi_options:
-        note += f"Kiwi was asked for {found.kiwi_options}."
-    return section("Kiwi, by country asked", ["Country", "Requests", "No answer", "Full", "Flights", "Destinations", "Airlines",
-                                              "Main airline", "Elsewhere"], rows,
-                   note + " Elsewhere counts the flights Kiwi gave to another country than the one asked.")
+        note += tr("discover_bd_kiwi_options", options=found.kiwi_options)
+    return section(tr("discover_bd_countries"), tr("discover_bd_countries_header").split("|"), rows,
+                   note + " " + tr("discover_bd_elsewhere"))
 
 def airlines_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     on_map = Counter(f["airline"] for f in found.destinations)
@@ -78,9 +79,7 @@ def airlines_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     rows = [[airline, len(flights), len({f["to"] for f in flights}), len({country_of(f["to"], airports) for f in flights}),
              f"{min(f['price_eur'] for f in flights):.0f}", on_map.get(airline, 0), ", ".join(sorted({f["source"] for f in flights}))]
             for airline, flights in sorted(by_airline.items(), key=lambda item: -len(item[1]))]
-    return section("Flights found, by airline", ["Airline", "Flights", "Destinations", "Countries", "Cheapest (EUR)", "Cheapest to a destination", "Source"],
-                   rows, "Every flight of every answer, before the cheapest one to each destination was kept. The airline is the one of the "
-                         "first flight of the trip.")
+    return section(tr("discover_bd_airlines"), tr("discover_bd_airlines_header").split("|"), rows, tr("discover_bd_airlines_note"))
 
 def destinations_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     by_country: dict[str, list[dict[str, Any]]] = {}
@@ -89,12 +88,12 @@ def destinations_section(found: Found, airports: dict[str, Any]) -> dict[str, An
     rows = [[country, len(flights), f"{min(f['total_eur'] for f in flights):.0f}", sum(1 for f in flights if f["stops"]),
              ", ".join(f"{airline} {count}" for airline, count in Counter(f["airline"] for f in flights).most_common())]
             for country, flights in sorted(by_country.items(), key=lambda item: -len(item[1]))]
-    return section("On the map, by country", ["Country", "Destinations", "Cheapest total (EUR)", "With a stop", "Cheapest airline"], rows)
+    return section(tr("discover_bd_on_map"), tr("discover_bd_on_map_header").split("|"), rows)
 
 def radar_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     known = known_routes({airport["code"] for airport in found.departures}, airports)
     if known is None:
-        return section("Radar: known routes not found", [], [], "OpenFlights could not be read: the radar was not checked.")
+        return section(tr("discover_bd_radar"), [], [], tr("discover_bd_radar_unread"))
     names = airline_names()
     mine = {airport["code"] for airport in found.departures}
     seen = {f["to"] for f in found.flights}
@@ -110,75 +109,81 @@ def radar_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
         close = [(distance_km(here["latitude"], here["longitude"], airports[other]["latitude"], airports[other]["longitude"]), other)
                  for other in on_map]
         km, other = min(close, default=(999.0, ""))
-        return f"{other}, {km:.0f} km away" if km <= NEARBY_KM else ""
+        return tr("discover_bd_km_away", airport=other, km=f"{km:.0f}") if km <= NEARBY_KM else ""
 
     def reason(code: str, carriers: set) -> str:
         country = country_of(code, airports)
         airport = airports[code]
         if "FR" in carriers and ryanair and carriers == {"FR"}:
-            return "Ryanair's own answer has no fare to it these days (or no longer flies it)"
+            return tr("discover_bd_why_ryanair")
         if nearby(code):
-            return f"its city is on the map by another airport ({nearby(code)})"
+            return tr("discover_bd_why_nearby", nearby=nearby(code))
         if not found.kiwi:
-            return "Kiwi was not asked"
+            return tr("discover_bd_why_no_kiwi")
         if distance_km(origin.latitude, origin.longitude, airport["latitude"], airport["longitude"]) > COUNTRIES_KM or country not in asked and country not in found.countries_left_out:
-            return f"its country, {country}, is not among the ones asked (beyond {COUNTRIES_KM} km, or no large airport)"
+            return tr("discover_bd_why_not_asked", country=country, km=COUNTRIES_KM)
         if country in found.countries_left_out:
-            return f"its country, {country}, was left out of the requests"
+            return tr("discover_bd_why_left_out", country=country)
         if country in full:
-            return f"Kiwi's answer for {country} was full: it may be among the cities not shown"
-        return f"Kiwi was asked about {country} and did not give it: no flight those days, or the route is no longer flown"
+            return tr("discover_bd_why_full", country=country)
+        return tr("discover_bd_why_none", country=country)
 
     rows = sorted(([code, airports[code]["city"] or airports[code]["name"], country_of(code, airports),
                     ", ".join(sorted(names.get(carrier, carrier) for carrier in carriers)), reason(code, carriers)]
                    for code, carriers in known.items() if code not in seen), key=lambda row: (row[4], row[2], row[0]))
     found_carriers = {f["carrier"] for f in found.flights if f.get("carrier")}
     silent = sorted({names.get(carrier, carrier) for carriers in known.values() for carrier in carriers} - {names.get(c, c) for c in found_carriers})
-    note = (f"{len(known)} destinations are known to be flown directly from {', '.join(sorted(mine))} (OpenFlights, 2014). "
-            f"{len(known) - len(rows)} of them were found, {len(rows)} were not. "
-            + (f"Airlines known to fly from there that appear in no answer: {', '.join(silent)}." if silent else "Every airline known to fly from there appears in some answer."))
-    return section("Radar: known routes not found", ["Code", "Destination", "Country", "Airlines (2014)", "Likely reason"], rows, note)
+    note = (tr("discover_bd_radar_note", known=len(known), airports=", ".join(sorted(mine)), found=len(known) - len(rows), missed=len(rows)) + " "
+            + (tr("discover_bd_radar_silent", airlines=", ".join(silent)) if silent else tr("discover_bd_radar_all_airlines")))
+    return section(tr("discover_bd_radar"), tr("discover_bd_radar_header").split("|"), rows, note)
 
 def lookups_section(found: Found) -> dict[str, Any]:
     """The cities looked up in the real timetables (confirm.py), and what their ways to and from the airports were."""
     if not found.lookups:
-        return section("Looked up in the timetables", [], [], found.confirm_stop or "No city was looked up in the timetables.")
+        return section(tr("discover_bd_lookups"), [], [], found.confirm_stop or tr("discover_bd_no_lookup"))
     rows = [[lookup["city"], ", ".join(lookup["airports"]), lookup["requests"], lookup["found"], lookup["impossible"], lookup["not covered"]]
             for lookup in found.lookups]
-    note = ("Each way to or from an airport, at the hour of its flight: found is a real connection that fits it, impossible a way "
-            "the timetables cover where nothing fits (the flight is left out), not covered a way no timetable knows (its "
-            "estimate stays). " + (f"The lookups {found.confirm_stop}." if found.confirm_stop else ""))
-    return section("Looked up in the timetables", ["City", "Airports", "Requests", "Found", "Impossible", "Not covered"], rows, note)
+    note = tr("discover_bd_lookups_note") + (" " + tr("discover_bd_lookups_stop", stop=found.confirm_stop) if found.confirm_stop else "")
+    return section(tr("discover_bd_lookups"), tr("discover_bd_lookups_header").split("|"), rows, note)
 
 def coverage_section(found: Found, airports: dict[str, Any]) -> dict[str, Any]:
     """How many of the destinations flown today from the traveller's airports the map found, and the ones it did not,
     with who flies there (flown.py: the airports' Wikipedia articles)."""
     seen = found.coverage
-    note = (f"{seen['found']} of the {seen['flown']} destinations flown from {', '.join(seen['airports'])} (their Wikipedia articles) "
-            f"were found on these days. {seen['ryanair_no_fare']} more are flown by Ryanair only, whose own answer, which has every fare it "
-            f"sells, had none to them those days. {len(seen['missing'])} are below, not found: "
-            + (f"{len(seen['missing']) - len(seen['not_asked'])} were asked of Kiwi once more by name and not found either, no flight those "
-               f"days or one Kiwi does not sell; " if len(seen['missing']) > len(seen['not_asked']) else "")
-            + (f"{len(seen['not_asked'])} were not asked by name, beyond the requests a map may make: they may have flights. "
-               if seen.get("not_asked") else "")
-            + f"{len(seen['missing_seasonal'])} of them are seasonal. The airline's own site may have them.")
+    note = (tr("discover_bd_coverage_note", found=seen["found"], flown=seen["flown"], airports=", ".join(seen["airports"]),
+               ryanair=seen["ryanair_no_fare"], missing=len(seen["missing"])) + " "
+            + (tr("discover_bd_coverage_asked", count=len(seen["missing"]) - len(seen["not_asked"])) + " "
+               if len(seen["missing"]) > len(seen["not_asked"]) else "")
+            + (tr("discover_bd_coverage_not_asked", count=len(seen["not_asked"])) + " " if seen.get("not_asked") else "")
+            + tr("discover_bd_coverage_seasonal", count=len(seen["missing_seasonal"])))
     gaps = {code: routes for code, routes in flown.missing(found.flown, set(), set()).items() if code in seen["missing"]}
     rows = [[code, (airports.get(code) or {}).get("city") or (airports.get(code) or {}).get("name", code), country_of(code, airports),
              ", ".join(sorted({route["airline"] for route in routes})), ", ".join(sorted({route["from"] for route in routes})),
-             "seasonal" if code in seen["missing_seasonal"] else "all year", "no" if code in seen.get("not_asked", []) else "yes"]
+             tr("discover_bd_seasonal") if code in seen["missing_seasonal"] else tr("discover_bd_all_year"),
+             tr("no") if code in seen.get("not_asked", []) else tr("yes")]
             for code, routes in sorted(gaps.items(), key=lambda item: (country_of(item[0], airports), item[0]))]
-    return section("Destinations flown from here, not found", ["Code", "Destination", "Country", "Airlines", "From", "Flown", "Asked by name"], rows, note)
+    return section(tr("discover_bd_coverage"), tr("discover_bd_coverage_header").split("|"), rows, note)
+
+def regions_section(found: Found) -> dict[str, Any]:
+    """How many cities of each region of Europe within reach the map found, and the requests of its own each got."""
+    asked = [row for row in found.regions if row["requests"]]
+    note = (tr("discover_bd_regions_note", regions=regions.MAX_REGIONS, share=f"{regions.MIN_SHARE:.0%}", cities=regions.MIN_CITIES,
+               requests=regions.REGION_REQUESTS, stops=regions.REGION_STOPS, asked=len(asked), km=regions.HOME_KM) if asked else
+            tr("discover_bd_regions_enough") if found.kiwi else tr("discover_bd_regions_no_kiwi"))
+    return section(tr("discover_bd_regions"), tr("discover_bd_regions_header").split("|"),
+                   [[regions.region_name(row["region"]), row["large"], row["before"], row["requests"] or "-", row["after"]]
+                    for row in found.regions], note)
 
 def breakdown(found: Found) -> list[dict[str, Any]]:
     airports = load_airports()
     stops = Counter(min(f["stops"], 2) for f in found.flights)
     # What was missed comes first when today's routes are known; without them, the 2014 radar comes last
     current = [coverage_section(found, airports)] if found.coverage.get("flown") else []
-    return [*current, lookups_section(found), requests_section(found), errors_section(found), countries_section(found, airports),
+    return [*current, *([regions_section(found)] if found.regions else []), lookups_section(found), requests_section(found), errors_section(found), countries_section(found, airports),
             airlines_section(found, airports), destinations_section(found, airports),
-            section("Stops", ["Stops", "Flights found", "On the map"],
-                    [[label, stops.get(number, 0), sum(1 for f in found.destinations if min(f["stops"], 2) == number)]
-                     for number, label in ((0, "direct"), (1, "one"), (2, "two or more"))]),
+            section(tr("discover_bd_stops"), tr("discover_bd_stops_header").split("|"),
+                    [[tr(label), stops.get(number, 0), sum(1 for f in found.destinations if min(f["stops"], 2) == number)]
+                     for number, label in ((0, "discover_bd_direct"), (1, "discover_bd_one_stop"), (2, "discover_bd_two_stops"))]),
             *([] if current else [radar_section(found, airports)])]
 
 def as_text(sections: list[dict[str, Any]], rows: int = 12) -> str:
@@ -193,7 +198,7 @@ def as_text(sections: list[dict[str, Any]], rows: int = 12) -> str:
                 lines.append("  " + "  ".join(cell.ljust(width) if index == len(row) - 1 else cell[:40].ljust(min(width, 40))
                                               for index, (cell, width) in enumerate(zip(row, widths))))
             if len(part["rows"]) > rows:
-                lines.append(f"  ... {len(part['rows']) - rows} more rows in the page")
+                lines.append("  " + tr("discover_bd_more_rows", count=len(part["rows"]) - rows))
         if part["note"]:
             lines.append("  " + part["note"])
     return "\n".join(lines)

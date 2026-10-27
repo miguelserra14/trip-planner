@@ -7,6 +7,7 @@ SETTINGS = TripSettings(
     origin="Antuérpia",
     destination="Coimbra",
     dates=["17/12/2026", "18/12/2026"],
+    return_dates=[],            # dates to come back, written like dates: empty = one way
     language="pt-PT",           # language of the airport list and the final report: "en" or "pt-PT"
     # Airports are found by distance. Uncomment to adjust the choice with codes, airport names or cities.
     # include_airports=["Paris"],

@@ -44,20 +44,28 @@ class PlaceChooser:
         self.window.place_chosen(self.setting, label, place)
 
 class DatePicker:
-    """A calendar to click the travel dates in. It starts with the dates of the form and writes back to it."""
+    """A calendar to click the travel dates in, or with returning those to come back. It starts with the dates of
+    the form and writes back to it. The way back cannot start before the first day of the way there."""
     CHOSEN, FREE, OFF = THEME["accent"], THEME["surface"], THEME["background"]
 
-    def __init__(self, window: "TripWindow"):
+    def __init__(self, window: "TripWindow", returning: bool = False):
         self.window, self.today = window, date.today()
+        self.variable = window.return_dates if returning else window.dates
+        self.first = self.today
+        if returning:
+            try:
+                self.first = min(read_dates(window.dates.get(), self.today), default=self.today)
+            except ValueError:
+                pass
         try:
-            self.chosen = set(read_dates(window.dates.get(), self.today))
+            self.chosen = set(read_dates(self.variable.get(), self.today)) if self.variable.get() else set()
         except ValueError:
             self.chosen = set()   # what is written is not a date yet: start empty
-        self.chosen = {day for day in self.chosen if day >= self.today}
-        self.month = min(self.chosen, default=self.today).replace(day=1)
+        self.chosen = {day for day in self.chosen if day >= self.first}
+        self.month = min(self.chosen, default=self.first).replace(day=1)
 
         self.top = tk.Toplevel(window.root)
-        self.top.title(tr("ui_dates"))
+        self.top.title(tr("ui_return_dates" if returning else "ui_dates"))
         self.top.transient(window.root)
         self.top.resizable(False, False)
         self.top.geometry(f"+{window.root.winfo_rootx() + 420}+{window.root.winfo_rooty() + 60}")
@@ -70,7 +78,8 @@ class DatePicker:
         self.title.pack(fill="x")
         self.days = ttk.Frame(self.top, padding=(12, 0))
         self.days.pack()
-        ttk.Label(self.top, text=tr("ui_calendar_hint", maximum=MAX_DATES), style="Muted.TLabel", padding=(12, 6)).pack(anchor="w")
+        ttk.Label(self.top, text=tr("ui_calendar_return_hint" if returning else "ui_calendar_hint", maximum=MAX_DATES), style="Muted.TLabel",
+                  padding=(12, 6)).pack(anchor="w")
         buttons = ttk.Frame(self.top, padding=(12, 0, 12, 12))
         buttons.pack(fill="x")
         ttk.Button(buttons, text=tr("ui_calendar_use"), command=self.use, style="Accent.TButton").pack(side="right")
@@ -83,7 +92,7 @@ class DatePicker:
         for child in self.days.winfo_children():
             child.destroy()
         self.title.configure(text=f"{tr('cal_months').split(',')[self.month.month - 1]} {self.month.year}")
-        self.back.configure(state="normal" if self.month > self.today.replace(day=1) else "disabled")
+        self.back.configure(state="normal" if self.month > self.first.replace(day=1) else "disabled")
         for column, name in enumerate(tr("cal_weekdays").split(",")):
             ttk.Label(self.days, text=name, width=5, anchor="center", style="Muted.TLabel").grid(row=0, column=column, pady=(4, 2))
         last = self.today + timedelta(days=MAX_DAYS_AHEAD)
@@ -91,7 +100,7 @@ class DatePicker:
             for column, day in enumerate(week):
                 if day.month != self.month.month:
                     continue
-                possible, chosen = self.today <= day <= last, day in self.chosen
+                possible, chosen = self.first <= day <= last, day in self.chosen
                 tk.Button(
                     self.days, text=str(day.day), width=4, relief="flat", borderwidth=0, font=(FONT, 10, "bold" if chosen else "normal"),
                     bg=self.CHOSEN if chosen else self.FREE if possible else self.OFF, fg="#ffffff" if chosen else THEME["text"], activeforeground="#ffffff",
@@ -116,7 +125,7 @@ class DatePicker:
         self.draw()
 
     def use(self) -> None:
-        self.window.dates.set(", ".join(f"{day:%d/%m/%Y}" for day in sorted(self.chosen)))
+        self.variable.set(", ".join(f"{day:%d/%m/%Y}" for day in sorted(self.chosen)))
         self.top.destroy()
 
 class LanguageManager:

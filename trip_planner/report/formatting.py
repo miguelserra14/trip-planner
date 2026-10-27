@@ -38,6 +38,10 @@ def arriving(itinerary: dict[str, Any]) -> str:
     lands the next day, or a connection that reaches the destination after midnight."""
     return with_day(itinerary["arrival_time"], itinerary["arrival_date"], itinerary["flight"]["date"])
 
+def listed(items: list[str]) -> str:
+    """Items in a sentence: "LIS", "LIS and OPO", "LIS, OPO and FAO", in the traveller's language."""
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {tr('list_and')} {items[-1]}"
+
 def day_text(day: str) -> str:
     return date.fromisoformat(day).strftime("%d/%m/%Y")
 
@@ -46,8 +50,17 @@ def grade_text(grade: str, service_day: str | None = None) -> str:
     if grade == "A":
         return f"{LIGHTS['A']} " + tr("grade_a")
     if grade == "B":
-        return f"{LIGHTS['B']} " + tr("grade_b", day=day_text(service_day) if service_day else "?")
+        return f"{LIGHTS['B']} " + (tr("grade_b", day=day_text(service_day)) if service_day else tr("grade_b_any_day"))
     return f"{LIGHTS['C']} " + tr("grade_c")
+
+def price_grade_text(leg: dict[str, Any]) -> str:
+    """The grade of the price of a ground leg as the traveller sees it. A price has no timetable: its middle grade is
+    a published tariff, or the operator's price for a nearer week (price_source)."""
+    kind = leg["price_kind"]
+    grade = price_source(kind)[1]
+    if grade == "B":
+        return f"{LIGHTS['B']} " + tr("grade_b_tariff" if kind == "tariff" else "grade_b_price")
+    return grade_text(grade)
 
 def leg_source(leg: dict[str, Any]) -> str:
     """Where the times of a ground leg come from."""

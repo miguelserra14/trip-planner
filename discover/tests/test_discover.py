@@ -118,10 +118,12 @@ def known(monkeypatch):
 
 def test_the_requests_say_which_answers_were_full(known, monkeypatch):
     monkeypatch.setattr(breakdown.kiwi, "RESULT_CAP", 2)
-    searches = [{"source": "Kiwi", "from": "OPO", "to": "ES", "answered": True, "flights": [flight("OPO", "MAD", 20), flight("OPO", "BCN", 25)]},
+    searches = [{"source": "Kiwi", "from": "OPO", "to": "ES", "answered": True, "flights": [flight("OPO", "MAD", 20), flight("OPO", "BCN", 25)],
+                 "kept": "2026-10-27T09:30"},
                 {"source": "Kiwi", "from": "OPO", "to": "GB", "answered": False, "flights": []}]
     requests = breakdown.requests_section(found_with(searches))
-    assert requests["rows"] == [["Kiwi", "OPO", "2", "1", "1", "2", "2"]]
+    assert requests["rows"] == [["Kiwi", "OPO", "2", "1", "1", "2", "2", "1 (read from 2026-10-27 09:30)"]]
+    assert "1 answers of Kiwi were given to the same request by an earlier map" in requests["note"]
 
 def test_the_radar_gives_each_known_route_not_found_its_reason(known, monkeypatch):
     monkeypatch.setattr(breakdown.kiwi, "RESULT_CAP", 1)
@@ -185,6 +187,7 @@ def services(monkeypatch, tmp_path):
     monkeypatch.setattr(finder, "countries_near", lambda place, departures: ["ES", "GB", "FR"])
     monkeypatch.setattr(finder, "route_counts", lambda: {})
     monkeypatch.setattr(finder.flown, "routes", lambda codes, today, say=print, extract=None: {})
+    monkeypatch.setattr(finder.regions, "requests_for", lambda *arguments: [])   # the regions have their own tests
 
     def ryanair(code: str, days: Days) -> list:
         if code == "LIS":
@@ -277,6 +280,17 @@ def test_a_page_opened_as_a_file_shows_the_command_and_has_no_token(monkeypatch)
     served = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [], token="abc")).group(1))
     assert served["token"] == "abc"
 
+def test_the_page_draws_the_lines_in_the_planners_colours_and_has_the_cities_with_no_flight(monkeypatch):
+    from trip_planner.gui.style import LIGHT_COLOURS
+    monkeypatch.setattr(page, "load_airports", lambda: {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB",
+                                                                "latitude": 52.4, "longitude": -1.7}})
+    salamanca = {"key": "ES|Salamanca|40.96", "name": "Salamanca", "country": "ES", "lat": 40.96, "lon": -5.66, "minutes": 269,
+                 "modes": ["bus"], "ground": []}
+    found = finder.Found(PLACE, ONE_WAY, [], [{**flight("OPO", "BHX", 10), "ground_eur": 5.0, "total_eur": 15.0}], [], [], by_ground=[salamanca])
+    data = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [], landing_minutes=45)).group(1))
+    assert data["grade_colours"] == LIGHT_COLOURS and data["landing_minutes"] == 45 and data["origin"]["short"] == "Coimbra"
+    assert data["state"]["by_ground"] == [salamanca]
+
 # ---------------------------------------------------------------- OpenFlights
 def test_an_error_page_is_not_kept_as_openflights():
     assert routes_module.rows_of("<html><body>Rate limited</body></html>") is None
@@ -320,3 +334,29 @@ def test_the_time_in_the_city_counts_from_reaching_its_centre_to_leaving_it():
     assert page.stay({**flight, "back": None}) is None   # one way: no time in the city
     late = {**flight, "back": {"date": "2026-11-12", "time": "12:00"}}
     assert page.stay(late, 90, 45)["minutes"] == 0   # back before having reached the centre
+
+def test_the_regions_with_fewest_cities_found_get_requests_of_their_own(services, monkeypatch):
+    monkeypatch.setattr(finder.regions, "requests_for", lambda *arguments: [
+        {"region": "Baltic states", "cities": 0, "targets": ["LT", "LV", "RIX,VNO"]}])
+    found = asyncio.run(finder.discover(PLACE, ONE_WAY, kiwi_requests=2))
+    assert services[2:] == [("OPO,LIS", "LT", "FR"), ("OPO,LIS", "LV", "FR")]   # the 403 came at the 4th: RIX,VNO not sent
+    assert [s["to"] for s in found.searches if s["to"].startswith("region")][:2] == ["region Baltic states: LT", "region Baltic states: LV"]
+
+def test_a_request_kiwi_answered_within_the_last_hours_is_not_sent_again(services):
+    first = asyncio.run(finder.discover(PLACE, ONE_WAY, kiwi_requests=2))
+    assert len(services) == 2 and not any(s.get("kept") for s in first.searches)
+    again = asyncio.run(finder.discover(PLACE, ONE_WAY, kiwi_requests=2))
+    assert len(services) == 4   # the two kept cost nothing, so the map could ask two more: GB, which the first left out
+    kept = [s for s in again.searches if s["source"] == "Kiwi" and s.get("kept")]
+    assert [(s["from"], s["to"]) for s in kept] == [("OPO", "ES"), ("LIS", "ES")] and kept[0]["flights"]
+    assert finder.kiwi_used(date.today().isoformat()) == 4
+
+def test_a_kept_answer_is_the_same_request_in_any_order_and_too_old_ones_are_forgotten(tmp_path):
+    from datetime import datetime, timedelta
+    days = Days("2026-11-12", "2026-11-14")
+    assert finder.kiwi_key("OPO,LIS", "ES", days, 0, "FR") == finder.kiwi_key("LIS,OPO", "ES", days, 0, "FR")
+    assert finder.kiwi_key("OPO", "ES", days, 0, "FR") != finder.kiwi_key("OPO", "ES", days, 1, "FR")
+    now = datetime(2026, 10, 27, 12, 0)
+    finder.keep_answer("old", [], now - timedelta(hours=finder.KIWI_ANSWER_HOURS + 1))
+    finder.keep_answer("new", [{"to": "MAD"}], now)
+    assert list(finder.kept_answers(now)) == ["new"]

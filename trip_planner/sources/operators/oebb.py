@@ -17,9 +17,13 @@ def oebb_fare(trip: Trip) -> float | None:
     session = {"AccessToken": http.get(f"{OEBB}/domain/v4/init").raise_for_status().json()["accessToken"], "Channel": "inet"}
 
     def station(name: str, at: tuple) -> dict[str, Any] | None:
-        found = http.get(f"{OEBB}/hafas/v1/stations", params={"name": name, "count": 5}, headers=session).raise_for_status().json()
-        near = [s for s in found if not at or distance_km(at[0], at[1], s["latitude"] / 1e6, s["longitude"] / 1e6) <= SAME_STATION_KM]
-        return near[0] if near else None
+        # The shop knows a main station by its short name: "Wien Hauptbahnhof" finds no station near it, "Wien Hbf" does
+        for asked in dict.fromkeys((name, name.replace("Hauptbahnhof", "Hbf"))):
+            found = http.get(f"{OEBB}/hafas/v1/stations", params={"name": asked, "count": 5}, headers=session).raise_for_status().json()
+            near = [s for s in found if not at or distance_km(at[0], at[1], s["latitude"] / 1e6, s["longitude"] / 1e6) <= SAME_STATION_KM]
+            if near:
+                return near[0]
+        return None
 
     start, end = station(trip.start, trip.start_at), station(trip.end, trip.end_at)
     if not start or not end:

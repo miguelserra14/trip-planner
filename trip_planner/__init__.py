@@ -2,6 +2,7 @@
 
 A multi-agent trip planner built with LangChain: a coordinator, two web-search subagents and code that checks what they say.
 It plans a one-way trip from any city to any city: transport to the airport, flight, and transport at the destination.
+A round trip is two of them (planner.plan_trip), the way back on the same airports, then a summary that pairs them.
 
 To plan a trip, edit settings.py and run main.py. Nothing else needs to change.
 

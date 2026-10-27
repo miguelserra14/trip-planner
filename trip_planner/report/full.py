@@ -150,9 +150,10 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
 REPORTS = ROOT / "reports"           # every run saves its report here, and only the newest recent_reports (a setting) stay
 SAVED_REPORTS = REPORTS / "saved"    # the reports the traveller chose to keep. Nothing here is ever deleted
 
-def save_report(response: dict[str, Any], recommendation: str) -> Path:
+def save_report(response: dict[str, Any], recommendation: str, beside: Path | None = None) -> Path:
     """Save the full reasoning and the final result, one file per run, and make room: the oldest reports go.
-    The log of the run is saved next to it, and the next run starts a new one."""
+    The log of the run is saved next to it, and the next run starts a new one. beside is a report that goes with
+    this one (the way there of a round trip): it is not made room with."""
     slug = lambda text: re.sub(r"[^a-z0-9]+", "-", plain(text)).strip("-")
     path = REPORTS / f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}.md"
     path.parent.mkdir(exist_ok=True)
@@ -161,14 +162,16 @@ def save_report(response: dict[str, Any], recommendation: str) -> Path:
     if response.get("verify"):
         vehicles_of(path).write_text(json.dumps(response["verify"], ensure_ascii=False, indent=1), encoding="utf-8")
     REQUESTS.clear()
-    remove_old_reports()
+    remove_old_reports(keep={report for report in (path, beside) if report})
     return path
 
-def remove_old_reports() -> None:
+def remove_old_reports(keep: set = frozenset()) -> None:
     """Delete the reports beyond the newest recent_reports of the settings, with their logs. The ones in saved/ are not counted
-    and not touched."""
+    and not touched, and neither are those in keep."""
     reports = sorted(REPORTS.glob("trip_*.md"), key=lambda report: report.stat().st_mtime)
     for old in reports[:-current.SETTINGS.recent_reports]:
+        if old.resolve() in {report.resolve() for report in keep}:
+            continue
         old.unlink(missing_ok=True)
         log_of(old).unlink(missing_ok=True)
         vehicles_of(old).unlink(missing_ok=True)

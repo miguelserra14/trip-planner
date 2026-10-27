@@ -58,7 +58,13 @@ def main(arguments: list[str]) -> int:
         import tkinter
         from tkinter import messagebox
         tkinter.Tk().withdraw()
-        messagebox.showerror("Trip Planner", f"The trip planner could not open this trip.\n\n{type(error).__name__}: {error}")
+        from trip_planner.texts import REFERENCE, text_in
+        try:
+            from settings import SETTINGS as written
+            language = written.language
+        except Exception:
+            language = REFERENCE
+        messagebox.showerror("Trip Planner", text_in(language, "discover_plan_failed", error=f"{type(error).__name__}: {error}"))
         return 1
     return gui.run(settings)
 

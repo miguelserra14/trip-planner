@@ -1,7 +1,8 @@
 """The settings that define a trip (TripSettings), and where the project's files are."""
+import dataclasses
 import re
 from dataclasses import dataclass, field, fields
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -55,6 +56,8 @@ class TripSettings:
     origin: str                           # city where the trip starts, in any language
     destination: str                      # city where the trip ends, in any language
     dates: list[str]                      # acceptable travel dates, from today on: "17/12/2026", "17-19/12", "sexta"... see dates.py
+    return_dates: list[str] = field(default_factory=list)   # acceptable dates to come back, written as dates. Empty = one way.
+                                          # The way back is planned as a trip of its own (return_trip), with the same limits
     language: str = "en"                  # language of the airport list and the final report: "en" or "pt-PT"
 
     # Airports are found automatically by distance from the two cities.
@@ -198,16 +201,24 @@ class TripSettings:
             raise self.refusal("same_place", place=self.origin)
 
     def check_dates(self) -> None:
-        """Real days, from today on, no further than airlines sell, in order and without repeats."""
-        fail = self.refusal
+        """Real days, from today on, no further than airlines sell, in order and without repeats. The way back,
+        when there is one, the same, and not before the first day of the way there."""
         if not self.dates:
-            raise fail("dates_required")
+            raise self.refusal("dates_required")
+        going = self.read_days(self.dates)
+        coming = self.read_days(self.return_dates)
+        if coming and coming[0] < going[0]:
+            raise self.refusal("return_before_outbound", value=f"{coming[0]:%d/%m/%Y}", first=f"{going[0]:%d/%m/%Y}")
+        self.dates, self.return_dates = [f"{day:%d/%m/%Y}" for day in going], [f"{day:%d/%m/%Y}" for day in coming]
+
+    def read_days(self, written: list[str]) -> list[date]:
+        fail = self.refusal
         today, days = date.today(), set()
         try:
-            written = read_dates(self.dates, today)   # "17/12", "17-19 dez", "sexta": see dates.py
+            read = read_dates(written, today) if written else []   # "17/12", "17-19 dez", "sexta": see dates.py
         except UnreadableDate as error:
             raise fail(error.key, **error.values)
-        for day in written:
+        for day in read:
             if day < today:
                 raise fail("date_past", value=f"{day:%d/%m/%Y}", today=f"{today:%d/%m/%Y}")
             if (day - today).days > MAX_DAYS_AHEAD:
@@ -215,7 +226,7 @@ class TripSettings:
             days.add(day)
         if len(days) > MAX_DATES:
             raise fail("too_many_dates", count=len(days), maximum=MAX_DATES)
-        self.dates = [f"{day:%d/%m/%Y}" for day in sorted(days)]
+        return sorted(days)
 
     def check_choices(self) -> None:
         self.min_reliability = self.min_reliability.upper()
@@ -277,7 +288,7 @@ class TripSettings:
         """Settings that are allowed but will probably disappoint, each with the reason, in the traveller's language.
         They are said before the search starts, not refused: the traveller may know better."""
         found, today = [], date.today()
-        furthest = max((date.fromisoformat(day) - today).days for day in self.iso_dates)
+        furthest = max((datetime.strptime(day, "%d/%m/%Y").date() - today).days for day in self.dates + self.return_dates)
         if self.latest_arrival:
             # Before any travel at all: leave, wait at the airport, walk out of the other airport
             fixed = self.min_airport_minutes + self.min_landing_minutes
@@ -292,6 +303,18 @@ class TripSettings:
         if furthest > FAR_DAYS_AHEAD:
             found.append(text_in(self.language, "advice_far_date", days=furthest))
         return found
+
+    def return_trip(self) -> "TripSettings":
+        """The way back as a trip of its own: from the destination to the origin on the return dates. Each choice
+        made for a side goes with that side (how to travel, how far to look for airports, free trains), and the
+        times are the same limits: when to leave, when to arrive."""
+        return dataclasses.replace(
+            self, origin=self.destination, destination=self.origin, dates=self.return_dates, return_dates=[],
+            departure_scale=self.arrival_scale, arrival_scale=self.departure_scale,
+            to_airport_by=self.from_airport_by, from_airport_by=self.to_airport_by,
+            max_changes_to_airport=self.max_changes_from_airport, max_changes_from_airport=self.max_changes_to_airport,
+            free_trains_at_origin=self.free_trains_at_destination, free_trains_at_destination=self.free_trains_at_origin,
+            primary_airports=self.arrival_airports, fallback_airports=[], arrival_airports=self.primary_airports + self.fallback_airports)
 
     # Limits deduced from the settings, used by the flight search, the checks and the prompts
     @property

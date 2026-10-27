@@ -475,6 +475,13 @@ def remove_airports(places: TripPlaces, removed: list[str]) -> TripPlaces:
     places.primary, places.fallback, places.arrival, places.dropped = primary, fallback, arrival, sorted(dropped)
     return places
 
+def return_places(places: TripPlaces) -> TripPlaces:
+    """The places of the way back: the same airports the traveller kept for the way there, each side turned round.
+    The airports of the destination are all its departures, and every airport near the origin is a place to land:
+    the distance of each one is already that from its own city."""
+    return TripPlaces(places.destination, places.origin, primary=list(places.arrival), fallback=[], arrival=list(places.departure),
+                      dropped=list(places.dropped), too_far=dict(places.too_far))
+
 def airport_groups(places: TripPlaces) -> list[tuple]:
     """The three groups of airports with their title in the traveller's language."""
     return [(tr("group_primary"), places.primary), (tr("group_fallback"), places.fallback), (tr("group_arrival"), places.arrival)]

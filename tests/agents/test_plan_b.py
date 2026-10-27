@@ -17,14 +17,14 @@ from trip_planner.sources import web
 # ---------------------------------------------------------------- the models
 def test_without_its_key_plan_b_changes_nothing(monkeypatch):
     monkeypatch.delenv(models.BACKUP_KEY, raising=False)
-    assert models.backup_models() == [] and models.subagent_fallback() == []
+    assert models.backup_models() == [] and models.subagent_guards() == [models.give_up_slow_calls]   # only the time limit
     assert models.coordinator_models() == models.GEMINI_COORDINATOR_MODELS
 
 def test_with_its_key_mistral_is_tried_last(monkeypatch):
     monkeypatch.setenv(models.BACKUP_KEY, "a key")
     names = models.coordinator_models()
     assert names == [*models.GEMINI_COORDINATOR_MODELS, models.BACKUP_MODEL]
-    assert len(models.subagent_fallback()) == 1
+    assert len(models.subagent_guards()) == 2 and models.subagent_guards()[-1] is models.give_up_slow_calls
 
 def test_a_subagent_that_fails_is_answered_by_plan_b():
     """The fallback of the agent library, as the subagents use it: the first model fails, the second answers."""
@@ -37,6 +37,22 @@ def test_a_subagent_that_fails_is_answered_by_plan_b():
 
     backup = GenericFakeChatModel(messages=iter([AIMessage(content="answered by plan B")]))
     agent = create_agent(model=Failing(messages=iter([])), tools=[], middleware=[ModelFallbackMiddleware(backup)])
+    answer = asyncio.run(agent.ainvoke({"messages": [("user", "hello")]}))
+    assert answer["messages"][-1].content == "answered by plan B"
+
+def test_a_subagent_whose_model_takes_too_long_is_answered_by_plan_b(monkeypatch):
+    """The time limit inside the fallback, as subagent_guards puts them: the slow call is given up, plan B answers."""
+    from langchain.agents import create_agent
+    from langchain.agents.middleware import ModelFallbackMiddleware
+
+    class Slow(GenericFakeChatModel):
+        async def _agenerate(self, *args, **kwargs):
+            await asyncio.sleep(5)
+            raise AssertionError("waited for the slow model")
+
+    monkeypatch.setattr(models, "MODEL_CALL_SECONDS", 0.05)
+    backup = GenericFakeChatModel(messages=iter([AIMessage(content="answered by plan B")]))
+    agent = create_agent(model=Slow(messages=iter([])), tools=[], middleware=[ModelFallbackMiddleware(backup), models.give_up_slow_calls])
     answer = asyncio.run(agent.ainvoke({"messages": [("user", "hello")]}))
     assert answer["messages"][-1].content == "answered by plan B"
 

@@ -16,7 +16,9 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 
+from trip_planner import current
 from trip_planner.sources import kiwi
+from trip_planner.texts import REFERENCE, text_in
 from trip_planner.utils import logged
 
 RYANAIR = "https://www.ryanair.com/api/farfnd/v4"
@@ -74,9 +76,11 @@ class Days:
         return [Days(*out, *back) for out in outs for back in backs if back[1] >= out[0]]
 
     def __str__(self) -> str:
-        shown = lambda days, first, last: ", ".join(days) if days else f"{first} to {last}"
+        say = lambda key, **values: text_in(current.SETTINGS.language if current.SETTINGS else REFERENCE, key, **values)
+        shown = lambda days, first, last: ", ".join(days) if days else say("discover_days_range", first=first, last=last)
         out = shown(self.out_days, self.first, self.last)
-        return out + (f", back {shown(self.back_days, self.back_first, self.back_last)}" if self.round_trip else ", one way")
+        return out + (say("discover_days_back", days=shown(self.back_days, self.back_first, self.back_last)) if self.round_trip
+                      else say("discover_days_one_way"))
 
 def ryanair_leg(flight: dict[str, Any]) -> dict[str, Any]:
     start, end = flight["departureAirport"], flight["arrivalAirport"]

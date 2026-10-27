@@ -19,6 +19,7 @@ from urllib.parse import unquote
 
 from discover import access
 from trip_planner.trip.places import distance_km, load_airports
+from trip_planner.texts import tr
 from trip_planner.utils import plain
 
 CACHE = Path(__file__).parent / "cache"
@@ -148,11 +149,11 @@ def routes(codes: list, today: date, say: Callable = print, extract: Callable | 
     fresh = lambda code: code in known and date.fromisoformat(known[code]["checked"]) > today - timedelta(days=ROUTES_DAYS)
     new = [code for code in codes if not fresh(code)]
     if new:
-        say(f"Reading the routes flown from {', '.join(new)} on Wikipedia: they are kept {ROUTES_DAYS} days")
+        say(tr("discover_say_routes", airports=", ".join(new), days=ROUTES_DAYS))
         try:
             pages = articles(new)
         except Exception as error:
-            say(f"[discover] Wikidata did not answer: {type(error).__name__}")
+            say(tr("discover_say_wikidata_failed", error=type(error).__name__))
             pages = {}
         for code in new:
             if code not in pages:
@@ -161,7 +162,7 @@ def routes(codes: list, today: date, say: Callable = print, extract: Callable | 
                 airport = load_airports().get(code) or {}
                 found = read_routes(pages[code], extract, (airport["latitude"], airport["longitude"]) if airport else ())
             except Exception as error:
-                say(f"[discover] the routes of {code} could not be read: {type(error).__name__}")
+                say(tr("discover_say_routes_failed", airport=code, error=type(error).__name__))
                 continue
             if found:
                 known[code] = {"routes": found, "article": pages[code], "checked": today.isoformat()}

@@ -24,6 +24,7 @@ from typing import Any, Callable
 from trip_planner.itineraries.estimates import ROAD_FACTOR
 from trip_planner.itineraries.legs import MAX_PLAUSIBLE_EUR_PER_KM
 from trip_planner.trip.places import airport_from, Place
+from trip_planner.texts import tr
 from trip_planner.utils import message_text, plain
 
 CACHE = Path(__file__).parent / "cache"
@@ -264,13 +265,13 @@ def look_up(codes: list, airports: dict[str, Any], centres: dict[str, Place], vo
         return date.fromisoformat(known[code]["checked"]) > today - timedelta(days=days)
     new = [code for code in dict.fromkeys(codes) if code in centres and code in airports and not fresh(code)][:MAX_NEW_AIRPORTS]
     if new:
-        say(f"Looking for the published prices from {len(new)} airports into their cities (web search, read by code): they are kept {TRANSFER_DAYS} days")
+        say(tr("discover_say_transfers", count=len(new), days=TRANSFER_DAYS))
 
     def one(code: str) -> tuple:
         try:
             return code, look_for(airports[code], centres[code], voyages.get(code, ""))
         except Exception as error:
-            say(f"[discover] the prices from {code} could not be looked for: {type(error).__name__}: {str(error)[:120]}")
+            say(tr("discover_say_transfers_failed", airport=code, error=f"{type(error).__name__}: {str(error)[:120]}"))
             return code, None
     with ThreadPoolExecutor(AT_ONCE) as pool:
         for code, found in pool.map(one, new):

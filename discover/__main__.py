@@ -53,23 +53,23 @@ def main(arguments: list[str]) -> int:
     days = Days(asked.days[0], asked.days[-1], *((asked.back[0], asked.back[-1]) if asked.back else ()))
     session = Session(asked.city, days, fast=asked.fast, light=asked.light, max_stops=asked.max_stops)
     session.make()
+    # The trains and buses are priced whether or not the flights are looked up in the timetables
     if asked.no_browser:
-        if not asked.no_confirm:
-            session.look_up()
+        session.look_up(timetables=not asked.no_confirm)
         print(session.report())
         return 0
     print(session.report())
-    address = session.serve(looking_up=not asked.no_confirm)
+    address = session.serve(looking_up=True)
     print(f"The map is served at {address}: a click on a trip there opens the planner on it. Ctrl+C to stop.", flush=True)
     webbrowser.open(address)
-    if not asked.no_confirm:
-        def looking() -> None:
-            try:
-                session.look_up()
-            except Exception as error:   # the map stays as it is: the lookups are a refinement of it
-                print(f"[discover] the timetables could not be looked up: {type(error).__name__}: {error}", flush=True)
-            print(session.report(), flush=True)
-        threading.Thread(target=looking, daemon=True).start()
+
+    def looking() -> None:
+        try:
+            session.look_up(timetables=not asked.no_confirm)
+        except Exception as error:   # the map stays as it is: the lookups are a refinement of it
+            print(f"[discover] the lookups stopped: {type(error).__name__}: {error}", flush=True)
+        print(session.report(), flush=True)
+    threading.Thread(target=looking, daemon=True).start()
     try:
         while True:
             time.sleep(1)

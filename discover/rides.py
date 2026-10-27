@@ -12,6 +12,7 @@ from typing import Any
 from trip_planner import current
 from trip_planner.trip.places import Place
 from trip_planner.sources import fares, timetables
+from trip_planner.texts import tr
 from trip_planner.utils import logged, to_minutes, to_time
 
 AT_ONCE = 6   # requests to the operators at the same time: each is a different site, or a different day
@@ -22,7 +23,7 @@ def look_up(home: Place, departures: list[dict[str, Any]], wanted: set, say=prin
     asked = [(name, source, code, day, to_airport) for name, source in fares.RIDE_SOURCES.items()
              for code, day, to_airport in sorted(wanted) if code in airports]
     if asked:
-        say(f"Asking FlixBus and Rede Expressos for their rides between {home.english_name} and its airports, on {len({key[1] for key in wanted})} days")
+        say(tr("discover_say_rides", place=home.english_name, days=len({key[1] for key in wanted})))
 
     def one(entry: tuple) -> tuple:
         name, source, code, day, to_airport = entry

@@ -1,14 +1,15 @@
 """The result shown to the traveller: the comparison, each option step by step, and what to check before booking."""
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from trip_planner import current
 from trip_planner.trip.trip_settings import LIGHTS
+from trip_planner.itineraries.ground_only import main_step
 from trip_planner.itineraries.ranking import price_range, REQUIREMENTS, tied_on_price
-from trip_planner.report.formatting import (arriving, at_destination, day_text, leaving, grade_text, leg_source, price_source, price_text,
-                                             steps_text, table, timeline)
+from trip_planner.report.formatting import (arriving, at_destination, day_text, leaving, grade_text, leg_source, price_grade_text, price_source,
+                                             price_text, steps_text, table, timeline)
 from trip_planner.texts import tr
-from trip_planner.utils import as_duration, to_time
+from trip_planner.utils import as_duration, to_minutes, to_time
 
 def total_text(itinerary: dict[str, Any]) -> str:
     """The total cost of an option, with what it may really cost when part of it is a guess: '78 EUR (59-116)'."""
@@ -29,13 +30,25 @@ def option_timeline(itinerary: dict[str, Any]) -> str:
         [(to_leg["grade"], to_leg["arrive"] - to_leg["leave"]), (None, itinerary["airport_wait"]), ("A", flight["duration_minutes"]),
          (None, itinerary["wait_after_landing"]), (from_leg["grade"], from_leg["arrive"] - from_leg["leave"])])
 
+def part_grades(itinerary: dict[str, Any]) -> dict[str, str]:
+    """The grade of each part of an option, by the text that names the part in its table: what the table shows,
+    and what a model's text about the option is checked against (agents/claims.py)."""
+    return {
+        "part_flight_times": "A",   # Kiwi, for the travel date
+        "part_flight_price": "A" if itinerary["booking"]["verified"] else "B",
+        "part_to_times": itinerary["to"]["grade"],
+        "part_to_price": price_source(itinerary["to"]["price_kind"])[1],
+        "part_from_times": itinerary["from"]["grade"],
+        "part_from_price": price_source(itinerary["from"]["price_kind"])[1],
+    }
+
 def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
     """One option, step by step: its cost, how reliable each part is, the times and where to book."""
     origin, destination = current.SETTINGS.origin, current.SETTINGS.destination
     lines: list[str] = []
     flight, booking, to_leg, from_leg = itinerary["flight"], itinerary["booking"], itinerary["to"], itinerary["from"]
     stops = tr("direct") if flight["stops"] == 0 else tr("stopovers", count=flight["stops"])
-    to_price, from_price = price_source(to_leg["price_kind"]), price_source(from_leg["price_kind"])
+    grades = part_grades(itinerary)
     lines += [
         "",
         f"### {tr('option')} {number}: {flight['route']}, {date.fromisoformat(flight['date']).strftime('%d/%m')}, {itinerary['total_cost']:.0f} EUR",
@@ -50,16 +63,17 @@ def option_lines(number: int, itinerary: dict[str, Any]) -> list[str]:
         *table(
             [tr("col_part"), tr("col_value"), tr("col_source"), tr("col_grade")],
             [
-                [tr("part_flight_times"), f"{flight['departure_time']} → {at_destination(flight['arrival_time'], flight)}", tr("source_kiwi", source=flight["source"]), grade_text("A")],
+                [tr("part_flight_times"), f"{flight['departure_time']} → {at_destination(flight['arrival_time'], flight)}", tr("source_kiwi", source=flight["source"]),
+                 grade_text(grades["part_flight_times"])],
                 [tr("part_flight_price"), f"{itinerary['flight_price']:.0f} EUR",
                  tr("source_airline", airline=flight["airline"]) if booking["verified"] else tr("source_kiwi_price", source=flight["source"]),
-                 grade_text("A") if booking["verified"] else f"{LIGHTS['B']} " + tr("grade_reseller")],
+                 grade_text("A") if grades["part_flight_price"] == "A" else f"{LIGHTS['B']} " + tr("grade_reseller")],
                 [tr("part_to_times"), f"{leaving(itinerary)} → {itinerary['at_airport_time']}", leg_source(to_leg),
-                 grade_text(to_leg["grade"], to_leg.get("service_day"))],
-                [tr("part_to_price"), f"{to_leg['price_eur']:.0f} EUR", price_text(to_leg), grade_text(to_price[1])],
+                 grade_text(grades["part_to_times"], to_leg.get("service_day"))],
+                [tr("part_to_price"), f"{to_leg['price_eur']:.0f} EUR", price_text(to_leg), price_grade_text(to_leg)],
                 [tr("part_from_times"), f"{to_time(from_leg['leave'])} → {arriving(itinerary)}", leg_source(from_leg),
-                 grade_text(from_leg["grade"], from_leg.get("service_day"))],
-                [tr("part_from_price"), f"{from_leg['price_eur']:.0f} EUR", price_text(from_leg), grade_text(from_price[1])],
+                 grade_text(grades["part_from_times"], from_leg.get("service_day"))],
+                [tr("part_from_price"), f"{from_leg['price_eur']:.0f} EUR", price_text(from_leg), price_grade_text(from_leg)],
             ],
         ),
         "",
@@ -108,8 +122,80 @@ def booking_checks(itineraries: list[dict[str, Any]]) -> list[str]:
     lines += [f"- {tr('check_general_prices')}", f"- {tr('check_general_bags')}", f"- {tr('check_general_links')}"]
     return lines
 
-def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any], warnings: list[str]) -> str:
-    """The Markdown report shown to the traveller, in the traveller's language."""
+GROUND_PLACE_CHARACTERS = 24   # a station's name on the line of a trip without a plane: the rest is in its steps
+VERSUS_SHOWN_EUR = 1000        # beyond this the value of the extra hours (growing hour after hour) means nothing in euros:
+                               # the difference is said in hours instead
+
+def ground_timeline(option: dict[str, Any]) -> str:
+    """A trip without a plane as a line from the origin to the destination: the trains and coaches in the colour of
+    its times, and between them the waits. A short ride inside a city goes with the wait before or after it."""
+    town = lambda written: written.split(",")[0].strip()
+    station = lambda name: name if len(name) <= GROUND_PLACE_CHARACTERS else name[:GROUND_PLACE_CHARACTERS - 1] + "…"
+    gap = lambda first, last: (to_minutes(last) - to_minutes(first)) % (24 * 60)
+    main = [step for step in option["steps"] if main_step(step)] or option["steps"]
+    points, parts = [(to_time(option["leave"]), town(current.SETTINGS.origin))], []
+    if main[0]["time"] != to_time(option["leave"]):
+        parts.append((None, gap(to_time(option["leave"]), main[0]["time"])))
+        points.append((main[0]["time"], station(main[0]["from"])))
+    for number, step in enumerate(main):
+        parts.append((option["grade"], gap(step["time"], step["arrive"])))
+        points.append((step["arrive"], station(step["to"])))
+        if number + 1 < len(main):
+            parts.append((None, gap(step["arrive"], main[number + 1]["time"])))
+            points.append((main[number + 1]["time"], ""))
+    if main[-1]["arrive"] != to_time(option["arrive"]):
+        parts.append((None, gap(main[-1]["arrive"], to_time(option["arrive"]))))
+        points.append((to_time(option["arrive"]), ""))
+    points[-1] = (points[-1][0], town(current.SETTINGS.destination))
+    return timeline(points, parts)
+
+def ground_arrival(option: dict[str, Any]) -> str:
+    """When a trip without a plane arrives, with the date when it is a later day than it leaves."""
+    later = option["arrive"] // (24 * 60)
+    arrival = to_time(option["arrive"])
+    return arrival if not later else f"{arrival} ({date.fromisoformat(option['day']) + timedelta(days=later):%d/%m})"
+
+def ground_lines(options: list[dict[str, Any]], recommended: int) -> list[str]:
+    """The trips without a plane, after the comparison of the flights: a table, how the best one compares with the
+    recommended option by the same rules, and each trip as a line in time with its vehicles and where to book."""
+    if not options:
+        return []
+    label = lambda number: f"{tr('ground_option')} {number}"
+    price = lambda option: f"{option['price_eur']:.0f} EUR" if option["price_eur"] is not None else tr("ground_no_price")
+    slower = lambda option: as_duration(option["minutes"] - option["versus_minutes"])
+    versus = lambda option: ("-" if "versus_eur" not in option else
+                             tr("ground_far_slower", hours=slower(option)) if option["versus_eur"] > VERSUS_SHOWN_EUR else
+                             f"+{option['versus_eur']:.0f} EUR" if option["versus_eur"] >= 0 else f"-{-option['versus_eur']:.0f} EUR")
+    lines = ["", f"## {tr('ground_title')}", "", tr("ground_intro"), "",
+             *table([tr("col_option"), tr("col_date"), tr("col_leave"), tr("col_arrive"), tr("col_duration"), tr("col_changes"),
+                     tr("col_total"), tr("col_schedules"), tr("col_confirmed")] + ([tr("col_versus", option=recommended)] if recommended else []),
+                    [[label(number), date.fromisoformat(option["day"]).strftime("%d/%m"), to_time(option["leave"]), ground_arrival(option),
+                      as_duration(option["minutes"]), len(option["steps"]) - 1, price(option), LIGHTS[option["grade"]],
+                      f"{option['confirmed_eur']:.0f} / {option['price_eur']:.0f} EUR" if option["price_eur"] is not None else "-"]
+                     + ([versus(option)] if recommended else [])
+                     for number, option in enumerate(options, start=1)]),
+             ""]
+    compared = [(number, option) for number, option in enumerate(options, start=1) if "versus_eur" in option]
+    if compared:
+        number, best = min(compared, key=lambda pair: pair[1]["versus_eur"])
+        if best["versus_eur"] > VERSUS_SHOWN_EUR:
+            lines.append(tr("ground_loses_hours", ground=label(number), option=recommended, hours=slower(best)))
+        else:
+            lines.append(tr("ground_beats" if best["beats"] else "ground_loses", ground=label(number), option=recommended,
+                            eur=f"{abs(best['versus_eur']):.0f}"))
+    elif all(option["price_eur"] is None for option in options):
+        lines.append(tr("ground_none_priced"))
+    for number, option in enumerate(options, start=1):
+        lines += ["", f"### {label(number)}: {date.fromisoformat(option['day']).strftime('%d/%m')}, {price(option)}", "",
+                  ground_timeline(option), "",
+                  *(f"- **{step['time']}** {step['line']} {step['from']} → {step['to']} ({step['arrive']})"
+                    + (f", {step['agency']}" if step.get("agency") and step["agency"] != step["line"] else "") for step in option["steps"]),
+                  "", f"- {tr('ground_book')}: " + (", ".join(option["urls"]) or tr("no_site"))]
+    return lines
+
+def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any], warnings: list[str], ground: list[dict[str, Any]] = ()) -> str:
+    """The Markdown report shown to the traveller, in the traveller's language. ground is the trips without a
+    plane (itineraries/ground_only.py), shown after the comparison of the flights."""
     lines = []
     if warnings:
         lines += [f"## {tr('warnings')}", ""] + [f"- {warning}" for warning in warnings] + [""]
@@ -144,6 +230,7 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
         lines += ["", tr("not_cheapest", extra=f"{recommended['total_cost'] - cheapest['total_cost']:.0f}",
                          saved=as_duration(cheapest["total_minutes"] - recommended["total_minutes"]),
                          worth=f"{cheapest['time_cost'] - recommended['time_cost']:.0f}")]
+    lines += ground_lines(list(ground), next(number for number, itinerary in enumerate(itineraries, start=1) if itinerary is recommended))
 
     for number, itinerary in enumerate(itineraries, start=1):
         lines += option_lines(number, itinerary)
@@ -153,9 +240,10 @@ def span(minutes: int) -> str:
     """A length of time in words: '45 min' or '2h10'."""
     return f"{minutes} min" if minutes < 60 else as_duration(minutes)
 
-def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> str:
+def render_closest(itineraries: list[dict[str, Any]], warnings: list[str], ground: list[dict[str, Any]] = ()) -> str:
     """Shown when no itinerary respects every requirement: the closest ones, closest first, each with what it
-    breaks, what speaks for and against it, and the settings that would make it valid."""
+    breaks, what speaks for and against it, and the settings that would make it valid. ground is the trips without
+    a plane, compared with the closest option."""
     lines = []
     if warnings:
         lines += [f"## {tr('warnings')}", ""] + [f"- {warning}" for warning in warnings] + [""]
@@ -182,6 +270,7 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
               f"{itinerary['confirmed_eur']:.0f} / {itinerary['total_cost']:.0f} EUR"]
              for number, itinerary in enumerate(itineraries, start=1)],
         ),
+        *ground_lines(list(ground), 1),
     ]
     cheapest = min(itinerary["total_cost"] for itinerary in itineraries)
     fastest = min(itinerary["total_minutes"] for itinerary in itineraries)
@@ -212,3 +301,47 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str]) -> st
                   "", f"**{tr('near_cons')}**", "", *(f"- {con}" for con in cons),
                   "", tr("near_fix", changes=changes)]
     return "\n".join(lines + booking_checks(itineraries))
+
+ROUND_TRIP_PAIRS = 3   # pairs of a way there and a way back shown in the summary of a round trip
+
+def worth(itinerary: dict[str, Any]) -> float:
+    """What the rules weigh an option by: its cost and what its extra hours are worth (ranking.rank_itineraries).
+    The closest options have no value of time: only their cost."""
+    return itinerary["total_cost"] + itinerary.get("time_cost", 0)
+
+def round_trip_pairs(going: list[dict[str, Any]], coming: list[dict[str, Any]]) -> list[tuple]:
+    """The options of each way that can go together, best first: (number there, number back, there, back). The way
+    back must leave after the way there arrives, on the destination's clock for both. Each way was ranked on its own
+    and no fare is cheaper for being booked with the other, so a pair is worth the sum of its two."""
+    pairs = [(number, other, there, back) for number, there in enumerate(going, start=1) for other, back in enumerate(coming, start=1)
+             if f"{back['leave_date']} {back['leave_time']}" > f"{there['arrival_date']} {there['arrival_time']}"]
+    return sorted(pairs, key=lambda pair: (worth(pair[2]) + worth(pair[3]), pair[2]["total_cost"] + pair[3]["total_cost"]))
+
+def render_round_trip(going: list[dict[str, Any]], coming: list[dict[str, Any]], origin: str, destination: str) -> str:
+    """The summary of a round trip, after the reports of the two ways: the best pairs of an option there and an
+    option back, with the days at the destination and the total."""
+    lines = [f"# {tr('round_trip_title', origin=origin, destination=destination)}", ""]
+    if not going or not coming:
+        return "\n".join(lines + [tr("round_trip_one_side", side=tr("round_side_there") if not going else tr("round_side_back"))])
+    pairs = round_trip_pairs(going, coming)
+    if not pairs:
+        return "\n".join(lines + [tr("round_trip_none")])
+    option = lambda number, itinerary: (f"{number}: {date.fromisoformat(itinerary['flight']['date']).strftime('%d/%m')}, "
+                                        f"{itinerary['flight']['route']}, {itinerary['total_cost']:.0f} EUR")
+    nights = lambda there, back: (date.fromisoformat(back["leave_date"]) - date.fromisoformat(there["arrival_date"])).days
+    best = pairs[0]
+    lines += [
+        tr("round_trip_intro"),
+        "",
+        *table([tr("col_round_pair"), tr("col_round_there"), tr("col_round_back"), tr("col_round_nights"), tr("col_total"),
+                tr("col_schedules"), tr("col_confirmed")],
+               [[f"**{rank}** ({tr('recommended_pair')})" if rank == 1 else str(rank), option(number, there), option(other, back),
+                 nights(there, back), f"{there['total_cost'] + back['total_cost']:.0f} EUR",
+                 LIGHTS[max(there["schedule_grade"], back["schedule_grade"])],
+                 f"{there['confirmed_eur'] + back['confirmed_eur']:.0f} / {there['total_cost'] + back['total_cost']:.0f} EUR"]
+                for rank, (number, other, there, back) in enumerate(pairs[:ROUND_TRIP_PAIRS], start=1)]),
+        "",
+        tr("round_trip_best", there=best[0], back=best[1], total=f"{best[2]['total_cost'] + best[3]['total_cost']:.0f}",
+           nights=nights(best[2], best[3])),
+    ]
+    return "\n".join(lines)

@@ -15,14 +15,16 @@ from trip_planner.trip import ground_choice
 from trip_planner.agents import subagents
 from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.itineraries import selection
+from trip_planner.itineraries.ground_only import ground_options, price_all
 from trip_planner.itineraries.legs import Rejected
 from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itineraries, price_itinerary, rank_itineraries
 from trip_planner.trip.places import describe_airport
-from trip_planner.report.formatting import day_text
-from trip_planner.report.summary import render_closest, render_report
+from trip_planner.report.formatting import day_text, listed
+from trip_planner.report.summary import ground_lines, render_closest, render_report
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web
+from trip_planner.sources.timetables.all_the_way import all_the_way
 from trip_planner.texts import tr
-from trip_planner.utils import logged, REQUESTS, say, timed
+from trip_planner.utils import as_duration, logged, REQUESTS, say, timed
 
 def iata(text: str) -> str:
     """The first IATA code in a text. The model sometimes writes junk after the airport code."""
@@ -234,18 +236,33 @@ async def look_up_in_rounds(flights: list[dict[str, Any]]) -> tuple:
         looked_up.update(await asyncio.to_thread(itineraries_of, batch, ground, transfers, trains))
         say(tr("progress_round", checked=len(checked), itineraries=sum(1 for itinerary in looked_up.values() if itinerary)))
 
+async def without_a_plane() -> dict[str, Any]:
+    """The ways from the origin to the destination by train or coach on the travel dates (all_the_way.py), to
+    compare with flying. A failure only leaves them out of the report."""
+    with timed("2d whole trip by train or coach"):
+        try:
+            found = await all_the_way(current.SETTINGS.iso_dates)
+            found["priced"] = await asyncio.to_thread(price_all, found)
+            return found
+        except Exception as error:
+            say(f"[without a plane] {type(error).__name__}: the trip by train or coach all the way is not compared")
+            return {}
+
 async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
     """Find the transport to the departure airport and from the arrival airport of the cheapest flights:
-    real timetables read by code, and the two transport specialists for prices and for what no timetable covers."""
+    real timetables read by code, and the two transport specialists for prices and for what no timetable covers.
+    The whole trip by train or coach is looked up at the same time."""
     flights = state["flights"]
     airlines.CHECKED.clear()
     with timed("2 ground transport (the three below run at the same time)"):
+        whole_way = asyncio.ensure_future(without_a_plane())
         if state.get("report"):
             # No flight fits the traveller's limits: the closest ones are looked up, the ones that break the least first
             checked, stopped = timetables.flights_to_check(flights), "limit"
             ground, transfers, trains = await ground_transport(checked)
         else:
             checked, ground, transfers, trains, stopped = await look_up_in_rounds(sorted(flights, key=lambda flight: flight["price_eur"]))
+        found_whole_way = await whole_way
     legs = [ground[flight["id"]][side] for flight in checked for side in ("to_airport", "from_airport")]
     covered = sum(leg["covered"] for leg in legs)
     say(tr("progress_ground", flights=len(checked), covered=covered, legs=len(legs), requests=ground.get("requests", 0)))
@@ -256,6 +273,7 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
         "ground": ground,
         "transfers": transfers,
         "trains": trains,
+        "all_the_way": found_whole_way,
         "message": f"Ground transport looked up for {len(checked)} flights"
             + (": every other flight costs too much to beat the best itinerary found. " if stopped == "beaten" else ". ") +
             f"Real timetables cover {covered} of {len(legs)} legs; "
@@ -264,18 +282,38 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
 
 def not_on_sale_warnings(shown: list[dict[str, Any]], ground: dict[str, Any]) -> list[str]:
     """For the options shown: the operators that do not sell the day of a leg yet (timetables.lookup), and from when
-    it can be known whether they run then. That day is its travel day less how far ahead the operator sells."""
-    warnings = {}
+    it can be known whether they run then. That day is its travel day less how far ahead the operator sells.
+    One warning per operator and side of the flight, with all its airports and days: not one per airport and day."""
+    groups: dict[tuple, dict[str, dict]] = {}
     for itinerary in shown:
         flight = itinerary["flight"]
         for key in ((True, flight["departure_airport"], flight["date"]), (False, flight["arrival_airport"], timetables.landing_day(flight))):
             for entry in (entry for entry in ground.get("not_on_sale") or [] if (entry["to_airport"], entry["airport"], entry["day"]) == key):
-                days = entry["days"] or 0
-                from_day = max(date.today(), date.fromisoformat(entry["day"]) - timedelta(days=days))
-                side = tr("sale_side_to" if entry["to_airport"] else "sale_side_from", airport=entry["airport"])
-                warnings[tr("warn_not_on_sale", source=entry["source"], days=days, side=side, day=day_text(entry["day"]),
-                            from_day=day_text(from_day.isoformat()))] = None
-    return list(warnings)
+                group = groups.setdefault((entry["source"], entry["days"] or 0, entry["to_airport"]), {"airports": {}, "days": {}})
+                group["airports"][entry["airport"]] = None
+                group["days"][entry["day"]] = None
+    warnings = []
+    for (source, days, to_airport), group in groups.items():
+        travel_days = sorted(group["days"])
+        from_days = [day_text(max(date.today(), date.fromisoformat(day) - timedelta(days=days)).isoformat()) for day in travel_days]
+        side = tr("sale_side_to" if to_airport else "sale_side_from", airport=listed(list(group["airports"])))
+        warnings.append(tr("warn_not_on_sale" if len(travel_days) == 1 else "warn_not_on_sale_days", source=source, days=days, side=side,
+                           day=listed([day_text(day) for day in travel_days]), from_day=listed(from_days)))
+    return warnings
+
+def without_a_plane_part(state: dict[str, Any], recommended: dict[str, Any] | None) -> tuple:
+    """The trips without a plane for the report (itineraries/ground_only.py), compared with the recommended option:
+    (the trips, the warnings when one is better than it, what the coordinator reads about them)."""
+    options = ground_options(state.get("all_the_way"), recommended)
+    warnings = [tr("warn_ground_beats", title=tr("ground_title"))] if any(option.get("beats") for option in options) else []
+    if not options:
+        return options, warnings, "\n\nWithout a plane: no trip by train or coach all the way was found within the traveller's limits."
+    found = "; ".join(f"{tr('ground_option')} {number}: " + (f"{option['price_eur']:.0f} EUR" if option["price_eur"] is not None else "no price")
+                      + f", {as_duration(option['minutes'])}"
+                      + (f", worth {option['versus_eur']:+.0f} EUR against the recommended option" if "versus_eur" in option else "")
+                      for number, option in enumerate(options, start=1))
+    return options, warnings, ("\n\nWithout a plane (by train or coach all the way), compared by code with the same rules: " + found
+                               + (". One of them is better than the recommended option: say so." if warnings else "."))
 
 def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
     """Combine the flights with their ground transport into door-to-door itineraries, discard the ones that break
@@ -341,17 +379,23 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                 for itinerary in shown:
                     if not itinerary["booking"]["url"]:
                         itinerary["booking"]["url"] = airlines.airline_site(itinerary["flight"].get("carrier", ""), itinerary["flight"]["airline"])
-                report = "\n\n".join(part for part in (no_flight_fits, render_closest(shown, warnings)) if part)
+                by_ground, ground_warnings, ground_note = without_a_plane_part(state, shown[0])
+                warnings = ground_warnings + warnings
+                report = "\n\n".join(part for part in (no_flight_fits, render_closest(shown, warnings, by_ground)) if part)
                 return {
                     "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 1, "verify": verify.record(shown),
+                    "shown": shown, "ground_only": by_ground,
                     "message": f"{report}\n\nNo itinerary respects every requirement. The options above are the closest ones, each "
-                        "breaking at least one requirement. By the order of requirements, option 1 is the closest."}
-            message = "No itinerary respects the hard constraints. Rejected flights:\n" + "\n".join(rejected[:12])
+                        "breaking at least one requirement. By the order of requirements, option 1 is the closest." + ground_note}
+            # No flight at all: the trips without a plane are what is left to offer
+            by_ground, _, ground_note = without_a_plane_part(state, None)
+            message = "No itinerary respects the hard constraints. Rejected flights:\n" + "\n".join(rejected[:12]) + ground_note
             # The reasons are shown to the traveller as the code found them, above whatever the coordinator writes
             report = "\n".join(([no_flight_fits, ""] if no_flight_fits else [])
-                               + [f"## {tr('no_itinerary')}", "", tr("no_itinerary_reasons"), ""] + [f"- {reason}" for reason in rejected])
+                               + [f"## {tr('no_itinerary')}", "", tr("no_itinerary_reasons"), ""] + [f"- {reason}" for reason in rejected]
+                               + ground_lines(by_ground, 0))
             return {
-                "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 0,
+                "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 0, "ground_only": by_ground,
                 "message": message}
 
         kept, recommended, not_worth_it = rank_itineraries(itineraries)
@@ -364,15 +408,19 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                 itinerary["booking"]["url"] = airlines.airline_site(itinerary["flight"].get("carrier", ""), itinerary["flight"]["airline"])
         number = next(index for index, itinerary in enumerate(shown, start=1) if itinerary is recommended)
         warnings += not_on_sale_warnings(shown, ground)
-        report = render_report(shown, recommended, warnings)
+        by_ground, ground_warnings, ground_note = without_a_plane_part(state, recommended)
+        warnings = ground_warnings + warnings
+        report = render_report(shown, recommended, warnings, by_ground)
     return {
         "step": 3,
         "report": report,
         "rejected": rejected + not_worth_it,
         "warnings": warnings,
         "recommended": number,
+        "shown": shown,                   # the options of the report, in its order: a round trip pairs them with those of the way back
+        "ground_only": by_ground,         # the trips without a plane shown after them
         "verify": verify.record(shown),   # the vehicles of the options shown, kept next to the report for --verify
-        "message": f"{report}\n\nThe rules recommend option {number}."}
+        "message": f"{report}\n\nThe rules recommend option {number}." + ground_note}
 
 # The steps of a trip, in order. Each one needs the result of the one before.
 STEPS = [search_flights, search_ground_transport, build_itineraries]

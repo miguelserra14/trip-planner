@@ -69,7 +69,7 @@ flight_agent = create_agent(
     model=SUBAGENT_MODEL,
     tools=[flight_search.search_route],
     response_format=ToolStrategy(FlightShortlist),
-    middleware=[*models.subagent_fallback(), flight_prompt],
+    middleware=[*models.subagent_guards(), flight_prompt],
 )
 
 # Two middlewares shared by the agents that search the web
@@ -157,7 +157,7 @@ airport_transfer_agent = create_agent(
     tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TransferPlan),
-    middleware=[*models.subagent_fallback(), airport_transfer_prompt, enforce_search_limit, shorten_old_results],
+    middleware=[*models.subagent_guards(), airport_transfer_prompt, enforce_search_limit, shorten_old_results],
 )
 
 # Destination transport agent
@@ -208,5 +208,5 @@ destination_transport_agent = create_agent(
     tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TrainPlan),
-    middleware=[*models.subagent_fallback(), destination_transport_prompt, enforce_search_limit, shorten_old_results],
+    middleware=[*models.subagent_guards(), destination_transport_prompt, enforce_search_limit, shorten_old_results],
 )

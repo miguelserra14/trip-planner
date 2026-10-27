@@ -25,6 +25,7 @@ import httpx
 from discover import transfers
 from trip_planner.trip.trip_settings import USER_AGENT
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price
+from trip_planner.texts import tr
 from trip_planner.trip.places import airport_from, ask_nominatim, distance_km, load_airports, move_to_centre, place_of, Place, settlement
 from trip_planner.utils import plain
 
@@ -149,14 +150,14 @@ def centres(codes: list, airports: dict[str, Any], today: date, say=print) -> di
         return bool(entry) and ("latitude" in entry or date.fromisoformat(entry.get("checked", "2000-01-01")) > today - timedelta(days=MISSING_DAYS))
     new = [code for code in wanted if not usable(known.get(code))]
     if new:
-        say(f"Finding the cities {len(new)} airports serve (Wikidata): they are kept for the next maps")
+        say(tr("discover_say_centres", count=len(new)))
     left = []
     for start in range(0, len(new), WIKIDATA_BATCH):
         batch = new[start:start + WIKIDATA_BATCH]
         try:
             rows = ask_wikidata(batch)
         except Exception as error:
-            say(f"[discover] Wikidata did not answer: {type(error).__name__}")
+            say(tr("discover_say_wikidata_failed", error=type(error).__name__))
             left += batch
             continue
         for code in batch:
@@ -167,14 +168,14 @@ def centres(codes: list, airports: dict[str, Any], today: date, say=print) -> di
                 left.append(code)
     write(CENTRES, known)
     if len(left) > MAX_NEW_CITIES:
-        say(f"{len(left) - MAX_NEW_CITIES} cities will be located by the next maps: OpenStreetMap is asked for {MAX_NEW_CITIES} at a time")
+        say(tr("discover_say_centres_later", count=len(left) - MAX_NEW_CITIES, most=MAX_NEW_CITIES))
     for code in left[:MAX_NEW_CITIES]:
         airport = airports[code]
         try:
             place = find_centre(city_name(airport) or airport["name"], airport["country"])
         except httpx.HTTPStatusError as error:
             if error.response.status_code == 429:
-                say("OpenStreetMap asks to wait: the other cities will be located by the next map")
+                say(tr("discover_say_osm_wait"))
                 break
             continue   # not kept: asked again next time
         except Exception:
@@ -227,23 +228,31 @@ def published_for(code: str, place: Place, today: date) -> dict[str, Any] | None
 def described(option: dict[str, Any]) -> str:
     """A published way in a few words: who, by what, where to, for how much, and where that was read."""
     words = " ".join(part for part in (option["operator"], option["mode"]) if part)
-    return (f"{words}{' to ' + option['to'] if option['to'] else ''}, {'from ' if option['from_price'] else ''}{option['price_text']}"
-            f" as published by {option['source']}")
+    return tr("discover_published", what=words + (tr("discover_page_to_place", place=option["to"]) if option["to"] else ""),
+              price=(tr("discover_from_price") if option["from_price"] else "") + option["price_text"], source=option["source"])
+
+def for_text(value: Any) -> str:
+    """The flight a way was looked up for: {"leaving", "time"}, or the words of a map made before they were kept so."""
+    if isinstance(value, dict):
+        return tr("discover_for_leaving" if value.get("leaving") else "discover_for_landing", time=value.get("time", ""))
+    return str(value)
 
 def leg(code: str, to_airport: bool, place: Place | None, today: date, label: str = "", ride: dict[str, Any] | None = None) -> dict[str, Any]:
     """The best known way between an airport and a place: {"airport", "to_airport", "place", "price_eur", "minutes",
     "grade" (of the timetable), "price_grade", "how", "looked_up", and "url", "quote", "options" when published}.
+    "urls" are where it is sold, for a ride sold for that day; "url" is where its price was read.
     ride is an operator's ride sold for this very flight (rides.py). looked_up is True for a way read for this flight."""
     base = {"airport": code, "to_airport": to_airport, "place": label or (place.english_name if place else ""), "looked_up": False}
     if ride:
         return {**base, "price_eur": ride["price_eur"], "minutes": ride["arrive"] - ride["leave"], "grade": "A", "price_grade": "A",
-                "how": f"{ride['source']} {ride['leave_time']}-{ride['arrive_time']}, sold for that day", "looked_up": True,
-                "leave": ride["leave_time"], "arrive": ride["arrive_time"], "url": ride.get("url", "")}
+                "how": tr("discover_ride_sold", source=ride["source"], leave=ride["leave_time"], arrive=ride["arrive_time"]), "looked_up": True,
+                "leave": ride["leave_time"], "arrive": ride["arrive_time"], "url": ride.get("url", ""),
+                "urls": [ride["url"]] if ride.get("url") else []}
     if place is None:
         country = (load_airports().get(code) or {}).get("country", "")
         return {**base, "price_eur": float(estimated_price(TYPICAL_AIRPORT_KM, country)), "minutes": estimated_minutes(TYPICAL_AIRPORT_KM),
                 "grade": "C", "price_grade": "C",
-                "how": f"the city is not located yet: estimated as from an airport {TYPICAL_AIRPORT_KM} km from its city"}
+                "how": tr("discover_estimated_typical", km=TYPICAL_AIRPORT_KM)}
     before = remembered(code, to_airport, place, today)
     found = published_for(code, place, today)
     best = (found or {}).get("best")
@@ -251,16 +260,16 @@ def leg(code: str, to_airport: bool, place: Place | None, today: date, label: st
                          for option in (found or {}).get("options", [])[:6]]} if found else {}
     if before and before["price_grade"] <= "B":
         return {**base, **shown, "price_eur": before["price_eur"], "minutes": before["minutes"], "grade": worse(before["grade"], "B"),
-                "price_grade": worse(before["price_grade"], "B"), "how": f"looked up on {before['checked']} for {before['for']}"}
+                "price_grade": worse(before["price_grade"], "B"), "how": tr("discover_looked_up_on", day=before["checked"], flight=for_text(before["for"]))}
     if best:
         airport = airport_from(place, code)
         minutes = (before or {}).get("minutes") or best.get("minutes") or estimated_minutes(airport["km"])
         return {**base, **shown, "price_eur": best["price_eur"], "minutes": minutes, "grade": worse((before or {}).get("grade", "C"), "B"),
-                "price_grade": "B", "how": described(best) + f", read on {found['checked']}", "url": best["url"], "quote": best["quote"]}
+                "price_grade": "B", "how": described(best) + ", " + tr("discover_read_on", day=found["checked"]), "url": best["url"], "quote": best["quote"]}
     if before:
         return {**base, **shown, "price_eur": before["price_eur"], "minutes": before["minutes"], "grade": worse(before["grade"], "B"),
-                "price_grade": worse(before["price_grade"], "B"), "how": f"looked up on {before['checked']} for {before['for']}"}
+                "price_grade": worse(before["price_grade"], "B"), "how": tr("discover_looked_up_on", day=before["checked"], flight=for_text(before["for"]))}
     airport = airport_from(place, code)
     return {**base, **shown, "price_eur": float(estimated_price(airport["km"], airport["country"])), "minutes": estimated_minutes(airport["km"]),
             "grade": "C", "price_grade": "C",
-            "how": f"estimated from the distance, {airport['km']} km" + ("; nothing published was found" if found else "")}
+            "how": tr("discover_estimated_distance", km=airport["km"]) + ("; " + tr("discover_nothing_published") if found else "")}

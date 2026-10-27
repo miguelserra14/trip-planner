@@ -2,9 +2,10 @@
 
 Gemini is the first choice everywhere. Mistral is plan B, from another company: it is only used when
 MISTRAL_API_KEY is in env/.env, and only after the Gemini models failed. Without that key nothing changes."""
+import asyncio
 import os
 
-from langchain.agents.middleware import ModelFallbackMiddleware
+from langchain.agents.middleware import ModelFallbackMiddleware, wrap_model_call
 from langchain.chat_models import init_chat_model
 
 from trip_planner.trip import trip_settings   # reads env/.env, where the keys are
@@ -22,6 +23,9 @@ GEMINI_COORDINATOR_MODELS = [
 # large ones answer "rate limit 0" or "not in your tier"), the most capable one that calls tools.
 BACKUP_MODEL = "mistralai:ministral-14b-latest"
 BACKUP_KEY = "MISTRAL_API_KEY"
+# A subagent's call to its model, retries of the client included, is given up after this long: one call to Gemini
+# took 26 minutes on 2026-10-26 and held the whole search. Then plan B is asked, with the same limit.
+MODEL_CALL_SECONDS = 240
 
 def backup_models() -> list[str]:
     """The plan B model, when its key is there."""
@@ -31,6 +35,13 @@ def coordinator_models() -> list[str]:
     """The models the coordinator tries, in order."""
     return [*GEMINI_COORDINATOR_MODELS, *backup_models()]
 
-def subagent_fallback() -> list:
-    """The middleware that hands a subagent's call to plan B when its own model fails. Empty without plan B."""
-    return [ModelFallbackMiddleware(*(init_chat_model(name, max_retries=2) for name in backup_models()))] if backup_models() else []
+@wrap_model_call
+async def give_up_slow_calls(request, handler):
+    """A call to the model that has not answered in MODEL_CALL_SECONDS fails, as if the model had answered with an error."""
+    return await asyncio.wait_for(handler(request), MODEL_CALL_SECONDS)
+
+def subagent_guards() -> list:
+    """The middlewares around a subagent's calls to its model: plan B when its own model fails, when it has a key, and
+    the time limit inside it, so that each model tried gets its own MODEL_CALL_SECONDS."""
+    fallback = [ModelFallbackMiddleware(*(init_chat_model(name, max_retries=2) for name in backup_models()))] if backup_models() else []
+    return [*fallback, give_up_slow_calls]

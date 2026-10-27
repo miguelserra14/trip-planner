@@ -1,5 +1,6 @@
 """Plan a trip: `plan_trip` runs the steps of one trip in code, shows the report as soon as it exists, then asks
-the coordinator, once, for the recommendation in words, and saves the report.
+the coordinator, once, for the recommendation in words, and saves the report. A round trip is two of them, the way
+there and the way back, then a summary that pairs their options.
 
 The conversation of every trip planned in a run is kept, so `ask` answers follow-up questions about a result
 without searching again. The answer is written by a model from the report: the report stays the reference."""
@@ -7,16 +8,18 @@ import asyncio
 import re
 import time
 import traceback
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 from langchain.messages import AIMessage, HumanMessage
 
 from trip_planner import current
-from trip_planner.agents import coordinator, subagents
+from trip_planner.agents import claims, coordinator, subagents
 from trip_planner.agents.steps import run_steps, STEPS
 from trip_planner.trip.trip_settings import TripSettings
-from trip_planner.trip.places import ask_airports, ask_places, choose_airports, codes, show_airports, TripPlaces
+from trip_planner.trip.places import ask_airports, ask_places, choose_airports, codes, return_places, show_airports, TripPlaces
 from trip_planner.report.full import keep_report, save_report
+from trip_planner.report.summary import render_round_trip
 from trip_planner.sources import web
 from trip_planner.texts import any_of, tr
 from trip_planner.utils import plain, say, show, TIMINGS
@@ -73,6 +76,11 @@ def results_for_model(request: str, state: dict[str, Any]) -> str:
     found = [f"Step {number}, {name}:\n{note}" for number, (name, note) in enumerate(zip(names, state.get("notes") or []), start=1)]
     return "\n\n".join([request, "What the search found, step by step:", *found])
 
+def given_to_model(state: dict[str, Any]) -> str:
+    """What the coordinator was given about a trip: the report and what each step found. A time or a duration it
+    writes must be in there (agents/claims.py)."""
+    return "\n".join([state.get("report") or "", *(state.get("notes") or [])])
+
 async def recommend(state: dict[str, Any], messages: list[Any]) -> str:
     """The recommendation in words, written by the coordinator from the results in messages. When no model answers,
     a line of fixed text names the option the rules chose: the report above it is complete without a model."""
@@ -83,12 +91,14 @@ async def recommend(state: dict[str, Any], messages: list[Any]) -> str:
         say(tr("progress_no_model", error=type(error).__name__))
         return tr("recommendation_by_rules", heading=tr("recommendation"), option=recommended) if recommended else ""
     text = check_recommendation(text, recommended)
+    text = claims.check_claims(text, given_to_model(state), state.get("shown") or [], recommended)
     messages.append(AIMessage(content=text))   # what the traveller was shown is what the follow-up questions build on
     return web.only_known_links(text, report)
 
 async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) -> dict[str, Any]:
-    """Plan one trip, show the result and save the report. places are the airports already chosen for it;
-    without them the airports are chosen here and, if the settings ask for it, confirmed as text."""
+    """Plan a trip, show the result and save the report. places are the airports already chosen for it;
+    without them the airports are chosen here and, if the settings ask for it, confirmed as text. With return
+    dates the way back follows, on the same airports, and the summary of the round trip comes last."""
     current.SETTINGS = settings   # the tools, the checks and the texts read the trip from here
     if places is None:
         if settings.confirm_airports:
@@ -98,6 +108,27 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
             ask_airports(places)
         else:
             show_airports(places)
+    if not settings.return_dates:
+        return await plan_one_way(settings, places)
+    show(f"# {tr('way_there', origin=settings.origin, destination=settings.destination)}")
+    going = await plan_one_way(settings, places)
+    there = PLANNED[-1]
+    back_settings = settings.return_trip()
+    current.SETTINGS = back_settings
+    show(f"# {tr('way_back', origin=back_settings.origin, destination=back_settings.destination)}")
+    coming = await plan_one_way(back_settings, return_places(places), after=lambda found: render_round_trip(
+        going.get("shown") or [], found.get("shown") or [], settings.origin, settings.destination), beside=there.get("report"))
+    # The questions that follow are about the round trip: the conversation of both ways, the report of both
+    back = PLANNED[-1]
+    back["there"], back["messages"] = there, there["messages"] + back["messages"]
+    return {**coming, "there": going}
+
+async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callable[[dict], str] | None = None,
+                       beside: Path | None = None) -> dict[str, Any]:
+    """Plan one way: search, show the result, write the recommendation and save the report. after, if given, writes
+    from the result what is shown once the recommendation is (the summary of a round trip), saved at the end of the
+    report; beside is the report of the way there, which saving this one must not delete to make room."""
+    current.SETTINGS = settings
     current.TRIP = places
     TIMINGS.clear()
     started = time.time()
@@ -123,7 +154,10 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     total = TIMINGS["total"] = time.time() - started
     if recommendation:
         show(recommendation)
-    PLANNED[-1]["report"] = save_report(response, recommendation).resolve()
+    summary = after(response) if after else ""
+    if summary:
+        show(summary)
+    PLANNED[-1]["report"] = save_report(response, "\n\n".join(part for part in (recommendation, summary) if part), beside).resolve()
     say(tr("progress_done", seconds=round(total), path=PLANNED[-1]["report"]))
     return response
 
@@ -143,8 +177,12 @@ async def ask(question: str, trip: int = -1) -> None:
         say(tr("progress_no_model", error=type(error).__name__))
         return
     planned["messages"].append(AIMessage(content=answer))
-    # The answer is written by a model: it is shown as such, and the report stays the reference
-    answer = web.only_known_links(answer, planned["state"].get("report") or "")
+    # The answer is written by a model: it is shown as such, and the report stays the reference (both, for a round trip)
+    trips = [trip for trip in (planned.get("there"), planned) if trip]
+    answer = web.only_known_links(answer, "\n".join(trip["state"].get("report") or "" for trip in trips))
+    answer = claims.check_claims(answer, "\n".join(given_to_model(trip["state"]) for trip in trips),
+                                 [itinerary for trip in trips for itinerary in trip["state"].get("shown") or []],
+                                 planned["state"].get("recommended") or 0, colours=len(trips) == 1)
     markdown = (f"**{web.clean_text(question)}**\n\n{answer}\n\n> {tr('followup_note')}")
     show(markdown)
 
@@ -168,6 +206,12 @@ def show_timings() -> None:
 
 
 
+def keep_trip(planned: dict[str, Any], keep: bool) -> None:
+    """Keep the report of a trip in saved/, or put it back among the recent ones: both reports of a round trip."""
+    for trip in (planned.get("there"), planned):
+        if trip and trip.get("report") is not None:
+            trip["report"] = keep_report(trip["report"], keep)
+
 def ask_to_keep() -> None:
     """Ask whether the report of the last trip is to be kept. Otherwise it goes when newer ones arrive."""
     if not PLANNED or PLANNED[-1].get("report") is None:
@@ -177,7 +221,7 @@ def ask_to_keep() -> None:
     except (EOFError, KeyboardInterrupt):
         return
     if plain(answer) in ("y", "yes", "s", "sim"):
-        PLANNED[-1]["report"] = keep_report(PLANNED[-1]["report"], True)
+        keep_trip(PLANNED[-1], True)
         say(tr("ui_report_kept", folder=PLANNED[-1]["report"].parent))
 
 async def follow_up() -> None:

@@ -301,6 +301,24 @@ def test_a_day_not_on_sale_says_from_when_it_can_be_known():
     assert len(warnings) == 1 and "OPO" in warnings[0]   # Istanbul is not in the options shown
     assert (date.fromisoformat(day) - timedelta(days=71)).strftime("%d/%m/%Y") in warnings[0]
 
+def test_days_not_on_sale_are_said_once_per_operator_and_side():
+    """Ghent to Lisbon, 2026-10-26: five warnings of Rede Expressos, one per airport and day, were one fact."""
+    from trip_planner.agents.steps import not_on_sale_warnings
+    first, second = ((date.today() + timedelta(days=days)).isoformat() for days in (100, 101))
+    entry = lambda airport, day, to_airport=False: {"source": "Rede Expressos", "airport": airport, "day": day, "to_airport": to_airport, "days": 71}
+    ground = {"not_on_sale": [entry("LIS", first), entry("OPO", second), entry("OPO", first), entry("LIS", second), entry("FAO", first),
+                              entry("LIS", first, True)]}
+    flight = lambda day, arrival: {"date": day, "departure_airport": "LIS", "arrival_airport": arrival}
+    shown = [{"flight": flight(first, "LIS")}, {"flight": flight(second, "OPO")}, {"flight": flight(first, "OPO")},
+             {"flight": flight(second, "LIS")}, {"flight": flight(first, "FAO")}]
+    warnings = not_on_sale_warnings(shown, ground)
+    assert len(warnings) == 2   # from the airports, and to Lisbon airport
+    from_airports = next(warning for warning in warnings if "FAO" in warning)
+    assert "LIS, OPO and FAO" in from_airports
+    day_text = lambda day, less=0: (date.fromisoformat(day) - timedelta(days=less)).strftime("%d/%m/%Y")
+    assert f"{day_text(first)} and {day_text(second)}" in from_airports
+    assert f"{day_text(first, 71)} and {day_text(second, 71)} respectively" in from_airports
+
 def test_movelia_says_when_a_day_is_not_on_sale_and_when_nothing_runs(monkeypatch):
     answers = []
 

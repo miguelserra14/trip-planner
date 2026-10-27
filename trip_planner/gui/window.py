@@ -160,6 +160,8 @@ class TripWindow:
             self.values[setting.name] = variable
         self.origin, self.destination = self.values["origin"], self.values["destination"]
         self.dates = tk.StringVar(value="")   # clicked in the calendar every time
+        self.return_dates = tk.StringVar(value="")   # the same, to come back: empty is a trip one way
+        self.return_dates.trace_add("write", lambda *changed: self.show_trip_kind())
         self.language = tk.StringVar(value=self.defaults.language)
 
     def value(self, name: str) -> Any:
@@ -208,8 +210,8 @@ class TripWindow:
         border.pack(fill="x")
         card = ttk.Frame(border, style="Card.TFrame", padding=(14, 10, 14, 12))
         card.pack(fill="both", padx=1, pady=1)
-        for column, key in ((0, "ui_from"), (2, "ui_to"), (3, "ui_dates")):
-            ttk.Label(card, text=tr(key), style="Card.TLabel").grid(row=0, column=column, sticky="w", padx=(12 if column == 3 else 0, 0), pady=(0, 2))
+        for column, key in ((0, "ui_from"), (2, "ui_to"), (3, "ui_dates"), (4, "ui_return_dates")):
+            ttk.Label(card, text=tr(key), style="Card.TLabel").grid(row=0, column=column, sticky="w", padx=(12 if column >= 3 else 0, 0), pady=(0, 2))
         origin = ttk.Entry(card, textvariable=self.origin, font=(FONT, 11), width=14)
         origin.grid(row=1, column=0, sticky="we", ipady=4)
         ttk.Button(card, text="↔", width=2, command=self.swap, style="Swap.TButton").grid(row=1, column=1, padx=6)
@@ -219,18 +221,23 @@ class TripWindow:
         dates = ttk.Entry(card, textvariable=self.dates, font=(FONT, 11), width=16, state="readonly", cursor="hand2")
         dates.grid(row=1, column=3, sticky="we", padx=(12, 0), ipady=4)
         dates.bind("<Button-1>", lambda event: DatePicker(self))
+        back = ttk.Entry(card, textvariable=self.return_dates, font=(FONT, 11), width=16, state="readonly", cursor="hand2")
+        back.grid(row=1, column=4, sticky="we", padx=(12, 0), ipady=4)
+        back.bind("<Button-1>", lambda event: DatePicker(self, returning=True))
         self.find_button = ttk.Button(card, text=tr("ui_search"), command=self.find_airports, style="Big.Accent.TButton")
-        self.find_button.grid(row=1, column=4, sticky="ns", padx=(12, 0))
+        self.find_button.grid(row=1, column=5, sticky="ns", padx=(12, 0))
         # The ticks hold the same variables as the advanced settings: the scale of each side, and the stopovers
         for column, key, name, on, off in ((0, "ui_nearby", "departure_scale", "wide", "near"), (2, "ui_nearby", "arrival_scale", "wide", "near"),
                                            (3, "ui_direct", "max_stopovers", "0", "1")):
             ttk.Checkbutton(card, text=tr(key), variable=self.values[name], onvalue=on, offvalue=off, style="Card.TCheckbutton").grid(
                 row=2, column=column, sticky="w", padx=(12 if column == 3 else 0, 0), pady=(10, 0))
-        for column in (0, 2, 3):
+        for column in (0, 2, 3, 4):
             card.columnconfigure(column, weight=1, uniform="field")
         under = ttk.Frame(form)
         under.pack(fill="x", pady=(6, 0))
-        ttk.Label(under, text=tr("ui_trip_kind"), style="Muted.TLabel").pack(side="left")
+        self.trip_kind = ttk.Label(under, style="Muted.TLabel")
+        self.trip_kind.pack(side="left")
+        self.show_trip_kind()
         self.advanced_button = ttk.Button(under, text=tr("ui_advanced"), command=self.open_advanced)
         self.advanced_button.pack(side="right")
         self.count_changes()
@@ -238,6 +245,11 @@ class TripWindow:
             entry.bind("<Return>", lambda event: self.find_airports())
         if getattr(self, "running", False):   # the new button as the old one was
             self.find_button.configure(state="disabled")
+
+    def show_trip_kind(self) -> None:
+        """One way or round trip, as the return dates say."""
+        if getattr(self, "trip_kind", None) is not None and self.trip_kind.winfo_exists():
+            self.trip_kind.configure(text=tr("ui_trip_kind_return" if self.return_dates.get() else "ui_trip_kind"))
 
     def swap(self) -> None:
         """Where from and where to change places, as on a flight search site."""
@@ -256,7 +268,8 @@ class TripWindow:
         tomorrow = f"{date.today() + timedelta(days=1):%d/%m/%Y}"
         try:
             dataclasses.replace(self.defaults, **({name: self.value(name) for name in self.values}
-                                                  | {"origin": "A", "destination": "B", "dates": tomorrow, "language": self.language.get()}))
+                                                  | {"origin": "A", "destination": "B", "dates": tomorrow, "return_dates": "",
+                                                     "language": self.language.get()}))
         except ValueError as error:
             # The reason names the setting as settings.py does: here it is named as the window shows it
             return re.sub(r"`([a-z_]+)`", lambda name: f"«{AdvancedSettings.label(name[1])}»", str(error))
@@ -325,7 +338,7 @@ class TripWindow:
     def read_form(self) -> TripSettings:
         """The trip on the main page and in the advanced settings. Raises ValueError, with the reason, if it is not valid."""
         return dataclasses.replace(self.defaults, **{name: self.value(name) for name in self.values},
-                                   dates=self.dates.get(), language=self.language.get())
+                                   dates=self.dates.get(), return_dates=self.return_dates.get(), language=self.language.get())
 
     def find_airports(self) -> None:
         if self.running:
@@ -340,6 +353,7 @@ class TripWindow:
             return
         current.SETTINGS = self.settings   # from here on the texts are in the language of this trip
         self.dates.set(", ".join(self.settings.dates))   # how the dates were read, for the traveller to see
+        self.return_dates.set(", ".join(self.settings.return_dates))
         self.advice = " ".join(f"{tr('advice')}: {advice}" for advice in self.settings.advice())
 
         async def work() -> None:
@@ -439,8 +453,8 @@ class TripWindow:
         if not planned() or planned()[-1].get("report") is None:
             return
         trip = planned()[-1]
-        from trip_planner.report.full import keep_report   # loaded with the search: a report exists
-        trip["report"] = keep_report(trip["report"], self.keep.get())
+        from trip_planner.planner import keep_trip   # loaded with the search: a report exists
+        keep_trip(trip, self.keep.get())   # both reports of a round trip
         note = tr("ui_report_kept", folder=trip["report"].parent) if self.keep.get() else tr("ui_report_not_kept", limit=current.SETTINGS.recent_reports)
         self.say_status(note)
         self.confirm(note, self.keep_box)

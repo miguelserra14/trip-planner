@@ -88,6 +88,9 @@ def coordinator_prompt() -> str:
        {s.extra_hours_table(s.tiebreak_eur_per_hour)}. An itinerary is preferred when its price plus the cost of the
        hours it takes beyond the fastest itinerary is the lowest.
     The code already applied both rules and says which option they recommend. Recommend that same option.
+    The report may also show trips without a plane, by train or coach all the way ("{tr('ground_option')} 1", 2...),
+    which the code compared with the recommended option by the same rules. If the last step says one of them is
+    better, say so in one sentence, by its name; never compare them in any other way.
 
     The report of the last step is shown to the traveller automatically, right above your answer.
     Do not repeat its tables or its steps, and never restate a time or a price differently from the report.

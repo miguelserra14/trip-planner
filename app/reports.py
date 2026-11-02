@@ -4,9 +4,10 @@ import html
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
 from urllib.parse import quote, unquote
 
-from app.report_page import page, to_html
+from app.report_page import to_html
 from trip_planner import current
 from trip_planner.report.full import REPORTS, SAVED_REPORTS, trip_folders
 from trip_planner.texts import tr
@@ -50,12 +51,22 @@ def list_section() -> str:
         body.append(f"<ul>{''.join(items)}</ul>" if items else f'<p class="muted">{html.escape(tr("app_no_reports"))}</p>')
     return "\n".join(body)
 
-def report_page(path: Path) -> str:
+def key_of(path: Path) -> str:
+    return next(key for group in reports().values() for key, found in group.items() if found == path)
+
+def report_page(path: Path, token: str, whole: Callable[[str, str], str]) -> str:
+    """A report, its list of contents, and the button that keeps it (or puts it back among the recent ones)."""
     content, sections = to_html(path.read_text(encoding="utf-8"))
     contents = "".join(f'<li><a href="#{anchor}">{html.escape(title)}</a></li>' for anchor, title in sections)
-    body = (f'<p><a href="/">{html.escape(tr("app_all_reports"))}</a></p>'
+    key = key_of(path)
+    kept = key.startswith("saved/")
+    keep = (f'<form method="post" action="/keep" class="keep"><input type="hidden" name="token" value="{html.escape(token)}">'
+            f'<input type="hidden" name="report" value="{html.escape(key)}"><input type="hidden" name="keep" value="{"0" if kept else "1"}">'
+            f'<button type="submit" class="quiet">{html.escape(tr("app_unkeep" if kept else "ui_keep_report"))}</button>'
+            f'<small>{html.escape(tr("app_kept" if kept else "app_not_kept", limit=current.SETTINGS.recent_reports))}</small></form>')
+    body = (f'<p><a href="/">{html.escape(tr("app_all_reports"))}</a></p>{keep}'
             f'<nav aria-label="{html.escape(tr("app_contents"))}"><ul>{contents}</ul></nav><article>{content}</article>')
-    return page(title_of(path), body, current.SETTINGS.language)
+    return whole(title_of(path), body)
 
 def find(path: str) -> Path | None:
     """The report a path of the app asks for, /report/<key>, if there is one by that key."""

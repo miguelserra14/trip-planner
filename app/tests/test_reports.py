@@ -65,7 +65,7 @@ def ask(port: int, method: str, host: str, body: str | None = None, length: int 
         sizes = {"Content-Length": str(length)} if length else {}
         connection.request(method, "/search", body=body, headers={"Host": host, **sizes})
         response = connection.getresponse()
-        assert "script-src" not in response.getheader("Content-Security-Policy")
+        assert "script-src 'self';" in response.getheader("Content-Security-Policy")   # the app's own file, never an inline script
         return response.status
     finally:
         connection.close()

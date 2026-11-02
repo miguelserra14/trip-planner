@@ -45,7 +45,7 @@ nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 
 form.search { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 24px 20px;
               margin-bottom: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px; }
 form.search h1, form.search p, form.search .refusal { grid-column: 1 / -1; margin-bottom: 0; }
-label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; position: relative; }
 label small { font-weight: normal; color: var(--muted); }
 input { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 button { font: inherit; padding: 8px 20px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer;
@@ -53,6 +53,40 @@ button { font: inherit; padding: 8px 20px; border: 0; border-radius: 6px; backgr
 .refusal { color: %(error)s; font-weight: 600; }
 pre.log { white-space: pre-wrap; font: .85em/1.4 Consolas, monospace; color: var(--muted); }
 details { margin: 12px 0; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+header .name { font-weight: 700; font-size: 1.15em; color: var(--text); text-decoration: none; }
+label.inline { flex-direction: row; align-items: center; font-weight: normal; gap: 6px; }
+select { font: inherit; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.ticks, details.advanced, form.search > button { grid-column: 1 / -1; }
+.ticks { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+label.tick { flex-direction: row; align-items: baseline; flex-wrap: wrap; font-weight: normal; gap: 6px; }
+label.tick small { flex-basis: 100%%; }
+details.advanced fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 16px; }
+fieldset { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px 14px 12px; }
+legend { font-weight: 700; padding: 0 4px; }
+form.ask { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 20px 16px; margin: 12px 0; }
+form.ask label.tick { display: flex; margin: 4px 0; }
+form.question { display: grid; gap: 8px; }
+form.keep { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+button.quiet { background: var(--surface); color: var(--accent); border: 1px solid var(--accent); }
+.calendar { position: absolute; top: 100%%; left: 0; z-index: 2; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+            padding: 8px; margin-top: 4px; width: max-content; box-shadow: 0 4px 16px rgba(0, 0, 0, .12); font-weight: normal; }
+.calendar .month { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+.calendar table { font-size: .9em; } .calendar th, .calendar td { border: 0; padding: 1px; text-align: center; }
+.calendar button { padding: 4px 0; width: 2.3em; background: var(--surface); color: var(--text); border-radius: 4px; }
+.calendar button.chosen { background: var(--accent); color: #fff; font-weight: 700; }
+.calendar button:disabled { color: var(--border); cursor: default; }
+.calendar .month button { width: auto; padding: 2px 10px; border: 1px solid var(--border); }
+.calendar small { display: block; max-width: 18em; margin-top: 4px; color: var(--muted); }
+.calendar button.quiet { width: auto; padding: 4px 12px; margin-top: 6px; }
+.tools { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-start; }
+form.tool { display: flex; flex-direction: column; gap: 4px; max-width: 26em; }
+form.tool small { color: var(--muted); }
+td form.tool { flex-direction: row; align-items: center; max-width: none; gap: 8px; }
+button:disabled { opacity: .5; cursor: default; }
+#conversation { margin-top: 20px; }
+#conversation .answer { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+                        border-radius: 8px; padding: 2px 20px; margin: 10px 0; }
 """ % {**THEME, "lights": " ".join(f"--light-{grade}: {colour};" for grade, colour in LIGHT_COLOURS.items())}
 
 def inline(text: str) -> str:
@@ -142,9 +176,9 @@ def to_html(markdown: str) -> tuple[str, list[tuple[str, str]]]:
     return "\n".join(out), sections
 
 def page(title: str, body: str, language: str, refresh: int = 0) -> str:
-    """A whole page of the app, with nothing loaded from elsewhere. refresh, in seconds, makes the browser ask for
-    it again: how a running search shows its progress without a script."""
-    again = f'<meta http-equiv="refresh" content="{int(refresh)}">' if refresh else ""
+    """A whole page of the app, with nothing loaded from elsewhere but its own script. refresh, in seconds, makes
+    a browser without the script ask for the page again: how a running search shows its progress then."""
+    again = f'<noscript><meta http-equiv="refresh" content="{int(refresh)}"></noscript>' if refresh else ""
     return (f'<!doctype html><html lang="{html.escape(language)}"><head><meta charset="utf-8">{again}'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title>'
-            f"<style>{STYLE}</style></head><body><main>{body}</main></body></html>")
+            f'<style>{STYLE}</style><script src="/page.js" defer></script></head><body><main>{body}</main></body></html>')

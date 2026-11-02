@@ -1,42 +1,57 @@
-"""A search started from the browser: the form, the process that plans the trip (job.py) and the page that shows
-how it goes. One search at a time: each one spends the models' quota, and the planner's own requests are already
-spread over its services.
+"""A search started from the browser: the process that plans the trip (job.py), what it said, and the part of the
+page that shows how it goes. One search at a time: each one spends the models' quota, and the planner's own
+requests are already spread over its services. The program's own jobs (checking the services, asking the ground
+prices again, adding a language) run the same way, one at a time with the searches.
 
-The page of a running search asks for itself again every few seconds (a refresh, no script), and stops once the
-search has ended: then it links its report."""
+The process asks the traveller things on the way, as the window does: which place a name means, which airports
+to leave out; once the trip is planned it takes questions about it. Each of those is a form in the page, sent
+back here and passed on to the process (site.py). While the process works the page asks for its part again every
+few seconds (page.js), or, without the script, the whole page."""
 import html
 import json
 import subprocess
 import sys
 import threading
 from pathlib import Path
+from typing import Any, Callable
 
-from app.report_page import page, to_html
-from trip_planner import current
 from trip_planner.texts import tr
-from trip_planner.trip.trip_settings import TripSettings
 
 ROOT = Path(__file__).parents[1]   # the planner is run from the repository's folder
 COMMAND = [sys.executable, "-m", "app.job"]
-REFRESH_SECONDS = 3   # how often the page of a running search asks for itself again
 LINES_SHOWN = 40      # the last progress lines on the page; the whole log is saved next to the report
 
 class Job:
-    """The process of one search and what it said so far. Its lines are read in a thread of their own."""
+    """The process of one search, what it said so far, and what it waits for. Its lines are read in a thread."""
 
-    def __init__(self, asked: dict[str, str], command: list[str] = COMMAND):
-        self.asked = asked
+    def __init__(self, first: dict[str, Any], command: list[str] = COMMAND):
+        """first is what the process is told first: {"settings": ...} for a search, {"task": ...} for a job."""
+        self.values = first.get("settings") or {}   # the settings of the form, for a search
         self.lines: list[str] = []      # the progress lines
         self.shown: list[str] = []      # the Markdown of the result, as it came
+        # The questions about the trip planned, in order: {"question", "answer" (Markdown), "unanswered" (why not)}.
+        # The one still waiting has neither
+        self.conversation: list[dict[str, str]] = []
         self.reports: list[Path] = []
         self.failure = ""
+        self.refusal = ""               # why the airports left out cannot be: the list is asked for again
         self.stopped = False
+        self.done = ""                  # how one of the program's own jobs went, once it ended (job.run_task)
+        self.asked: tuple[str, Any] | None = None   # what the process waits for: ("unclear" | "airports" | "ready", what)
+        self.lock = threading.Lock()
         self.process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
-        self.process.stdin.write(json.dumps(asked, ensure_ascii=False))
-        self.process.stdin.close()
+        self.tell(first)
         self.reader = threading.Thread(target=self.read, daemon=True)
         self.reader.start()
+
+    def tell(self, message: dict[str, Any]) -> None:
+        with self.lock:
+            try:
+                self.process.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
+                self.process.stdin.flush()
+            except OSError:   # the process has ended: what it said is already read
+                pass
 
     def read(self) -> None:
         for line in self.process.stdout:
@@ -45,21 +60,57 @@ class Job:
                 kind, text = event["kind"], event["text"]
             except (ValueError, KeyError, TypeError):
                 kind, text = "say", line.rstrip("\n")   # a warning of a library, on stderr: a line like any other
-            if kind == "show":
-                self.shown.append(text)
-            elif kind == "report":
-                self.reports.append(Path(text))
-            elif kind == "failed":
-                self.failure = text
-            elif text.strip():
-                self.lines.append(text)
+            self.read_event(kind, text)
         code = self.process.wait()
+        self.asked = None
         if code and not self.failure and not self.stopped:
             self.failure = tr("app_search_ended", code=code)
+
+    def read_event(self, kind: str, text: Any) -> None:
+        """What one line of the process says. Shown while a question waits, it is that question's answer."""
+        if kind == "show" and self.pending():
+            self.pending()["answer"] = text
+        elif kind == "show":
+            self.shown.append(text)
+        elif kind == "unanswered" and self.pending():
+            self.pending()["unanswered"] = text
+        elif kind == "report":
+            self.reports.append(Path(text))
+        elif kind == "failed":
+            self.failure = text
+        elif kind == "done":
+            self.done = text
+        elif kind == "refused":
+            self.refusal = text
+        elif kind in ("unclear", "airports", "ready"):
+            self.asked = (kind, text)
+        elif isinstance(text, str) and text.strip():
+            self.lines.append(text)
 
     @property
     def running(self) -> bool:
         return self.process.poll() is None or self.reader.is_alive()
+
+    @property
+    def working(self) -> bool:
+        """Running and not waiting for the traveller: a new search would have to wait for this one."""
+        return self.running and self.asked is None
+
+    def waiting(self, kind: str) -> Any:
+        """What the process asked, if it waits for that kind of answer now."""
+        asked = self.asked
+        return asked[1] if asked and asked[0] == kind else None
+
+    def pending(self) -> dict[str, str] | None:
+        """The question the model is answering now, if there is one."""
+        last = self.conversation[-1] if self.conversation else None
+        return last if last and not last["answer"] and not last["unanswered"] else None
+
+    def answer(self, message: dict[str, Any]) -> None:
+        self.asked, self.refusal = None, ""
+        if "question" in message:
+            self.conversation.append({"question": message["question"], "answer": "", "unanswered": ""})
+        self.tell(message)
 
     def stop(self) -> None:
         if self.process.poll() is None:
@@ -67,44 +118,80 @@ class Job:
             self.process.kill()
         self.reader.join(timeout=5)
 
-def form(token: str, asked: dict[str, str], refusal: str = "", busy: bool = False) -> str:
-    """The short form: where from, where to, and the days. Every other setting is the one in settings.py."""
-    field = lambda name, label, hint="": (
-        f'<label>{html.escape(tr(label))}<input name="{name}" value="{html.escape(asked.get(name, ""))}"'
-        f'{" required" if not hint else ""}>{f"<small>{html.escape(tr(hint))}</small>" if hint else ""}</label>')
+def hidden(token: str) -> str:
+    return f'<input type="hidden" name="token" value="{html.escape(token)}">'
+
+def place_form(asked: dict[str, Any], token: str) -> str:
+    options = "".join(f'<label class="tick"><input type="radio" name="index" value="{number}"{" checked" if number == 0 else ""}> '
+                      f"{html.escape(label)}</label>" for number, label in enumerate(asked["options"]))
+    return (f'<form method="post" action="/place" class="ask"><h2>{html.escape(tr("ui_place_title"))}</h2>'
+            f'<p>{html.escape(tr("place_several", name=asked["name"]))}</p>{hidden(token)}{options}'
+            f'<button type="submit">{html.escape(tr("ui_place_use"))}</button></form>')
+
+def airports_form(asked: dict[str, Any], token: str, refusal: str) -> str:
+    """Every airport found, ticked, by group: the ones unticked are left out, as in the window."""
+    groups = []
+    for group in asked["groups"]:
+        boxes = "".join(f'<label class="tick"><input type="checkbox" name="keep" value="{html.escape(airport["code"])}" checked> '
+                        f'<b>{html.escape(airport["code"])}</b> {html.escape(airport["name"])} ({html.escape(airport["city"])}, '
+                        f'{html.escape(airport["country"])}) <span class="muted">{airport["km"]} km</span></label>'
+                        for airport in group["airports"])
+        groups.append(f'<fieldset><legend>{html.escape(group["title"])}</legend>{boxes or html.escape(tr("none"))}</fieldset>')
+    notes = "".join(f'<p class="muted">{html.escape(note)}</p>' for note in asked.get("notes") or [])
     error = f'<p class="refusal" role="alert">{html.escape(refusal)}</p>' if refusal else ""
-    button = (f'<a href="/search">{html.escape(tr("app_search_running"))}</a>' if busy
-              else f'<button type="submit">{html.escape(tr("app_search"))}</button>')
-    return (f'<form method="post" action="/search" class="search"><h1>{html.escape(tr("app_plan_title"))}</h1>{error}'
-            f'<input type="hidden" name="token" value="{html.escape(token)}">'
-            f'{field("origin", "origin")}{field("destination", "destination")}'
-            f'{field("dates", "app_dates", "app_dates_hint")}{field("return_dates", "app_return_dates", "app_return_dates_hint")}'
-            f'<p class="muted">{html.escape(tr("app_other_settings"))}</p>{button}</form>')
+    return (f'<form method="post" action="/airports" class="ask"><p>{html.escape(tr("ui_airports_instruction"))}</p>{error}'
+            f'{hidden(token)}{"".join(groups)}{notes}<button type="submit">{html.escape(tr("ui_search"))}</button></form>')
 
-def asked_of(defaults: TripSettings) -> dict[str, str]:
-    """What the form starts with: the trip in settings.py."""
-    return {"origin": defaults.origin, "destination": defaults.destination,
-            "dates": ", ".join(defaults.dates), "return_dates": ", ".join(defaults.return_dates)}
+def question_form(token: str) -> str:
+    return (f'<form method="post" action="/ask" class="ask question">{hidden(token)}'
+            f'<label>{html.escape(tr("ui_question"))}<input name="question" required maxlength="500" autofocus></label>'
+            f'<button type="submit">{html.escape(tr("ui_ask"))}</button><small>{html.escape(tr("followup_note"))}</small></form>')
 
-def progress_page(job: Job, token: str, report_link) -> str:
-    """How the search goes: its last lines and the result as soon as it is shown; once it ended, its reports."""
-    trip = html.escape(f"{job.asked.get('origin')} → {job.asked.get('destination')}")
-    lines = "\n".join(html.escape(line) for line in job.lines[-LINES_SHOWN:])
-    parts = [f'<p><a href="/">{html.escape(tr("app_all_reports"))}</a></p>', f"<h1>{trip}</h1>"]
-    if job.running:
-        parts.append(f'<p role="status">{html.escape(tr("app_search_running"))}</p>'
-                     f'<form method="post" action="/stop"><input type="hidden" name="token" value="{html.escape(token)}">'
-                     f'<button type="submit">{html.escape(tr("app_stop"))}</button></form>')
-    elif job.failure:
+def conversation_part(job: Job, token: str, to_html: Callable[[str], str]) -> str:
+    """The questions about the trip and their answers, under the result and apart from it, with the one being
+    answered and the form for the next. The page is sent here (#conversation) after a question, so that the
+    answer is seen where it arrives, not at the end of a long report."""
+    items = []
+    for item in job.conversation:
+        if item["answer"]:   # the answer repeats the question, in bold, and says it was written by a model
+            items.append(f'<div class="answer">{to_html(item["answer"])}</div>')
+        else:
+            said = (f'<p class="refusal" role="alert">{html.escape(item["unanswered"])}</p>' if item["unanswered"]
+                    else f'<p role="status">{html.escape(tr("ui_asking"))}</p>')
+            items.append(f'<div class="answer"><p><strong>{html.escape(item["question"])}</strong></p>{said}</div>')
+    form = question_form(token) if job.waiting("ready") is not None else ""
+    return (f'<section id="conversation"><h2>{html.escape(tr("app_questions"))}</h2>{"".join(items)}{form}</section>'
+            if items or form else "")
+
+def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html: Callable[[str], str]) -> str:
+    """The part of the page that changes while the search runs: what it waits for, the result as soon as it is
+    shown, and the progress lines. Marked as working while the page should ask for it again."""
+    parts = []
+    if job.failure:
         parts.append(f'<p class="refusal" role="alert">{html.escape(job.failure)}</p>')
     elif job.stopped:
         parts.append(f'<p role="status">{html.escape(tr("app_search_stopped"))}</p>')
-    else:
+    elif job.waiting("unclear"):
+        parts.append(place_form(job.waiting("unclear"), token))
+    elif job.waiting("airports"):
+        parts.append(airports_form(job.waiting("airports"), token, job.refusal))
+    elif job.working and job.pending():   # the search is over: only the model is answering a question
+        parts.append(f'<p role="status">{html.escape(tr("ui_asking"))}</p>')
+    elif job.working:
+        last = job.lines[-1] if job.lines else tr("ui_finding")
+        parts.append(f'<p role="status"><b>{html.escape(tr("app_search_running" if job.values else "app_working"))}</b> {html.escape(last)}</p>'
+                     f'<form method="post" action="/stop">{hidden(token)}<button type="submit" class="quiet">'
+                     f'{html.escape(tr("app_stop"))}</button></form>')
+    elif job.done:
+        parts.append(f'<p role="status">{html.escape(job.done)}</p>')
+    elif job.reports:
         links = "".join(f"<li>{report_link(path)}</li>" for path in job.reports)
         parts.append(f'<p role="status">{html.escape(tr("app_search_done"))}</p><ul>{links}</ul>')
     if job.shown:
-        parts.append(f'<article>{"".join(to_html(markdown)[0] for markdown in job.shown)}</article>')
+        parts.append(f'<article>{"".join(to_html(markdown) for markdown in job.shown)}</article>')
+    parts.append(conversation_part(job, token, to_html))
+    lines = "\n".join(html.escape(line) for line in job.lines[-LINES_SHOWN:])
     parts.append(f'<details{" open" if not job.shown else ""}><summary>{html.escape(tr("app_progress"))}</summary>'
                  f'<pre class="log">{lines}</pre></details>')
-    title = f"{job.asked.get('origin')} → {job.asked.get('destination')}"
-    return page(title, "\n".join(parts), current.SETTINGS.language, refresh=REFRESH_SECONDS if job.running else 0)
+    working = ' data-working="1"' if job.working else ""
+    return f'<section id="live"{working}>{"".join(parts)}</section>'

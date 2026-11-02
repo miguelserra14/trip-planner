@@ -4,8 +4,10 @@ any web page the traveller has open could send a request to this computer:
   rebinding, is refused);
 - a POST, which starts or stops a search, must carry the token of the app's own forms (site.py), and is small;
 - what is served is looked up by its key among what exists, never a path built from the request;
-- the pages run no script, load nothing from elsewhere and send their forms only here, and the browser is told so
-  (Content-Security-Policy), so that a text a model wrote in a report cannot become one."""
+- the pages run no script but the app's own file (page.js), load nothing from elsewhere and send their forms and
+  requests only here, and the browser is told so (Content-Security-Policy), so that a text a model wrote in a
+  report cannot become a script."""
+import sys
 import threading
 import time
 import webbrowser
@@ -14,9 +16,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from app.site import Reply, Site
 
 HOST = "127.0.0.1"
-MAX_BODY_BYTES = 4000   # a form of the app is a token and a few short fields
-# What the pages may do: their own inline style, and forms sent back here. Links still open, in a new tab
-POLICY = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+MAX_BODY_BYTES = 16000  # the form of a trip with every advanced setting, a few wishes in words included
+# What the pages may do: their own inline style, the app's script, and forms and requests sent back here.
+# Links still open, in a new tab
+POLICY = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; "
+          "form-action 'self'; frame-ancestors 'none'")
+
+class Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address) -> None:
+        """A tab closed, or a page left while it was still asking: the browser dropped the connection, nothing went
+        wrong here. Anything else is printed, as by default."""
+        if not isinstance(sys.exc_info()[1], ConnectionError):
+            super().handle_error(request, client_address)
 
 def start(site: Site) -> ThreadingHTTPServer:
     """Serve the site in the background, until stop(). The address is address_of(server)."""
@@ -30,7 +41,7 @@ def start(site: Site) -> ThreadingHTTPServer:
             self.send_response(reply.status)
             if reply.location:
                 self.send_header("Location", reply.location)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", reply.kind)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Security-Policy", POLICY)
@@ -57,7 +68,7 @@ def start(site: Site) -> ThreadingHTTPServer:
         def log_message(self, *arguments) -> None:
             pass   # the terminal is for the app's own lines
 
-    server = ThreadingHTTPServer((HOST, 0), Handler)
+    server = Server((HOST, 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 

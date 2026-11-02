@@ -899,4 +899,12 @@ TEXTS = {
     "discover_serve_opening": "opening",
     "discover_plan_failed": "The trip planner could not open this trip.\n\n{error}",
     "discover_no_airport": "No airport within {km} km of {place}.",
+    # ---- the app in the browser (app/)
+    "app_reports": "Trip reports",
+    "app_recent": "Recent (the oldest are deleted)",
+    "app_saved": "Kept",
+    "app_no_reports": "None yet.",
+    "app_all_reports": "← All the reports",
+    "app_contents": "Contents",
+    "app_not_found": "There is no such report.",
 }

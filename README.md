@@ -127,6 +127,8 @@ env\.venv\Scripts\python -m discover.window                         the Discover
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map from the terminal, leaving between the two days
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 --fast      Ryanair only: a few seconds
+
+env\.venv\Scripts\python -m app               the reports of the trips planned, in the browser (first step of app/)
 ```
 
 `python -m discover --help` lists the other options (`--light`, `--max-stops`, `--no-confirm`, `--no-browser`).
@@ -355,6 +357,7 @@ discover/
 | `settings.py` | The trip the form starts with, and every setting the form does not show |
 | `main.py` | Runs the program: in a window, in the terminal (`--terminal`), or checks the setup (`--check`) |
 | `trip_planner/` | The program, see above |
+| `app/` | The program in the browser, being built in phases to replace the two windows (the plan is in `app/__init__.py`). Today it shows the reports |
 | `discover/` | Discover, see above. Its maps go to `discover/maps/` and what it remembers to `discover/cache/`, both left out of the repository |
 | `env/requirements.txt` | Direct dependencies, pinned |
 | `env/requirements.lock` | Every package of the tested environment, pinned |

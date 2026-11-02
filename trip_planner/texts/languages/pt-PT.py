@@ -935,4 +935,6 @@ TEXTS = {
     "app_working": "A trabalhar...",
     "app_questions": "Perguntas sobre esta viagem",
     "app_no_answer": "O modelo não respondeu a esta pergunta. Volta a fazê-la daqui a pouco: o relatório acima não mudou.",
+    "app_open_map": "Abrir o mapa",
+    "app_map_done": "Concluído: o mapa tem todos os preços. Fica aqui até se fazer outro mapa, e também ficou guardado em {file}.",
 }

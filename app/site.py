@@ -4,12 +4,13 @@ app: it is in the app's own forms, and another page cannot read it, so it cannot
 models' quota (see server.py)."""
 import dataclasses
 import html
+import json
 import secrets
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
-from urllib.parse import parse_qs, quote
+from urllib.parse import parse_qs, quote, unquote
 
-from app import fields, reports, search
+from app import fields, maps, reports, search
 from app.job import settings_for
 from app.report_page import page, to_html
 from trip_planner import current
@@ -25,6 +26,8 @@ class Reply(NamedTuple):
     html: str = ""
     location: str = ""   # where a 303 sends the browser
     kind: str = "text/html; charset=utf-8"
+    policy: str = ""     # what the page may do, when not what the app's own pages may (server.POLICY)
+    referrer: str = "no-referrer"   # what the browser tells other sites of the page their links and images come from
 
 class Site:
     def __init__(self, defaults: TripSettings, start: Callable[[dict[str, Any]], search.Job] = search.Job,
@@ -36,6 +39,8 @@ class Site:
         self.values = fields.values_of(defaults)      # what the form shows: settings.py, then the last search
         self.stale = stale                            # the reports whose ground prices are too old to believe
         self.languages_added = False                  # a language job ran: the languages are read again once it ends
+        self.map_job: search.Job | None = None        # the last Discover map, in a process of its own (map_job.py)
+        self.map_values = maps.values_of(defaults.origin)   # what Discover's form shows
 
     def begin(self, first: dict[str, Any], title: str) -> Reply:
         """Start a search or one of the program's own jobs, and show how it goes."""
@@ -57,6 +62,7 @@ class Site:
         languages = "".join(f'<option value="{code}"{" selected" if code == current.SETTINGS.language else ""}>'
                             f'{html.escape(TEXTS[code].get("language_name", code))}</option>' for code in LANGUAGES)
         header = (f'<header><a href="/" class="name">{html.escape(tr("ui_title"))}</a>'
+                  f'<nav class="inline"><a href="/">{html.escape(tr("app_plan_title"))}</a> <a href="/discover">{html.escape(tr("discover_win_title"))}</a></nav>'
                   f'<form method="post" action="/language">{search.hidden(self.token)}<label class="inline">{html.escape(tr("ui_language"))} '
                   f'<select name="language" data-submit>{languages}</select></label><noscript><button type="submit">OK</button></noscript></form></header>')
         return page(title, header + body, current.SETTINGS.language, refresh=3 if working else 0)
@@ -126,6 +132,8 @@ class Site:
         self.languages_read()
         if path == "/languages":
             return Reply(200, self.languages_page())
+        if path.startswith("/discover"):
+            return self.get_discover(path)
         if path in ("/", "/index.html"):
             return Reply(200, self.home())
         if path == "/page.js":
@@ -150,7 +158,8 @@ class Site:
         answers = {"/search": self.post_search, "/stop": self.post_stop, "/place": self.post_place, "/airports": self.post_airports,
                    "/ask": self.post_question, "/keep": self.post_keep, "/language": self.post_language,
                    "/check": self.post_check, "/prices": self.post_prices, "/language/add": self.post_add_language,
-                   "/language/remove": self.post_remove_language}
+                   "/language/remove": self.post_remove_language, "/discover": self.post_discover,
+                   "/discover/stop": self.post_discover_stop}
         return answers[path](one, sent) if path in answers else self.not_found()
 
     def post_search(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
@@ -217,6 +226,57 @@ class Site:
             self.values["language"] = one["language"]
         return Reply(303, location="/")
 
+    # ---------------------------------------------------------------- Discover (maps.py)
+    def discover_page(self, refusal: str = "") -> str:
+        body = maps.form(self.token, self.map_values, refusal)
+        if self.map_job is not None:
+            body += self.map_live() + (f'<form method="post" action="/discover/stop" class="tool">{search.hidden(self.token)}'
+                                       f'<button type="submit" class="quiet">{html.escape(tr("app_stop"))}</button></form>'
+                                       if self.map_job.working else "")
+        return self.page(tr("discover_win_title"), body, working=self.map_job is not None and self.map_job.working)
+
+    def map_live(self) -> str:
+        return search.live_part(self.map_job, self.token, reports.link_to, lambda markdown: to_html(markdown)[0], part="/discover/part")
+
+    def get_discover(self, path: str) -> Reply:
+        """The form and how the map goes; the map's page and its destinations as they change; a trip of the map
+        opening the planner's form, by its key among the map's own trips."""
+        if path == "/discover":
+            return Reply(200, self.discover_page())
+        job = self.map_job
+        if job is None:
+            return Reply(303, location="/discover")
+        if path == "/discover/part":
+            return Reply(200, self.map_live())
+        if path == "/discover/map":
+            if not job.map_page:
+                return Reply(303, location="/discover")
+            return Reply(200, job.map_page, policy=maps.MAP_POLICY, referrer=maps.MAP_REFERRER)
+        if path == "/discover/state":
+            return Reply(200, json.dumps(job.map_state, ensure_ascii=False), kind="application/json; charset=utf-8")
+        if path.startswith(maps.PLANNER_LINK):
+            trip = job.trips.get(unquote(path[len(maps.PLANNER_LINK):]))
+            if trip:
+                self.values = maps.planner_values(trip, self.values)
+                return Reply(303, location="/")
+        return self.not_found()
+
+    def post_discover(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        asked = maps.read(one)
+        self.map_values = {**asked, "look_up": "on" if asked["look_up"] else ""}
+        refusal = maps.refusal_of(asked)
+        if refusal:
+            return Reply(400, self.discover_page(refusal))
+        if self.map_job is not None and self.map_job.running:   # two maps cannot look up at once (discover/session.py)
+            self.map_job.stop()
+        self.map_job = self.start({"task": "map", "language": current.SETTINGS.language, "planner_link": maps.PLANNER_LINK, **asked})
+        return Reply(303, location="/discover")
+
+    def post_discover_stop(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        if self.map_job is not None and self.map_job.running:
+            self.map_job.stop()
+        return Reply(303, location="/discover")
+
     def post_check(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         if self.busy():
             return Reply(303, location="/search")
@@ -259,5 +319,6 @@ class Site:
         return Reply(200, self.languages_page(note=note))
 
     def close(self) -> None:
-        if self.job is not None and self.job.running:
-            self.job.stop()
+        for job in (self.job, self.map_job):
+            if job is not None and job.running:
+                job.stop()

@@ -128,7 +128,7 @@ env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map from t
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 --fast      Ryanair only: a few seconds
 
-env\.venv\Scripts\python -m app               the planner in the browser: the whole form, the search, questions about it, the reports (see app/)
+env\.venv\Scripts\python -m app               the planner and Discover in the browser: the whole form, the search, questions about it, the reports, the maps (see app/)
 ```
 
 `python -m discover --help` lists the other options (`--light`, `--max-stops`, `--no-confirm`, `--no-browser`).
@@ -357,7 +357,7 @@ discover/
 | `settings.py` | The trip the form starts with, and every setting the form does not show |
 | `main.py` | Runs the program: in a window, in the terminal (`--terminal`), or checks the setup (`--check`) |
 | `trip_planner/` | The program, see above |
-| `app/` | The program in the browser, being built in phases to replace the two windows (the plan is in `app/__init__.py`). Today it has the whole form of the window, each search in a process of its own that asks which place and which airports, takes questions about the trip, and shows and keeps the reports |
+| `app/` | The program in the browser, being built in phases to replace the two windows (the plan is in `app/__init__.py`). Today it has the whole form of the window, each search in a process of its own that asks which place and which airports, takes questions about the trip, and shows and keeps the reports; and Discover's maps, a trip of a map opening the form filled in |
 | `discover/` | Discover, see above. Its maps go to `discover/maps/` and what it remembers to `discover/cache/`, both left out of the repository |
 | `env/requirements.txt` | Direct dependencies, pinned |
 | `env/requirements.lock` | Every package of the tested environment, pinned |

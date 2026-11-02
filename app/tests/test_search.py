@@ -27,9 +27,8 @@ class StandIn(search.Job):
     """A search without a process: it asks what it is told to, and keeps what it is answered. The rest is Job's."""
 
     def __init__(self, first):
-        self.first, self.values, self.lines, self.shown, self.reports, self.answers = first, first.get("settings") or {}, [], [], [], []
-        self.failure, self.refusal, self.stopped, self.asked, self.alive, self.done = "", "", False, None, True, ""
-        self.conversation = []
+        self.nothing_said(first)
+        self.answers, self.alive = [], True
 
     running = property(lambda self: self.alive)
     working = property(lambda self: self.alive and self.asked is None)
@@ -138,6 +137,18 @@ def test_a_question_is_seen_at_once_with_its_answer_under_the_result_and_apart_f
     assert "Yes, at 06:10." in conversation and "Yes, at 06:10." not in result and search_job.shown == ["# Final result"]
     assert 'action="/ask"' in conversation and thinking_words not in answered
 
+def test_what_the_planner_says_after_the_result_is_shown_with_it_not_folded_away():
+    site, started = site_and_searches()
+    site.post("/search", sent(site))
+    search_job = started[0]
+    search_job.read_event("say", "Flights: 26 found")
+    search_job.read_event("show", "# Final result")
+    search_job.read_event("say", "The model that writes the recommendation did not answer (HTTPStatusError).")
+    search_job.read_event("report", "reports/trip_x/trip_x.md")
+    search_job.alive = False
+    status = site.get("/search/part").html.split("<article>")[0]
+    assert "did not answer (HTTPStatusError)" in status and "Flights: 26 found" not in status
+
 def test_a_question_the_model_did_not_answer_says_so():
     site, started = site_and_searches()
     site.post("/search", sent(site))
@@ -154,7 +165,7 @@ def test_the_part_of_a_working_search_is_marked_to_be_asked_again_until_it_waits
     site.post("/search", sent(site))
     started[0].lines.append("Looking up the flights")
     part = site.get("/search/part").html
-    assert part.startswith('<section id="live" data-working="1">') and "Looking up the flights" in part
+    assert part.startswith('<section id="live" data-part="/search/part" data-working="1">') and "Looking up the flights" in part
     assert 'http-equiv="refresh"' in site.get("/search").html   # for a browser without the script
     started[0].alive = False
     assert "data-working" not in site.get("/search/part").html and 'http-equiv="refresh"' not in site.get("/search").html

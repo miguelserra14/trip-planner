@@ -55,6 +55,8 @@ pre.log { white-space: pre-wrap; font: .85em/1.4 Consolas, monospace; color: var
 details { margin: 12px 0; }
 header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
 header .name { font-weight: 700; font-size: 1.15em; color: var(--text); text-decoration: none; }
+nav.inline { display: flex; gap: 16px; margin-right: auto; margin-left: 24px; }
+a.open { font-weight: 700; font-size: 1.1em; }
 label.inline { flex-direction: row; align-items: center; font-weight: normal; gap: 6px; }
 select { font: inherit; padding: 5px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
 .ticks, details.advanced, form.search > button { grid-column: 1 / -1; }

@@ -91,6 +91,13 @@ def field(name: str, value: Any, defaults: TripSettings) -> str:
         widget = f'<input name="{name}" value="{escape(value)}">'
     return f'<label>{escape(label(name))}{widget}{f"<small>{escape(hint(name))}</small>" if hint(name) else ""}</label>'
 
+def calendar_data() -> str:
+    """What the calendar of a form's "dates" and "return_dates" fields needs (page.js): its words and its limits."""
+    calendar = {"months": tr("cal_months"), "weekdays": tr("cal_weekdays"), "clear": tr("ui_calendar_clear"),
+                "hint": tr("ui_calendar_hint", maximum=MAX_DATES), "return-hint": tr("ui_calendar_return_hint", maximum=MAX_DATES),
+                "today-limit": MAX_DAYS_AHEAD, "most-dates": MAX_DATES}
+    return "".join(f' data-{name}="{html.escape(str(value))}"' for name, value in calendar.items())
+
 def trip_form(token: str, values: dict[str, Any], defaults: TripSettings, refusal: str = "", busy: bool = False) -> str:
     """The whole form: the main card first, the advanced settings folded under it."""
     escape = lambda text: html.escape(str(text))
@@ -106,11 +113,7 @@ def trip_form(token: str, values: dict[str, Any], defaults: TripSettings, refusa
     error = f'<p class="refusal" role="alert">{escape(refusal)}</p>' if refusal else ""
     button = (f'<a href="/search">{escape(tr("app_search_running"))}</a>' if busy
               else f'<button type="submit">{escape(tr("ui_search"))}</button>')
-    calendar = {"months": tr("cal_months"), "weekdays": tr("cal_weekdays"), "clear": tr("ui_calendar_clear"),
-                "hint": tr("ui_calendar_hint", maximum=MAX_DATES), "return-hint": tr("ui_calendar_return_hint", maximum=MAX_DATES),
-                "today-limit": MAX_DAYS_AHEAD, "most-dates": MAX_DATES}
-    data = "".join(f' data-{name}="{escape(value)}"' for name, value in calendar.items())
-    return (f'<form method="post" action="/search" class="search"{data}>'
+    return (f'<form method="post" action="/search" class="search"{calendar_data()}>'
             f'<h1>{escape(tr("app_plan_title"))}</h1>{error}'
             f'<input type="hidden" name="token" value="{escape(token)}">'
             f'{entry("origin", "ui_from", " required")}{entry("destination", "ui_to", " required")}'

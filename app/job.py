@@ -4,7 +4,8 @@ cannot share a process; and the process stays while the traveller asks about the
 with the model is kept in it (planner.PLANNED).
 
 It also runs the program's own jobs, which the window has as buttons, when the first line names one instead of a
-trip: {"task": "check" | "prices" | "language", "name": the language to add, "language": the one to write in}.
+trip: {"task": "check" | "prices" | "language" | "map", "name": the language to add, "language": the one to write in};
+a Discover map takes the fields of its form too (map_job.py).
 Each says what it does as a search does, and ends with {"kind": "done", "text": how it went}.
 
 On stdin, first the trip, then the traveller's answers, each when it is asked for:
@@ -161,6 +162,9 @@ async def run_task(asked: dict[str, Any], events: Events) -> None:
         translate.refresh()
         events.send("done", " ".join(tr("ui_language_added", name=TEXTS[code].get("language_name", code))
                                      + (f" ({tr('ui_language_incomplete', count=count)})" if count else "") for code, count in left.items()))
+    elif asked["task"] == "map":
+        from app.map_job import make_map
+        await asyncio.to_thread(make_map, asked, events)   # discover's Session runs its own event loops
     else:
         events.send("failed", tr("app_not_a_trip"))
 

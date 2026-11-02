@@ -127,13 +127,17 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
             "coverage": found.coverage, "by_ground": found.by_ground, "fare_lookups": found.fare_lookups, "fare_stop": found.fare_stop, "phase": found.phase}
 
 def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120, token: str = "",
-             running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes) -> str:
+             running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes,
+             planner_link: str = "") -> str:
     """airport_minutes is how long before a flight the traveller is at the airport (the planner's setting). token
     is the served page's (serve.py): without it the page shows the command to open the planner instead of a button,
-    and does not ask for the destinations again. running says the timetables are still being looked up."""
+    and does not ask for the destinations again. planner_link is the page in the app (app/) that the planner's form
+    opens at, filled in with a trip, followed by its key: with it each trip is a link there instead of a button, and
+    the page asks for the destinations again as when served. running says the timetables are still being looked up."""
     data = {"origin": {"name": found.place.label, "short": found.place.english_name, "lat": found.place.latitude, "lon": found.place.longitude},
             "days": str(found.days), "round_trip": found.days.round_trip, "sources": sources, "airport_minutes": airport_minutes,
             "long_wait": LONG_WAIT_MINUTES, "early_hour": EARLY_AIRPORT_HOUR, "late_hour": LATE_LANDING_HOUR, "token": token,
+            "planner_link": planner_link,
             "max_lookups": max_lookups, "kiwi_why": found.kiwi_why, "texts": page_texts(), "locale": current.SETTINGS.language, "landing_minutes": landing_minutes, "grade_colours": LIGHT_COLOURS, "state": map_state(found, sections, running, 0, airport_minutes, landing_minutes)}
     title = tr("discover_page_tab_title", origin=found.place.english_name)
     return PAGE.replace("__DATA__", as_script({**data, "title": title})).replace("__TITLE__", title)
@@ -568,13 +572,17 @@ function describePlan(panel, p) {
   add(panel, "h4", t("check_in_planner"));
   add(panel, "p", t("planner_intro"), "muted");
   for (const [label, plan] of legs) {
-    if (data.token) {
+    if (data.planner_link) {   // in the app: its form, filled in with the trip, to check it and search
+      const line = add(panel, "p");
+      const link = add(line, "a", t("open_planner_on", {way: label}));
+      link.href = data.planner_link + encodeURIComponent(plan.key);
+    } else if (data.token) {
       const line = add(panel, "p");
       const button = add(line, "button", t("open_planner_on", {way: label}));
       const status = add(line, "span", "", "muted");
       button.onclick = () => {
         status.textContent = " ...";
-        fetch("/plan", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({token: data.token, trip: plan.key})})
+        fetch("plan", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({token: data.token, trip: plan.key})})
           .then(response => response.json().then(answer => { status.textContent = " " + t(response.ok ? "planner_is" : "planner_refused", {result: answer.result}); }))
           .catch(() => { status.textContent = " " + t("server_stopped_run", {command: plan.command}); });
       };
@@ -829,8 +837,8 @@ function render() {
 
 // While the timetables are looked up, the served page asks for the destinations again
 function follow() {
-  if (!data.token || !state.running) return;
-  setTimeout(() => fetch("/state").then(response => response.json())
+  if (!(data.token || data.planner_link) || !state.running) return;
+  setTimeout(() => fetch("state").then(response => response.json())
     .then(next => { if (next.version !== state.version) { state = next; render(); } follow(); })
     .catch(() => { lost = true; describeStatus(); }), 4000);
 }

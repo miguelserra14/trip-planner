@@ -133,7 +133,7 @@ function poll() {
   if (!live || !live.dataset.working) return;
   setTimeout(async () => {
     try {
-      const answer = await fetch("/search/part", { cache: "no-store" });
+      const answer = await fetch(live.dataset.part, { cache: "no-store" });   // the search's part, or the map's
       if (answer.ok && answer.headers.get("Content-Type").startsWith("text/html")) {
         const text = await answer.text();
         const now = document.getElementById("live");

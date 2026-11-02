@@ -26,24 +26,35 @@ class Job:
 
     def __init__(self, first: dict[str, Any], command: list[str] = COMMAND):
         """first is what the process is told first: {"settings": ...} for a search, {"task": ...} for a job."""
+        self.nothing_said(first)
+        self.process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
+        self.tell(first)
+        self.reader = threading.Thread(target=self.read, daemon=True)
+        self.reader.start()
+
+    def nothing_said(self, first: dict[str, Any]) -> None:
+        """What is known of the job before its process says anything."""
+        self.first = first
         self.values = first.get("settings") or {}   # the settings of the form, for a search
         self.lines: list[str] = []      # the progress lines
         self.shown: list[str] = []      # the Markdown of the result, as it came
         # The questions about the trip planned, in order: {"question", "answer" (Markdown), "unanswered" (why not)}.
         # The one still waiting has neither
         self.conversation: list[dict[str, str]] = []
+        # How many progress lines there were when the result was first shown: what the planner says after it (the
+        # recommendation the model did not write, where the report was saved) is shown with the result, not folded
+        self.result_at: int | None = None
         self.reports: list[Path] = []
         self.failure = ""
         self.refusal = ""               # why the airports left out cannot be: the list is asked for again
         self.stopped = False
         self.done = ""                  # how one of the program's own jobs went, once it ended (job.run_task)
+        self.map_page = ""              # for a Discover map: its page, its trips by key, and its state as it changes
+        self.trips: dict[str, list[str]] = {}
+        self.map_state: dict[str, Any] = {}
         self.asked: tuple[str, Any] | None = None   # what the process waits for: ("unclear" | "airports" | "ready", what)
         self.lock = threading.Lock()
-        self.process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
-        self.tell(first)
-        self.reader = threading.Thread(target=self.read, daemon=True)
-        self.reader.start()
 
     def tell(self, message: dict[str, Any]) -> None:
         with self.lock:
@@ -72,6 +83,8 @@ class Job:
             self.pending()["answer"] = text
         elif kind == "show":
             self.shown.append(text)
+            if self.result_at is None:
+                self.result_at = len(self.lines)
         elif kind == "unanswered" and self.pending():
             self.pending()["unanswered"] = text
         elif kind == "report":
@@ -80,6 +93,12 @@ class Job:
             self.failure = text
         elif kind == "done":
             self.done = text
+        elif kind == "map":       # a Discover map (map_job.py): its page, its trips, what changes in it
+            self.map_page = text
+        elif kind == "trips":
+            self.trips = text
+        elif kind == "state":
+            self.map_state = text
         elif kind == "refused":
             self.refusal = text
         elif kind in ("unclear", "airports", "ready"):
@@ -163,7 +182,8 @@ def conversation_part(job: Job, token: str, to_html: Callable[[str], str]) -> st
     return (f'<section id="conversation"><h2>{html.escape(tr("app_questions"))}</h2>{"".join(items)}{form}</section>'
             if items or form else "")
 
-def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html: Callable[[str], str]) -> str:
+def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html: Callable[[str], str],
+              part: str = "/search/part") -> str:
     """The part of the page that changes while the search runs: what it waits for, the result as soon as it is
     shown, and the progress lines. Marked as working while the page should ask for it again."""
     parts = []
@@ -184,9 +204,14 @@ def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html:
                      f'{html.escape(tr("app_stop"))}</button></form>')
     elif job.done:
         parts.append(f'<p role="status">{html.escape(job.done)}</p>')
+    if job.map_page:   # a Discover map can be opened as soon as its flights are found, while the rest goes on
+        parts.insert(1 if job.failure or job.done else 0,
+                     f'<p><a href="/discover/map" target="_blank" class="open">{html.escape(tr("app_open_map"))}</a></p>')
     elif job.reports:
         links = "".join(f"<li>{report_link(path)}</li>" for path in job.reports)
-        parts.append(f'<p role="status">{html.escape(tr("app_search_done"))}</p><ul>{links}</ul>')
+        notes = "".join(f'<li class="muted">{html.escape(line)}</li>' for line in job.lines[job.result_at or len(job.lines):])
+        parts.append(f'<p role="status">{html.escape(tr("app_search_done"))}</p><ul>{links}</ul>'
+                     + (f'<ul class="notes">{notes}</ul>' if notes else ""))
     if job.shown:
         parts.append(f'<article>{"".join(to_html(markdown) for markdown in job.shown)}</article>')
     parts.append(conversation_part(job, token, to_html))
@@ -194,4 +219,4 @@ def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html:
     parts.append(f'<details{" open" if not job.shown else ""}><summary>{html.escape(tr("app_progress"))}</summary>'
                  f'<pre class="log">{lines}</pre></details>')
     working = ' data-working="1"' if job.working else ""
-    return f'<section id="live"{working}>{"".join(parts)}</section>'
+    return f'<section id="live" data-part="{part}"{working}>{"".join(parts)}</section>'

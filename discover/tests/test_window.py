@@ -1,11 +1,13 @@
 """The discover window (window.py): the days of its form are checked, and what the map's code prints reaches it. No network,
 no window opened."""
 import queue
-from datetime import date
+import threading
+from datetime import date, timedelta
+from types import SimpleNamespace
 
 import pytest
 
-from discover import sources, window
+from discover import confirm, ground, ground_fares, session, sources, window
 from discover.sources import Days
 
 TODAY = date(2026, 10, 22)
@@ -50,3 +52,40 @@ def test_every_map_made_stays_served_until_the_window_closes():
     shown.sessions, shown.root = [Map(), Map()], type("Root", (), {"destroy": lambda self: None})()
     shown.close()
     assert stopped == shown.sessions
+
+def test_a_map_asked_for_while_the_last_one_is_at_work_starts_once_that_one_stops():
+    shown = object.__new__(window.DiscoverWindow)
+    form = lambda value: SimpleNamespace(get=lambda: value)
+    leaving = f"{date.today() + timedelta(days=10):%d/%m/%Y}"
+    shown.city, shown.out_days, shown.back_days, shown.round_trip = form("Porto"), form(leaving), form(""), form(False)
+    shown.sources, shown.look_up = form("fast"), form(True)
+    said, started = [], []
+    shown.say = lambda text, error=False: said.append(text)
+    shown.start = lambda session, look_up: started.append(session)
+    last = SimpleNamespace(stopping=threading.Event())
+    shown.session, shown.working, shown.waiting = last, True, None
+    shown.open_map()
+    assert last.stopping.is_set() and not started   # asked to stop, the new map not started yet
+    shown.finish("")
+    assert [session.city for session in started] == ["Porto"] and shown.waiting is None and not shown.working
+
+def test_a_map_asked_to_stop_ends_its_lookups_at_the_next_city_and_keeps_what_it_found(monkeypatch):
+    made = object.__new__(session.Session)
+    made.found, made.planner, made.days, made.sections = SimpleNamespace(phase=""), None, None, []
+    made.live, made.lock, made.stopping = {"state": {}}, threading.Lock(), threading.Event()
+    saved, cities = [], []
+    made.save = lambda: saved.append(made.found.phase)
+
+    def price(found, on_change):
+        for city in ("Madrid", "Paris"):
+            cities.append(city)
+            made.stopping.set()   # another map is asked for while the first city is priced
+            on_change(found)
+    monkeypatch.setattr(ground_fares, "price", price)
+    monkeypatch.setattr(confirm, "confirm", lambda *args: pytest.fail("the timetables were looked up after the map was asked to stop"))
+    monkeypatch.setattr(ground, "ways_back", lambda *args: pytest.fail("the ways back were looked up after the map was asked to stop"))
+    monkeypatch.setattr(session, "map_state", lambda *args, **kwargs: {"running": kwargs["running"]})
+    monkeypatch.setattr(session, "breakdown", lambda found: [])
+    monkeypatch.setattr(session, "load_airports", lambda: {})
+    made.look_up()
+    assert cities == ["Madrid"] and saved == [""] and made.live["state"] == {"running": False}

@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from trip_planner.report import full
 from trip_planner.sources import fares
 from trip_planner.sources.fares import FareSource, NotRunning
 from trip_planner.tools import prices, verify
@@ -32,19 +33,22 @@ def model_leg(price: float) -> dict:
 
 @pytest.fixture
 def report(tmp_path, monkeypatch):
-    """The folders of the reports, empty, and a way to write one report of one option: its .md and its .json."""
-    monkeypatch.setattr(prices, "REPORTS", tmp_path)
-    monkeypatch.setattr(prices, "SAVED_REPORTS", tmp_path / "saved")
+    """The folders of the reports, empty, and a way to write one report of one option in its trip's folder: its .md
+    and its .json."""
+    monkeypatch.setattr(full, "REPORTS", tmp_path)
+    monkeypatch.setattr(full, "SAVED_REPORTS", tmp_path / "saved")
+    folder = tmp_path / "trip_a_b"
+    folder.mkdir()
 
     def write(legs: list, read: str = TWO_DAYS_AGO) -> dict:
         kept = {"trip": "A -> B", "prices_read": read, "options": [{
             "number": 1, "flight": "F", "route": "OPO → BRU", "date": SOON, "flight_price": 50.0,
             "total": 50.0 + sum(leg["price_eur"] for leg in legs), "legs": legs}]}
-        (tmp_path / "trip_a_b.md").write_text("# The report\n", encoding="utf-8")
-        (tmp_path / "trip_a_b.json").write_text(json.dumps(kept), encoding="utf-8")
+        (folder / "trip_a_b.md").write_text("# The report\n", encoding="utf-8")
+        (folder / "trip_a_b.json").write_text(json.dumps(kept), encoding="utf-8")
         return kept
-    write.json = lambda: json.loads((tmp_path / "trip_a_b.json").read_text(encoding="utf-8"))
-    write.md = lambda: (tmp_path / "trip_a_b.md").read_text(encoding="utf-8")
+    write.json = lambda: json.loads((folder / "trip_a_b.json").read_text(encoding="utf-8"))
+    write.md = lambda: (folder / "trip_a_b.md").read_text(encoding="utf-8")
     return write
 
 @pytest.fixture

@@ -531,7 +531,6 @@ TEXTS = {
     "discover_win_look_up": "Procurar os destinos mais baratos nos horários reais (alguns minutos, no máximo {cities} cidades)",
     "discover_win_shared": "Usa o Kiwi, o Gemini e os horários que o planner também usa: melhor não enquanto o planner está a pesquisar.",
     "discover_win_open": "Abrir o mapa",
-    "discover_win_again": "Mostrar o mapa outra vez",
     "discover_win_bad_day": "'{day}' não é um dia escrito dd/mm/aaaa, como 12/11/2026",
     "discover_win_no_day": "escolhe pelo menos um dia para partir",
     "discover_win_past_day": "o primeiro dia de partida já passou",
@@ -545,6 +544,7 @@ TEXTS = {
     "discover_win_updating": "Os comboios e autocarros estão a ser preçados: o mapa atualiza-se sozinho. Mantém esta janela aberta enquanto o usas.",
     "discover_win_done": "Concluído. Este mapa e os anteriores continuam disponíveis enquanto esta janela estiver aberta. Também ficou guardado num ficheiro: {file}",
     "discover_win_failed": "Não foi possível fazer o mapa: {error}",
+    "discover_win_stopping": "O novo mapa começa assim que o anterior deixar de se atualizar. Esse continua aberto, com o que encontrou até agora.",
     # ---- discover: what was searched, under the map (discover/breakdown.py). Headers are separated by |
     "discover_bd_requests": "Pedidos",
     "discover_bd_requests_header": "Fonte|De|Pedidos|Sem resposta|Respostas cheias|Voos|Destinos|Guardados de mapas anteriores",

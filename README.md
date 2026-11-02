@@ -44,8 +44,8 @@ On macOS or Linux, see [Set up by hand](#set-up-by-hand).
 2. The airports around both cities are listed: untick the ones you do not want and press **Search** again. It takes
    five to eight minutes, and the progress is shown.
 3. Read the result in the window: the comparison first, then each option from door to door. Links open in the
-   browser, and **Open the full report** opens the file saved in `reports/`.
-   Only the reports of the last 5 runs stay there: tick **Keep this report** to move this one to `reports/saved/`, where nothing is deleted.
+   browser, and **Open the full report** opens the file saved in `reports/`, in a folder of its own for each trip.
+   Only the last 5 trips stay there: tick **Keep this report** to move this one to `reports/saved/`, where nothing is deleted.
 4. Ask about the trip in the box at the bottom ("and if I leave a day later?"). Questions are answered without searching again.
 5. Prices change. Once a report's prices are over a day old, **Refresh prices** asks the coach and train operators
    again, before you book. Flight prices are not asked again: check them on the airline's site.
@@ -367,8 +367,8 @@ discover/
 | `resources/airport_stops.json` | The stops travellers use at each airport, filled as trips are planned |
 | `resources/operators/` | What the coach and train operators' booking systems need and do not give with each answer, one file per operator (see the README there) |
 | `resources/timezones.json` | Cache of time zones, filled as trips are planned |
-| `reports/` | The Markdown report of each of the last 5 runs: result, sources, reasoning and timings. Older ones are deleted. Next to each, its log (`.log`) and the vehicles and prices of its options for `--verify` and `--prices` (`.json`) |
-| `reports/saved/` | The reports you chose to keep, with **Keep this report** in the window. Never deleted |
+| `reports/` | One folder for each of the last 5 trips, older ones deleted. In it the Markdown report (result, sources, reasoning and timings), its log (`.log`) and the vehicles and prices of its options for `--verify` and `--prices` (`.json`). A round trip is one folder with both ways. Not in the repository |
+| `reports/saved/` | The trips you chose to keep, with **Keep this report** in the window, a folder each as above. Never deleted |
 
 ## Tests
 

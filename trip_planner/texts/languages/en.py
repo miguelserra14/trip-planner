@@ -531,7 +531,6 @@ TEXTS = {
     "discover_win_look_up": "Look the cheapest destinations up in the real timetables (a few minutes, at most {cities} cities)",
     "discover_win_shared": "It asks Kiwi, Gemini and the timetables the planner uses too: better not while the planner is searching.",
     "discover_win_open": "Open the map",
-    "discover_win_again": "Show the map again",
     "discover_win_bad_day": "'{day}' is not a day written dd/mm/yyyy, such as 12/11/2026",
     "discover_win_no_day": "choose at least one day to leave on",
     "discover_win_past_day": "the first day to leave on is already past",
@@ -545,6 +544,7 @@ TEXTS = {
     "discover_win_updating": "The trains and buses are being priced: the map updates itself. Keep this window open while you use it.",
     "discover_win_done": "Done. The map, and the ones made before it, stay served while this window is open. It is also saved as a file: {file}",
     "discover_win_failed": "The map could not be made: {error}",
+    "discover_win_stopping": "The new map starts as soon as the one before stops updating. That one stays open, with what it found so far.",
     # ---- discover: what was searched, under the map (discover/breakdown.py). Headers are separated by |
     "discover_bd_requests": "Requests",
     "discover_bd_requests_header": "Source|From|Requests|No answer|Full answers|Flights|Destinations|Kept from earlier maps",

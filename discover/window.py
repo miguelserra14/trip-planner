@@ -88,6 +88,7 @@ class DiscoverWindow:
         self.session: Session | None = None   # the last map
         self.sessions: list[Session] = []    # every map made, each still served
         self.working = False
+        self.waiting: tuple | None = None    # the map asked for while the last one was still at work: (session, look up)
         try:   # the planner's look, when its window's code can be read; the plain one otherwise
             from trip_planner.gui import style
             style(self.root)
@@ -130,12 +131,7 @@ class DiscoverWindow:
                         variable=self.look_up).grid(row=5, column=0, columnspan=4, sticky="w", pady=4)
         ttk.Label(form, text=tr("discover_win_shared"),
                   wraplength=560, style="Muted.TLabel").grid(row=6, column=0, columnspan=4, sticky="w", pady=(2, 10))
-        buttons = ttk.Frame(form)
-        buttons.grid(row=7, column=0, columnspan=4, sticky="we")
-        self.open_button = ttk.Button(buttons, text=tr("discover_win_open"), command=self.open_map, style="Accent.TButton")
-        self.open_button.pack(side="left")
-        self.again_button = ttk.Button(buttons, text=tr("discover_win_again"), command=self.show_again, state="disabled")
-        self.again_button.pack(side="left", padx=8)
+        ttk.Button(form, text=tr("discover_win_open"), command=self.open_map, style="Accent.TButton").grid(row=7, column=0, sticky="w")
         self.status = ttk.Label(form, text="", wraplength=560)
         self.status.grid(row=8, column=0, columnspan=4, sticky="w", pady=(10, 4))
         self.log = tk.Text(form, height=12, width=80, wrap="word", state="disabled", relief="flat", borderwidth=1)
@@ -173,8 +169,8 @@ class DiscoverWindow:
 
     # ---------------------------------------------------------------- the map
     def open_map(self) -> None:
-        if self.working:
-            return
+        """A new map from the form. When the last one is still at work it is asked to stop, and the new one starts
+        once it has (finish): two maps cannot look up at once."""
         try:
             days = read_days(self.out_days.get(), self.back_days.get() if self.round_trip.get() else "")
         except ValueError as error:
@@ -182,21 +178,31 @@ class DiscoverWindow:
         if not self.city.get().strip():
             return self.say(tr("discover_win_no_city"), error=True)
         source = self.sources.get()
-        self.session = Session(self.city.get().strip(), days, fast=source == "fast", light=source == "light", max_stops=finder.MAX_STOPS)
-        self.sessions.append(self.session)
+        session = Session(self.city.get().strip(), days, fast=source == "fast", light=source == "light", max_stops=finder.MAX_STOPS)
+        if self.working:
+            self.waiting = (session, self.look_up.get())   # a second click while waiting: the form as it is now
+            self.session.stopping.set()
+            return self.say(tr("discover_win_stopping"))
+        self.start(session, self.look_up.get())
+
+    def start(self, session: Session, look_up: bool) -> None:
+        self.session = session
+        self.sessions.append(session)
         self.working = True
-        self.open_button.configure(state="disabled")
-        self.again_button.configure(state="disabled")
         self.log.configure(state="normal")
         self.log.delete("1.0", "end")
         self.log.configure(state="disabled")
         self.say(tr("discover_win_finding"))
-        threading.Thread(target=self.make, args=(self.session, self.look_up.get()), daemon=True).start()
+        threading.Thread(target=self.make, args=(session, look_up), daemon=True).start()
 
     def make(self, session: Session, look_up: bool) -> None:
-        """In the background: the map, then its page served and opened, then the lookups."""
+        """In the background: the map, then its page served and opened, then the lookups. A map another one replaced
+        before it was served is not opened: only saved."""
         try:
             session.make()
+            if session.stopping.is_set():
+                self.lines.put(("stopped", ""))
+                return
             address = session.serve(looking_up=True)
             self.lines.put(("opened", address))
             # The trains and buses are priced whether or not the flights are looked up in the timetables
@@ -215,8 +221,9 @@ class DiscoverWindow:
                 if kind == "say":
                     self.add_line(text)
                 elif kind == "opened":
+                    if self.waiting:
+                        continue   # replaced already: the new map is opened instead
                     webbrowser.open(text)
-                    self.again_button.configure(state="normal")
                     why = self.session.found.kiwi_why if self.session and self.session.found else ""
                     self.say(tr("discover_win_opened", address=text) + (" " + tr("discover_win_only_ryanair", why=why) if why else "") + " "
                              + tr("discover_win_updating_lookups" if self.look_up.get() else "discover_win_updating"))
@@ -224,18 +231,19 @@ class DiscoverWindow:
                     self.finish(tr("discover_win_done", file=text))
                 elif kind == "failed":
                     self.finish(tr("discover_win_failed", error=text), error=True)
+                elif kind == "stopped":
+                    self.finish("")
         except queue.Empty:
             pass
         self.root.after(POLL_MS, self.poll)
 
     def finish(self, text: str, error: bool = False) -> None:
+        """The map at work is done, failed or stopped: the one asked for meanwhile starts now."""
         self.working = False
-        self.open_button.configure(state="normal")
         self.say(text, error)
-
-    def show_again(self) -> None:
-        if self.session and self.session.address:
-            webbrowser.open(self.session.address)
+        if self.waiting:
+            waiting, self.waiting = self.waiting, None
+            self.start(*waiting)
 
     def close(self) -> None:
         for session in self.sessions:

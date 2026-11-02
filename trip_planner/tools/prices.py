@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from trip_planner.report.formatting import table
-from trip_planner.report.full import REPORTS, SAVED_REPORTS
+from trip_planner.report.full import report_files
 from trip_planner.sources import fares
 from trip_planner.texts import tr
 from trip_planner.trip.places import Place
@@ -42,7 +42,7 @@ def stale_reports(now: datetime | None = None) -> list[Path]:
     that has not passed."""
     now = now or datetime.now()
     found = []
-    for path in sorted(REPORTS.glob("trip_*.json")) + sorted(SAVED_REPORTS.glob("trip_*.json")):
+    for path in report_files("trip_*.json"):
         try:
             kept = json.loads(path.read_text(encoding="utf-8"))
             if now - read_on(path, kept) > timedelta(hours=PRICE_VALID_HOURS) and ahead(kept):

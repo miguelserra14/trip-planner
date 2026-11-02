@@ -139,7 +139,7 @@ class TripSettings:
     ambiguous_importance: float = 0.2     # places of the same name whose importance (0 to 1, from OpenStreetMap) differs by less
                                           # than this could each be the one meant: the traveller chooses ("Nazare": Bahia or Leiria)
     # Reports (report/full.py)
-    recent_reports: int = 5               # reports kept in reports/. Older ones are deleted, except those kept in reports/saved/
+    recent_reports: int = 5               # trips kept in reports/, a folder each. Older ones are deleted, except those kept in reports/saved/
 
     # Speed
     use_flight_agent: bool = False        # True adds a model that also searches flights. Slower, and the code searches every route anyway

@@ -2,6 +2,7 @@
 where it came from, what was discarded and why, how long each step took, and the final result."""
 import json
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -147,43 +148,48 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     ]
     return "\n".join(lines)
 
-REPORTS = ROOT / "reports"           # every run saves its report here, and only the newest recent_reports (a setting) stay
-SAVED_REPORTS = REPORTS / "saved"    # the reports the traveller chose to keep. Nothing here is ever deleted
+REPORTS = ROOT / "reports"           # every trip saves its reports here, and only the newest recent_reports (a setting) stay
+SAVED_REPORTS = REPORTS / "saved"    # the trips the traveller chose to keep. Nothing here is ever deleted
+# Each trip is a folder of its own in one of the two above, named after its first report: the report (.md), the log
+# of the run (.log) and the vehicles of its options (.json). A round trip is one trip: both ways are in one folder.
+
+def trip_folders(where: Path) -> list[Path]:
+    return [folder for folder in where.glob("trip_*") if folder.is_dir()]
+
+def report_files(pattern: str) -> list[Path]:
+    """The files of every trip, recent ones first, then the kept ones, that match a pattern ("trip_*.json")."""
+    return [path for where in (REPORTS, SAVED_REPORTS) for folder in sorted(trip_folders(where)) for path in sorted(folder.glob(pattern))]
 
 def save_report(response: dict[str, Any], recommendation: str, beside: Path | None = None) -> Path:
-    """Save the full reasoning and the final result, one file per run, and make room: the oldest reports go.
+    """Save the full reasoning and the final result in a new folder for the trip, and make room: the oldest trips go.
     The log of the run is saved next to it, and the next run starts a new one. beside is a report that goes with
-    this one (the way there of a round trip): it is not made room with."""
+    this one (the way there of a round trip): this one is saved in its folder, which is not made room with."""
     slug = lambda text: re.sub(r"[^a-z0-9]+", "-", plain(text)).strip("-")
-    path = REPORTS / f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}.md"
-    path.parent.mkdir(exist_ok=True)
+    name = f"trip_{slug(current.SETTINGS.origin)}_{slug(current.SETTINGS.destination)}_{datetime.now():%Y-%m-%d_%H%M}"
+    path = (beside.parent if beside else REPORTS / name) / f"{name}.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_full_report(response, recommendation), encoding="utf-8")
     log_of(path).write_text(render_log(), encoding="utf-8")
     if response.get("verify"):
         vehicles_of(path).write_text(json.dumps(response["verify"], ensure_ascii=False, indent=1), encoding="utf-8")
     REQUESTS.clear()
-    remove_old_reports(keep={report for report in (path, beside) if report})
+    remove_old_reports(keep={path.parent})
     return path
 
 def remove_old_reports(keep: set = frozenset()) -> None:
-    """Delete the reports beyond the newest recent_reports of the settings, with their logs. The ones in saved/ are not counted
-    and not touched, and neither are those in keep."""
-    reports = sorted(REPORTS.glob("trip_*.md"), key=lambda report: report.stat().st_mtime)
-    for old in reports[:-current.SETTINGS.recent_reports]:
-        if old.resolve() in {report.resolve() for report in keep}:
-            continue
-        old.unlink(missing_ok=True)
-        log_of(old).unlink(missing_ok=True)
-        vehicles_of(old).unlink(missing_ok=True)
+    """Delete the trips beyond the newest recent_reports of the settings, every file of each. The ones in saved/ are
+    not counted and not touched, and neither are the folders in keep."""
+    folders = sorted(trip_folders(REPORTS), key=lambda folder: folder.stat().st_mtime)
+    for old in folders[:-current.SETTINGS.recent_reports]:
+        if old.resolve() not in {folder.resolve() for folder in keep}:
+            shutil.rmtree(old, ignore_errors=True)
 
 def keep_report(path: Path, keep: bool) -> Path:
-    """Move a report to saved/ to keep it, or back among the recent ones, with its log. Returns where the report
-    is now."""
-    target = (SAVED_REPORTS if keep else REPORTS) / path.name
-    if target != path and path.exists():
+    """Move the folder of a report to saved/ to keep it, or back among the recent ones, with every file of the trip.
+    Returns where the report is now. Asked for the other report of a round trip, whose folder has moved already, it
+    only says where it is."""
+    target = (SAVED_REPORTS if keep else REPORTS) / path.parent.name
+    if target != path.parent and path.parent.exists():
         target.parent.mkdir(parents=True, exist_ok=True)
-        path.replace(target)
-        for other in (log_of, vehicles_of):
-            if other(path).exists():
-                other(path).replace(other(target))
-    return target
+        path.parent.replace(target)
+    return target / path.name

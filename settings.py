@@ -47,7 +47,7 @@ SETTINGS = TripSettings(
     ambiguous_importance=0.2,   # when places of the same name differ in importance (0 to 1, from OpenStreetMap) by less
                                 # than this, you are asked which one you mean ("Nazaré": Bahia or Leiria)
     # Reports (trip_planner/report/full.py)
-    recent_reports=5,           # reports kept in reports/. Older ones are deleted, except those you keep in reports/saved/
+    recent_reports=5,           # trips kept in reports/, a folder each. Older ones are deleted, except those you keep in reports/saved/
 )
 
 # More trips to plan in the same run, each with its own settings. Leave the list empty to plan only the trip above.

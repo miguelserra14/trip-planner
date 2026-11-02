@@ -6,6 +6,7 @@
     session.look_up()     the cheapest destinations in the real timetables, then the trains and buses priced
                           (ground_fares.py), the page redrawing itself (blocks)
     session.stop()        the server stopped
+    session.stopping.set()   look_up ends at the next city or phase, keeping what it found (another map is wanted)
 
 Each step blocks, and runs in this process: the planner's own code reads the trip of the moment from globals
 (current.SETTINGS, current.TRIP) that the lookups change, so a map is never made inside the planner's window."""
@@ -35,6 +36,9 @@ def snapshot(state: dict[str, Any]) -> dict[str, Any]:
     the lookups go on changing the destinations."""
     return json.loads(json.dumps(state, ensure_ascii=False))
 
+class Stopped(Exception):
+    """Raised by look_up's own callbacks when the session is asked to stop, to leave the lookups between two cities."""
+
 def times() -> dict[str, int]:
     """The planner's times at the airports (settings.py), for the time in the city of each trip (page.stay)."""
     return {"airport_minutes": SETTINGS.min_airport_minutes, "landing_minutes": SETTINGS.min_landing_minutes}
@@ -52,6 +56,8 @@ class Session:
         self.planner: Planner | None = None
         self.live = {"state": {}}
         self.lock = threading.Lock()
+        # Set when another map is wanted: two maps cannot look up at once, they change the same globals (current.TRIP)
+        self.stopping = threading.Event()
 
     def make(self) -> Path:
         """Find the flights and the ways to and from the airports, and save the map. Returns its file."""
@@ -106,10 +112,13 @@ class Session:
         at the end: the trains and buses priced, in seconds when they are FlixBus's, against the flights' totals as
         estimated; with timetables, the cheapest destinations in the real timetables, a city at a time, and the trains
         and buses priced again for the cities that can now be among the cheapest; then the way back in the
-        timetables of the trains and buses with no price for it."""
+        timetables of the trains and buses with no price for it. When stopping is set it ends at the next city or
+        phase, the page and the file keeping what was found up to then."""
         airports = load_airports()
 
         def changed(found: Found) -> None:
+            if self.stopping.is_set():
+                raise Stopped
             with self.lock:
                 if self.planner:
                     self.planner.trips = trips(found, airports)
@@ -140,6 +149,8 @@ class Session:
                 ground_fares.price(self.found, changed)
             phase("ways back")
             ground.ways_back([options for _, options, _, _ in ground_fares.cities_of(self.found)], self.days)
+        except Stopped:
+            pass
         finally:
             self.found.phase = ""
             self.save()

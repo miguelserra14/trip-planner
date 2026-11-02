@@ -20,7 +20,7 @@ from typing import Any
 
 from trip_planner import current
 from trip_planner.trip.trip_settings import LIGHTS
-from trip_planner.report.full import REPORTS, SAVED_REPORTS
+from trip_planner.report.full import report_files
 from trip_planner.sources import fares, timetables
 from trip_planner.sources.timetables import landing_day, local_to_utc, utc_to_local
 from trip_planner.utils import to_minutes
@@ -182,7 +182,7 @@ def summary(reports: dict[Path, dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 async def verify_reports() -> int:
-    files = sorted(REPORTS.glob("trip_*.json")) + sorted(SAVED_REPORTS.glob("trip_*.json"))
+    files = report_files("trip_*.json")
     if not files:
         print("No report keeps its connections yet: only the reports made from now on can be verified.")
         return 0

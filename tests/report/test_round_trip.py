@@ -2,6 +2,7 @@
 in a summary. Made-up settings and options, no network."""
 import asyncio
 import dataclasses
+import os
 from datetime import date, timedelta
 
 import pytest
@@ -199,10 +200,57 @@ def test_keeping_a_round_trip_keeps_both_reports(tmp_path, monkeypatch, settings
     monkeypatch.setattr(full, "SAVED_REPORTS", tmp_path / "saved")
     monkeypatch.setattr(full, "render_full_report", lambda response, recommendation: "the report")
     settings.recent_reports = 1
+    destination, settings.destination = settings.destination, "Paris"
+    older = full.save_report({}, "")   # a trip of before, which the round trip makes room for
+    os.utime(older.parent, (1, 1))
+    settings.destination = destination
     there = full.save_report({}, "")
     settings.origin, settings.destination = settings.destination, settings.origin
     back = full.save_report({}, "", beside=there)
-    assert there.exists() and back.exists()   # one report is kept, but the way there goes with the way back
+    assert there.exists() and back.exists()   # one trip is kept, and both ways are that trip
+    assert not older.parent.exists() and full.trip_folders(tmp_path) == [there.parent] == [back.parent]
+    assert sorted(path.name for path in there.parent.iterdir()) == sorted([there.name, full.log_of(there).name, back.name, full.log_of(back).name])
     trip = {"report": back, "there": {"report": there}}
     planner.keep_trip(trip, True)
-    assert trip["report"].parent.name == "saved" and trip["there"]["report"].parent.name == "saved" and trip["there"]["report"].exists()
+    for report in (trip["report"], trip["there"]["report"]):
+        assert report.parent.parent.name == "saved" and report.exists() and full.log_of(report).exists()
+    assert full.trip_folders(tmp_path) == []
+    planner.keep_trip(trip, False)   # unticked: back among the recent ones, both ways together
+    assert trip["report"].parent == trip["there"]["report"].parent == tmp_path / there.parent.name and trip["report"].exists()
+
+def test_a_round_trip_planned_saves_both_ways_in_one_folder(tmp_path, monkeypatch):
+    monkeypatch.setattr(full, "REPORTS", tmp_path)
+    monkeypatch.setattr(full, "SAVED_REPORTS", tmp_path / "saved")
+    monkeypatch.setattr(full, "render_full_report", lambda response, recommendation: f"{full.current.SETTINGS.origin} -> {full.current.SETTINGS.destination}")
+    monkeypatch.setattr(planner, "PLANNED", [])
+    monkeypatch.setattr(planner, "say", lambda text: None)
+    monkeypatch.setattr(planner, "show", lambda markdown: None)
+
+    async def run_search(state):
+        return {**state, "report": "", "shown": [], "recommended": 0, "verify": {"options": []}}
+
+    async def no_model(messages):
+        raise RuntimeError("no model in tests")
+    monkeypatch.setattr(planner, "run_search", run_search)
+    monkeypatch.setattr(planner, "build_request", lambda settings, places: "")
+    monkeypatch.setattr(planner.coordinator, "write", no_model)
+    asyncio.run(planner.plan_trip(round_trip(), places()))
+    there, back = (trip["report"] for trip in planner.PLANNED)
+    assert there.parent == back.parent and full.trip_folders(tmp_path) == [there.parent]
+    assert there.read_text(encoding="utf-8") == "Coimbra -> Antwerp" and back.read_text(encoding="utf-8") == "Antwerp -> Coimbra"
+    assert len(full.report_files("trip_*.json")) == 2 and len(full.report_files("trip_*.log")) == 2
+
+def test_each_trip_is_a_folder_of_its_own_and_only_the_newest_stay(tmp_path, monkeypatch, settings):
+    monkeypatch.setattr(full, "REPORTS", tmp_path)
+    monkeypatch.setattr(full, "SAVED_REPORTS", tmp_path / "saved")
+    monkeypatch.setattr(full, "render_full_report", lambda response, recommendation: "the report")
+    settings.recent_reports = 2
+    reports = []
+    for age, destination in enumerate(("Paris", "Madrid", "Rome")):
+        settings.destination = destination
+        reports.append(full.save_report({"verify": {"options": []}}, ""))
+        os.utime(reports[-1].parent, (age, age))
+    assert sorted(full.trip_folders(tmp_path)) == sorted(report.parent for report in reports[1:])
+    assert not reports[0].parent.exists() and all(report.exists() and full.vehicles_of(report).exists() for report in reports[1:])
+    kept = full.keep_report(reports[1], True)
+    assert [path.name for path in full.report_files("trip_*.json")] == [full.vehicles_of(reports[2]).name, full.vehicles_of(kept).name]

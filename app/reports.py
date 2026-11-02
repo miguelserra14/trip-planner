@@ -28,13 +28,27 @@ def title_of(path: Path) -> str:
     when = re.search(r"(\d{4}-\d{2}-\d{2}_\d{4})$", path.stem)
     return f"{heading} ({datetime.strptime(when[1], '%Y-%m-%d_%H%M'):%d/%m/%Y %H:%M})" if when else heading
 
-def list_page(found: dict[str, dict[str, Path]]) -> str:
+
+def link(key: str, path: Path) -> str:
+    return f'<a href="{REPORT_PATH}{quote(key)}">{html.escape(title_of(path))}</a>'
+
+def link_to(path: Path) -> str:
+    """The link to a report from its file, or its name if it is not among the reports (already deleted)."""
+    for group in reports().values():
+        for key, found in group.items():
+            if found.resolve() == path.resolve():
+                return link(key, found)
+    return html.escape(path.name)
+
+def list_section() -> str:
+    """The reports, the recent ones and the kept ones, newest first."""
+    found = reports()
     body = [f"<h1>{html.escape(tr('app_reports'))}</h1>"]
     for group in ("recent", "saved"):
         body.append(f"<h2>{html.escape(tr('app_' + group))}</h2>")
-        items = [f'<li><a href="{REPORT_PATH}{quote(key)}">{html.escape(title_of(path))}</a></li>' for key, path in found[group].items()]
+        items = [f"<li>{link(key, path)}</li>" for key, path in found[group].items()]
         body.append(f"<ul>{''.join(items)}</ul>" if items else f'<p class="muted">{html.escape(tr("app_no_reports"))}</p>')
-    return page(tr("app_reports"), "\n".join(body), current.SETTINGS.language)
+    return "\n".join(body)
 
 def report_page(path: Path) -> str:
     content, sections = to_html(path.read_text(encoding="utf-8"))
@@ -43,15 +57,9 @@ def report_page(path: Path) -> str:
             f'<nav aria-label="{html.escape(tr("app_contents"))}"><ul>{contents}</ul></nav><article>{content}</article>')
     return page(title_of(path), body, current.SETTINGS.language)
 
-def answer(path: str) -> tuple[int, str]:
-    """The page at a path: the list at /, a report at /report/<key>, nothing else."""
-    found = reports()
-    if path in ("/", "/index.html"):
-        return 200, list_page(found)
-    if path.startswith(REPORT_PATH):
-        key = unquote(path[len(REPORT_PATH):])
-        report = next((group[key] for group in found.values() if key in group), None)
-        if report:
-            return 200, report_page(report)
-    return 404, page(tr("app_not_found"), f'<p>{html.escape(tr("app_not_found"))}</p><p><a href="/">{html.escape(tr("app_all_reports"))}</a></p>',
-                     current.SETTINGS.language)
+def find(path: str) -> Path | None:
+    """The report a path of the app asks for, /report/<key>, if there is one by that key."""
+    if not path.startswith(REPORT_PATH):
+        return None
+    key = unquote(path[len(REPORT_PATH):])
+    return next((group[key] for group in reports().values() if key in group), None)

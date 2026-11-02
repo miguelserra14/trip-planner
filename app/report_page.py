@@ -42,6 +42,17 @@ nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 
                      border-radius: 50%%; background: var(--surface); }
 .timeline .first i { margin-left: -6px; } .timeline .last i { margin-right: -6px; }
 .timeline .point span { color: var(--muted); }
+form.search { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px 24px 20px;
+              margin-bottom: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 16px; }
+form.search h1, form.search p, form.search .refusal { grid-column: 1 / -1; margin-bottom: 0; }
+label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+label small { font-weight: normal; color: var(--muted); }
+input { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+button { font: inherit; padding: 8px 20px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer;
+         justify-self: start; }
+.refusal { color: %(error)s; font-weight: 600; }
+pre.log { white-space: pre-wrap; font: .85em/1.4 Consolas, monospace; color: var(--muted); }
+details { margin: 12px 0; }
 """ % {**THEME, "lights": " ".join(f"--light-{grade}: {colour};" for grade, colour in LIGHT_COLOURS.items())}
 
 def inline(text: str) -> str:
@@ -130,8 +141,10 @@ def to_html(markdown: str) -> tuple[str, list[tuple[str, str]]]:
     flush()
     return "\n".join(out), sections
 
-def page(title: str, body: str, language: str) -> str:
-    """A whole page of the app, with nothing loaded from elsewhere."""
-    return (f'<!doctype html><html lang="{html.escape(language)}"><head><meta charset="utf-8">'
+def page(title: str, body: str, language: str, refresh: int = 0) -> str:
+    """A whole page of the app, with nothing loaded from elsewhere. refresh, in seconds, makes the browser ask for
+    it again: how a running search shows its progress without a script."""
+    again = f'<meta http-equiv="refresh" content="{int(refresh)}">' if refresh else ""
+    return (f'<!doctype html><html lang="{html.escape(language)}"><head><meta charset="utf-8">{again}'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{html.escape(title)}</title>'
             f"<style>{STYLE}</style></head><body><main>{body}</main></body></html>")

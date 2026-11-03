@@ -5,17 +5,20 @@
 - The breakdown counts every request, says which answers were full, and explains the known routes not found.
 - The map page cannot be broken by a name, and the arguments are checked.
 - Kiwi is asked politely: never again after a refusal, within a daily limit, without Ryanair only where Ryanair answered.
-- A city is one dot, and a trip of the map opens the planner only when its own page asks.
+- A city is one dot, and a page opened as a file has no planner to open (the app's is tested in app/tests).
 - The planner does not depend on this folder."""
 import asyncio
 import json
 import re
+import threading
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from discover import __main__ as command, breakdown, finder, page, plan, serve, sources
+from discover import __main__ as command, breakdown, confirm, finder, ground, ground_fares, page, sources
+from discover import session as session_module
 from discover import routes as routes_module
 from discover.sources import Days
 from trip_planner.trip.places import Place
@@ -23,6 +26,7 @@ from trip_planner.trip.places import Place
 ROOT = Path(__file__).parents[2]
 ONE_WAY = Days("2026-11-12", "2026-11-19")
 RETURN = Days("2026-11-12", "2026-11-14", "2026-11-15", "2026-11-17")
+TODAY = date(2026, 10, 22)
 PLACE = Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43)
 
 def flight(start: str, end: str, price: float, airline: str = "Ryanair", back: dict | None = None, carrier: str = "FR") -> dict:
@@ -142,8 +146,8 @@ def test_a_name_cannot_break_the_page(monkeypatch):
     monkeypatch.setattr(page, "load_airports", lambda: {"XXX": {"city": "</script><b>x", "name": "", "country": "PT", "latitude": 1.0, "longitude": 2.0}})
     found = finder.Found(PLACE, RETURN, [], [{**flight("OPO", "XXX", 10), "ground_eur": 5.0, "total_eur": 15.0}], [], [])
     html = page.map_page(found, "Ryanair", [breakdown.section("</script>", ["a"], [["</script>"]])])
-    script = html[html.index("const data"):]
-    assert "</script>" not in script[:script.index("\n")]   # the data cannot end the script it is in
+    script = html[html.index('id="data">'):]
+    assert "</script>" not in script[:script.index("</script>\n<script>")] and "<b>" not in script   # the data cannot end its block
 
 def test_the_days_are_checked():
     asked = command.read_arguments(["Coimbra", "14/11/2026", "12/11/2026", "--back", "17/11/2026"])
@@ -151,6 +155,29 @@ def test_the_days_are_checked():
     for wrong in (["Coimbra", "2026-11-12"], ["Coimbra", "12/11/2026", "--back", "01/11/2026"], ["Coimbra", "1/11/2026", "2/11/2026", "3/11/2026"]):
         with pytest.raises(SystemExit):
             command.read_arguments(wrong)
+
+def test_the_days_of_the_form_are_read_and_put_in_order():
+    assert sources.read_days("14/11/2026, 12/11/2026, 13/11/2026", today=TODAY) == Days("2026-11-12", "2026-11-14")   # all in a row
+    assert sources.read_days("12/11/2026", today=TODAY) == Days("2026-11-12", "2026-11-12")
+    assert sources.read_days("12/11/2026, 14/11/2026", "17/11/2026, 15/11/2026, 16/11/2026", today=TODAY) == \
+        Days("2026-11-12", "2026-11-14", "2026-11-15", "2026-11-17", out_days=("2026-11-12", "2026-11-14"))
+
+def test_a_day_that_is_wrong_says_what_is_wrong():
+    for wrong, why in ((("2026-11-12",), "dd/mm/yyyy"), (("01/10/2026",), "already past"), (("",), "at least one day"),
+                       (("12/11/2026, 14/11/2026", "01/11/2026"), "before the days to leave on")):
+        with pytest.raises(ValueError, match=why):
+            sources.read_days(*wrong, today=TODAY)
+
+def test_days_not_in_a_row_are_asked_a_run_at_a_time_and_the_others_left_out():
+    days = Days.clicked(["2026-11-12", "2026-11-13", "2026-11-20"], ["2026-11-16", "2026-11-24"])
+    assert days.runs() == [Days("2026-11-12", "2026-11-13", "2026-11-16", "2026-11-16"), Days("2026-11-12", "2026-11-13", "2026-11-24", "2026-11-24"),
+                           Days("2026-11-20", "2026-11-20", "2026-11-24", "2026-11-24")]   # not back on the 16th from the 20th
+    assert days.allows({"date": "2026-11-13", "back": {"date": "2026-11-24"}})
+    assert not days.allows({"date": "2026-11-15", "back": {"date": "2026-11-24"}})   # a day between the ones clicked
+    assert not days.allows({"date": "2026-11-13", "back": {"date": "2026-11-20"}})
+
+def test_beyond_two_runs_the_closest_are_joined():
+    assert sources.runs_of(["2026-11-01", "2026-11-03", "2026-11-04", "2026-11-10"]) == [("2026-11-01", "2026-11-04"), ("2026-11-10", "2026-11-10")]
 
 def test_the_planner_does_not_depend_on_this_folder():
     code = [path for path in (ROOT / "trip_planner").rglob("*.py")] + [ROOT / "main.py"]
@@ -257,39 +284,47 @@ def test_each_trip_of_the_map_opens_the_planner_on_its_own_cities_and_day():
     out = {**flight("OPO", "BHX", 45, back=back_to("MAN", "LIS"))}
     found = finder.Found(PLACE, RETURN, [], [out], [], [])
     airports = {"BHX": {"city": "Birmingham"}, "MAN": {"city": "Manchester"}}
-    assert plan.trips(found, airports) == {"BHX-out": ["Coimbra", "Birmingham", "12/11/2026"],
+    assert page.trips(found, airports) == {"BHX-out": ["Coimbra", "Birmingham", "12/11/2026"],
                                            "BHX-back": ["Manchester", "Coimbra", "16/11/2026"]}
 
-def test_the_server_opens_only_a_trip_of_its_map_asked_by_its_page():
-    opened = []
-    planner = serve.Planner({"BHX-out": ["Coimbra", "Birmingham", "12/11/2026"]}, "secret", opened.append)
-    ask = lambda body, now=0.0: planner.ask(json.dumps(body).encode(), now)
-    assert ask({"token": "guess", "trip": "BHX-out"})[0] == 403
-    assert ask({"token": "secret", "trip": "Coimbra & del C:"})[0] == 404
-    assert planner.ask(b"<html>", 0.0)[0] == 400
-    assert ask({"token": "secret", "trip": "BHX-out"}) == (200, "opening")
-    assert ask({"token": "secret", "trip": "BHX-out"}, 1.0) == (200, "already opening")   # a double click is one window
-    assert len(opened) == 1 and opened[0][-4:] == ["discover.plan", "Coimbra", "Birmingham", "12/11/2026"]
-
-def test_a_page_opened_as_a_file_shows_the_command_and_has_no_token(monkeypatch):
+def test_a_page_opened_as_a_file_has_no_planner_to_open(monkeypatch):
     monkeypatch.setattr(page, "load_airports", lambda: {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB",
                                                                 "latitude": 52.4, "longitude": -1.7}})
     found = finder.Found(PLACE, ONE_WAY, [], [{**flight("OPO", "BHX", 10), "ground_eur": 5.0, "total_eur": 15.0}], [], [])
-    data = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [])).group(1))
-    assert data["token"] == "" and "discover.plan Coimbra Birmingham 12/11/2026" in data["state"]["points"][0]["plan"]["out"]["command"]
-    served = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [], token="abc")).group(1))
-    assert served["token"] == "abc"
+    data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', page.map_page(found, "Ryanair", [])).group(1))
+    assert data["planner_link"] == "" and data["state"]["points"][0]["plan"]["out"] == {"key": "BHX-out"}
+    assert "token" not in data
 
 def test_the_page_draws_the_lines_in_the_planners_colours_and_has_the_cities_with_no_flight(monkeypatch):
-    from trip_planner.gui.style import LIGHT_COLOURS
+    from trip_planner.trip.trip_settings import LIGHT_COLOURS
     monkeypatch.setattr(page, "load_airports", lambda: {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB",
                                                                 "latitude": 52.4, "longitude": -1.7}})
     salamanca = {"key": "ES|Salamanca|40.96", "name": "Salamanca", "country": "ES", "lat": 40.96, "lon": -5.66, "minutes": 269,
                  "modes": ["bus"], "ground": []}
     found = finder.Found(PLACE, ONE_WAY, [], [{**flight("OPO", "BHX", 10), "ground_eur": 5.0, "total_eur": 15.0}], [], [], by_ground=[salamanca])
-    data = json.loads(re.search(r"const data = (.*);\n", page.map_page(found, "Ryanair", [], landing_minutes=45)).group(1))
+    data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', page.map_page(found, "Ryanair", [], landing_minutes=45)).group(1))
     assert data["grade_colours"] == LIGHT_COLOURS and data["landing_minutes"] == 45 and data["origin"]["short"] == "Coimbra"
     assert data["state"]["by_ground"] == [salamanca]
+
+def test_a_map_asked_to_stop_ends_its_lookups_at_the_next_city_and_keeps_what_it_found(monkeypatch):
+    made = object.__new__(session_module.Session)
+    made.found, made.days, made.sections = SimpleNamespace(phase=""), None, []
+    made.live, made.lock, made.stopping = {"state": {}}, threading.Lock(), threading.Event()
+    saved, cities = [], []
+    made.save = lambda: saved.append(made.found.phase)
+
+    def price(found, on_change):
+        for city in ("Madrid", "Paris"):
+            cities.append(city)
+            made.stopping.set()   # another map is asked for while the first city is priced
+            on_change(found)
+    monkeypatch.setattr(ground_fares, "price", price)
+    monkeypatch.setattr(confirm, "confirm", lambda *args: pytest.fail("the timetables were looked up after the map was asked to stop"))
+    monkeypatch.setattr(ground, "ways_back", lambda *args: pytest.fail("the ways back were looked up after the map was asked to stop"))
+    monkeypatch.setattr(session_module, "map_state", lambda *args, **kwargs: {"running": kwargs["running"]})
+    monkeypatch.setattr(session_module, "breakdown", lambda found: [])
+    made.look_up()
+    assert cities == ["Madrid"] and saved == [""] and made.live["state"] == {"running": False}
 
 # ---------------------------------------------------------------- OpenFlights
 def test_an_error_page_is_not_kept_as_openflights():

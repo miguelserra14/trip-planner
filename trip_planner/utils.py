@@ -1,8 +1,12 @@
-"""Small helpers used everywhere: times, text, progress lines and timings."""
+"""Small helpers used everywhere: times, text, progress lines, timings, and files written whole."""
+import os
 import re
 import time
 import unicodedata
 from contextlib import contextmanager
+from pathlib import Path
+
+REPLACE_TRIES = 5   # Windows (and OneDrive) may hold a file a moment while it is read: putting the new one in place is tried again
 
 def to_minutes(hhmm: str) -> int:
     """'HH:MM' -> minutes since midnight. Raises ValueError if the text is not a time."""
@@ -22,7 +26,23 @@ def plain(text: str) -> str:
     """Lowercase text without accents, to compare names written in different ways."""
     return unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode().lower().strip()
 
-# Progress lines and results are printed in the terminal, unless something else asked for them: the window (gui/window.py)
+def write_whole(path: Path, text: str, newline: str | None = None) -> None:
+    """Write a file of the caches whole: to a file beside it, then put in its place. A process stopped halfway (the
+    app's window closed, a map killed after its time) leaves the old file as it was, never one cut short, which its
+    reader would take for empty. If the file cannot be put in place, it is written as before, not lost."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    beside = path.with_name(f"{path.name}.{os.getpid()}.writing")   # one per process: two may write the same cache
+    beside.write_text(text, encoding="utf-8", newline=newline)
+    for attempt in range(REPLACE_TRIES):
+        try:
+            os.replace(beside, path)
+            return
+        except PermissionError:
+            time.sleep(0.1 * (attempt + 1))
+    path.write_text(text, encoding="utf-8", newline=newline)
+    beside.unlink(missing_ok=True)
+
+# Progress lines and results are printed in the terminal, unless something else asked for them: a search of the app (app/job.py)
 # puts its own functions here, under "say" and "show".
 LISTENERS: dict = {}
 

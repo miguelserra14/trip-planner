@@ -24,7 +24,7 @@ from trip_planner.sources.timetables.days import (day_bounds, landing_day, local
                                                 zone_of_country)
 from trip_planner.sources.timetables.modes import GROUND_MODES, NO_COACH_MODES, ROAD_MODES
 from trip_planner.texts import tr
-from trip_planner.utils import logged, to_minutes, to_time
+from trip_planner.utils import logged, to_minutes, to_time, write_whole
 
 TRANSITOUS_API = "https://api.transitous.org/api/v1"
 # Transitous is a free community service. It answers about one request every 1.4 seconds per user, however fast
@@ -226,8 +226,7 @@ class Timetables:
             if not zone:
                 return ""
             TIMEZONES[key] = zone
-            TIMEZONES_FILE.parent.mkdir(exist_ok=True)
-            TIMEZONES_FILE.write_text(json.dumps(TIMEZONES), encoding="utf-8")
+            write_whole(TIMEZONES_FILE, json.dumps(TIMEZONES))
         return TIMEZONES[key]
 
     async def stops_around(self, airport: dict[str, Any], terminal: list[float] | None) -> list[dict[str, Any]]:

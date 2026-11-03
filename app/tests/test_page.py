@@ -1,6 +1,7 @@
 """The page in a real browser (page.js, and the pages without it), run with `pytest --browser`: the calendar, the
 part of a running search put in place without a reload, the language, a browser without scripts, two tabs and the
-back button. The searches are stood in for (test_search.StandIn): no network but this computer's own address."""
+back button, and a Discover map in the app. The searches are stood in for (test_search.StandIn): no network but
+this computer's own address, and unpkg for the map's Leaflet."""
 import time
 from datetime import date, timedelta
 
@@ -126,6 +127,15 @@ def start_search(tab, app) -> StandIn:
     assert tab.js("location.pathname") == "/search"
     return app.started[-1]
 
+def test_enter_in_a_field_searches_and_never_restores_the_settings(tab, app):
+    tab.js(f"document.querySelector('input[name=dates]').value = '{written(date.today() + timedelta(days=30))}'")
+    tab.js("document.querySelector('input[name=origin]').focus()")
+    for kind in ("keyDown", "keyUp"):
+        tab.call("Input.dispatchKeyEvent", type=kind, key="Enter", code="Enter", windowsVirtualKeyCode=13,
+                 **({"text": "\r"} if kind == "keyDown" else {}))
+    tab.wait("location.pathname === '/search'")
+    assert len(app.started) == 1
+
 def test_a_running_search_is_put_in_place_without_a_reload_and_then_left_alone(tab, app):
     search = start_search(tab, app)
     search.lines.append("Flights: 26 found")
@@ -180,7 +190,7 @@ def test_a_second_tab_sees_the_search_running_and_can_stop_it(tab, app, browser)
     other = browser.tab()
     try:
         other.open(app.address)
-        assert other.js("!document.querySelector('form.search button[type=submit]')")   # one search at a time
+        assert other.js("document.querySelector('form.search button[type=submit]').disabled")   # one search at a time
         other.open(app.address + "search")
         other.submit("form[action='/stop']")
         assert search.stopped
@@ -193,3 +203,70 @@ def test_back_from_a_running_search_shows_the_form_busy(tab, app):
     tab.loaded()
     assert tab.js("location.pathname") == "/"
     assert tab.js("!!document.querySelector('form.search a[href=\"/search\"]')")
+
+# ---------------------------------------------------------------- the form's extras
+
+def test_the_swap_button_swaps_where_from_and_where_to(tab):
+    tab.js("document.querySelector('input[name=origin]').value = 'Coimbra'; document.querySelector('input[name=destination]').value = 'Ghent'")
+    assert tab.js("!document.querySelector('button[data-swap]').hidden")
+    tab.js("document.querySelector('button[data-swap]').click()")
+    assert tab.js("[document.querySelector('input[name=origin]').value, document.querySelector('input[name=destination]').value]") == ["Ghent", "Coimbra"]
+
+def test_the_settings_changed_are_counted_as_they_are_changed(tab):
+    summary = "document.querySelector('details.advanced summary').textContent"
+    assert "(" not in tab.js(summary)
+    tab.js("{ const box = document.querySelector('input[name=options_shown]'); box.value = '9'; box.dispatchEvent(new Event('input', {bubbles: true})) }")
+    tab.js("{ const tick = document.querySelector('details.advanced input[type=checkbox]'); tick.click() }")
+    assert "2" in tab.js(summary)
+    tab.js("{ const box = document.querySelector('input[name=options_shown]'); box.value = box.dataset.default; box.dispatchEvent(new Event('input', {bubbles: true})) }")
+    assert "1" in tab.js(summary)
+
+def test_the_kind_of_trip_follows_the_days_to_come_back(tab):
+    kind = "document.querySelector('.trip-kind').textContent"
+    one_way = tab.js(kind)
+    calendar_of(tab, "return_dates")
+    turn(tab, 2)
+    click_day(tab, 5)
+    assert tab.js(kind) != one_way
+    tab.js("{ const back = document.querySelector('input[name=return_dates]'); back.value = ''; back.dispatchEvent(new Event('input', {bubbles: true})) }")
+    assert tab.js(kind) == one_way
+
+# ---------------------------------------------------------------- a Discover map in the app
+
+def test_a_map_in_the_app_runs_no_script_of_its_own_and_its_trip_opens_the_planners_form(tab, app, monkeypatch):
+    """The one test that needs more than this computer: Leaflet comes from unpkg. The map's tiles are not asked for."""
+    from discover import finder, page
+    from discover.sources import Days
+    from trip_planner.trip.places import Place
+    airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7}}
+    monkeypatch.setattr(page, "load_airports", lambda: airports)
+    leaving = date.today() + timedelta(days=30)
+    leg = {"from": "OPO", "to": "BHX", "date": leaving.isoformat(), "time": "07:00", "arrival_date": leaving.isoformat(),
+           "arrival_time": "09:45", "minutes": 165, "airline": "Ryanair", "stops": 0}
+    flight = {**leg, "segments": [dict(leg)], "price_eur": 10, "carrier": "FR", "source": "Ryanair", "back": None,
+              "ground_eur": 5.0, "total_eur": 15.0}
+    found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
+                         Days(leaving.isoformat(), leaving.isoformat()), [], [flight], [], [])
+    app.post("/discover", f"token={app.token}&city=Coimbra&dates={written(leaving)}&source=light".encode())
+    made = app.started[-1]
+    made.read_event("map", page.map_page(found, "Ryanair", [], planner_link=made.map_link + "plan/"))
+    made.read_event("trips", page.trips(found, airports))
+    made.read_event("state", page.map_state(found, []))
+    tab.call("Network.enable")
+    tab.call("Network.setBlockedURLs", urls=["*tile.openstreetmap.org*"])
+    tab.call("Page.addScriptToEvaluateOnNewDocument", source="window.violations = []; window.errors = []; addEventListener('error', event => errors.push(event.message));"
+             "document.addEventListener('securitypolicyviolation', event => violations.push(event.violatedDirective + ' ' + event.blockedURI));")
+    tab.open(app.address + "discover/map/1/")
+    try:
+        tab.wait("typeof L === 'object'", seconds=15)
+    except AssertionError:
+        pytest.skip("Leaflet could not be fetched from unpkg")
+    tab.wait("document.getElementById('title').textContent !== ''")
+    assert tab.js("violations") == []   # the page's own script and style are files: nothing inline was needed
+    tab.js("document.querySelector('#rows tr').click()")
+    tab.wait("!!document.querySelector('#detail a[href$=\"/plan/BHX-out\"]')")
+    assert tab.js("errors") == []
+    tab.js("document.querySelector('#detail a[href$=\"/plan/BHX-out\"]').click()")
+    tab.wait("location.pathname === '/' && document.readyState === 'complete'")
+    assert tab.js("document.querySelector('input[name=destination]').value") == "Birmingham"
+    assert len(app.started) == 1   # the form filled in, nothing searched

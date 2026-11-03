@@ -185,3 +185,9 @@ def rank_itineraries(itineraries: list[dict[str, Any]]) -> tuple:
         itinerary["time_cost"] = current.SETTINGS.extra_hours_cost(current.SETTINGS.tiebreak_eur_per_hour, itinerary["extra_minutes"] / 60)
     recommended = min(kept, key=lambda itinerary: (itinerary["total_cost"] + itinerary["time_cost"], itinerary["total_cost"]))
     return kept, recommended, not_worth_it
+
+def cheapest_by_date(itineraries: list[dict[str, Any]], days: list[str]) -> list[tuple[str, dict[str, Any] | None]]:
+    """The cheapest itinerary of each travel date (yyyy-mm-dd), or None for a date none is left on: what going on
+    each date would cost, the faster one first when two cost the same."""
+    on = lambda day: [itinerary for itinerary in itineraries if itinerary["flight"]["date"] == day]
+    return [(day, min(on(day), key=lambda itinerary: (itinerary["total_cost"], itinerary["total_minutes"]), default=None)) for day in days]

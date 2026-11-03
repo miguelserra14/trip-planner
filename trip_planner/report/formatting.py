@@ -6,7 +6,7 @@ from typing import Any
 from trip_planner.trip.trip_settings import GRADES, LIGHTS
 from trip_planner.texts import tr
 
-TIMELINE_SQUARES = 24   # how many squares the line of an option takes in the Markdown; the window draws it to scale
+TIMELINE_SQUARES = 24   # how many squares the line of an option takes in the Markdown; the app draws it to scale
 # The colour of each part of that line: the grade of its schedule, or None for a wait
 SQUARES = {**dict(zip(GRADES, "🟦🟩🟧")), None: "⬜"}
 

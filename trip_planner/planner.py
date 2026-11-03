@@ -150,6 +150,7 @@ async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callab
     PLANNED.append({"settings": settings, "places": current.TRIP, "messages": messages, "state": response})
     writing = time.time()
     recommendation = await recommend(response, messages)
+    response["recommendation"] = recommendation   # kept apart in the options as data (report/options.py): a model wrote it
     TIMINGS["4 coordinator model (writing the recommendation)"] = time.time() - writing
     total = TIMINGS["total"] = time.time() - started
     if recommendation:

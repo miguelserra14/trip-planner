@@ -27,7 +27,7 @@ from trip_planner.trip.trip_settings import USER_AGENT
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price
 from trip_planner.texts import tr
 from trip_planner.trip.places import airport_from, ask_nominatim, distance_km, load_airports, move_to_centre, place_of, Place, settlement
-from trip_planner.utils import plain
+from trip_planner.utils import plain, write_whole
 
 CACHE = Path(__file__).parent / "cache"
 CENTRES = CACHE / "city_centres.json"     # the city each destination airport serves, found once
@@ -62,8 +62,7 @@ def read(path: Path) -> dict[str, Any]:
         return {}
 
 def write(path: Path, content: dict[str, Any]) -> None:
-    path.parent.mkdir(exist_ok=True)
-    path.write_text(json.dumps(content, ensure_ascii=False, indent=0), encoding="utf-8")
+    write_whole(path, json.dumps(content, ensure_ascii=False, indent=0))
 
 def city_name(airport: dict[str, Any]) -> str:
     """The city an airport is in, as the airport database writes it, without where the airport is: the database

@@ -25,7 +25,7 @@ from trip_planner.itineraries.estimates import ROAD_FACTOR
 from trip_planner.itineraries.legs import MAX_PLAUSIBLE_EUR_PER_KM
 from trip_planner.trip.places import airport_from, Place
 from trip_planner.texts import tr
-from trip_planner.utils import message_text, plain
+from trip_planner.utils import message_text, plain, write_whole
 
 CACHE = Path(__file__).parent / "cache"
 TRANSFERS = CACHE / "airport_transfers.json"   # what was found for each airport
@@ -61,8 +61,7 @@ def read(path: Path) -> dict[str, Any]:
         return {}
 
 def write(path: Path, content: dict[str, Any]) -> None:
-    path.parent.mkdir(exist_ok=True)
-    path.write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")
+    write_whole(path, json.dumps(content, ensure_ascii=False, indent=1))
 
 def published(code: str, today: date) -> dict[str, Any] | None:
     """What was found for an airport, when recent enough: {"checked", "options", "best"}."""

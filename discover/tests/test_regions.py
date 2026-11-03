@@ -15,6 +15,10 @@ def test_an_airport_belongs_to_its_region_and_the_islands_to_their_own():
     assert regions.region_of({"country": "PT", "latitude": 32.7, "longitude": -16.8}) == "Madeira and the Azores"
     assert regions.region_of(AIRPORTS["JFK"]) is None
 
+def test_a_flight_to_an_airport_the_list_does_not_know_counts_in_no_region():
+    assert regions.region_of({}) is None
+    assert regions.cities_found({"BCN", "XXX"}, AIRPORTS, city, ANTWERP) == {"Iberia": {"Barcelona"}}
+
 def test_a_thin_region_is_asked_its_countries_and_islands_their_airports_by_name():
     wanted = regions.requests_for(ANTWERP, AIRPORTS, 3500, {"BCN", "MAD"}, asked={"LV"}, city_of=city)
     assert [region["region"] for region in wanted] == ["Baltic states", "Canary Islands"]   # Iberia has its two cities; New York is too far

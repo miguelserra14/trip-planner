@@ -1,0 +1,32 @@
+:root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --panel: #f5f5f7; --link: #0a66c2; --pick: #fff6d6; }
+@media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --fg: #f2f2f7; --muted: #a1a1a6; --line: #3a3a3c; --panel: #2c2c2e; --link: #6cb4ff; --pick: #3d3519; } }
+body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+a { color: var(--link); }
+header { padding: 12px 16px; } h1 { font-size: 18px; margin: 0 0 4px; } header p { margin: 0; color: var(--muted); }
+h2 { font-size: 16px; margin: 28px 16px 4px; } h3 { font-size: 14px; margin: 20px 16px 4px; } p.note { margin: 4px 16px 8px; color: var(--muted); max-width: 70em; }
+#map { height: 58vh; } .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; }
+/* Whether the program is still searching, or has seen everything: the first thing to read on the page */
+#status { margin: 8px 0 4px; padding: 8px 12px; border-radius: 8px; border-left: 4px solid; color: var(--fg); max-width: 70em; }
+#status.running { background: #fff4d6; border-color: #e0a100; } #status.done { background: #e6f4ea; border-color: #1e8e3e; }
+#status.lost { background: #fde7e9; border-color: #b3261e; }
+@media (prefers-color-scheme: dark) { #status.running { background: #3d3519; } #status.done { background: #1e3325; } #status.lost { background: #3d1f1f; } }
+#status p.kiwi { margin: 0 0 4px; font-weight: 600; color: #b3261e; } @media (prefers-color-scheme: dark) { #status p.kiwi { color: #ff8a80; } }
+#status p.ground-status { margin: 4px 0 0; } #status strong { margin-right: 6px; } #status .pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e0a100;
+  margin-right: 8px; animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { #status .pulse { animation: none; } }
+#detail { background: var(--panel); padding: 12px 16px 16px; border-bottom: 1px solid var(--line); }
+#detail h2 { margin: 0 0 2px; } #detail h4 { margin: 14px 0 4px; font-size: 14px; } #detail p { margin: 2px 0; }
+#detail .muted { color: var(--muted); } #detail ol { margin: 4px 0; padding-left: 20px; } #detail li { margin: 2px 0; }
+#detail ul.links { margin: 6px 0 0; padding-left: 20px; } #detail .close { float: right; }
+#detail .warn { color: #b3261e; } @media (prefers-color-scheme: dark) { #detail .warn { color: #ff8a80; } }
+table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: 6px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; } td.n { text-align: right; font-variant-numeric: tabular-nums; }
+#rows tr { cursor: pointer; } #rows tr:hover, #rows tr.picked { background: var(--pick); }
+.wrap { overflow-x: auto; } #tiles { margin: 4px 16px; color: var(--muted); }
+#detail pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px 8px; border: 1px solid var(--line); }
+#filters { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 6px 16px 10px; border-top: 1px solid var(--line); }
+#filters label { white-space: nowrap; } #filters input[type=range] { width: 140px; vertical-align: middle; }
+#filters .count { color: var(--muted); }
+/* The line of each option, as the planner draws it */
+.lines { margin: 8px 0 4px; } .lines .line { overflow-x: auto; } .lines svg { width: 100%; min-width: 560px; height: auto; display: block; font-size: 12px; }
+.lines p.line-title { margin: 10px 0 0; font-weight: 600; }

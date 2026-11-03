@@ -17,7 +17,7 @@ from trip_planner.trip.places import airports_near, distance_km, load_airports, 
 from trip_planner.sources import kiwi
 from trip_planner.texts import tr
 from trip_planner.tools.prices import PRICE_VALID_HOURS
-from trip_planner.utils import say
+from trip_planner.utils import say, write_whole
 
 RADIUS_KM = 200          # departure airports this close to the city...
 # ... the ones with the most routes: the closest ones left Charleroi, Ryanair's base in Belgium, out of a map of
@@ -97,8 +97,7 @@ def kiwi_used(today: str) -> int:
 def count_kiwi(today: str) -> None:
     """One more request to Kiwi today. Counted before it is sent, so a map stopped halfway still counts it."""
     used = kiwi_used(today) + 1
-    KIWI_COUNT.parent.mkdir(exist_ok=True)
-    KIWI_COUNT.write_text(json.dumps({"day": today, "requests": used}), encoding="utf-8")
+    write_whole(KIWI_COUNT, json.dumps({"day": today, "requests": used}))
 
 class KeptAnswer(list):
     """Flights Kiwi gave to the same request earlier: read says when (yyyy-mm-ddThh:mm)."""
@@ -125,8 +124,7 @@ def keep_answer(key: str, flights: list[dict[str, Any]], now: datetime) -> None:
     """An answer of Kiwi kept for the next maps; the ones too old to be reused are dropped from the file."""
     kept = kept_answers(now)
     kept[key] = {"read": now.isoformat(timespec="minutes"), "flights": flights}
-    KIWI_ANSWERS.parent.mkdir(exist_ok=True)
-    KIWI_ANSWERS.write_text(json.dumps(kept, ensure_ascii=False), encoding="utf-8")
+    write_whole(KIWI_ANSWERS, json.dumps(kept, ensure_ascii=False))
 
 def countries_near(place: Place, departures: set, km: float = COUNTRIES_KM) -> list[str]:
     """The two-letter codes of the countries with a large airport within km of a place. First the ones with most

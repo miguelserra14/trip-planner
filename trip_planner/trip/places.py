@@ -15,7 +15,7 @@ import httpx
 from trip_planner import current
 from trip_planner.trip.trip_settings import ROOT, TripSettings, USER_AGENT
 from trip_planner.texts import tr
-from trip_planner.utils import as_duration, logged, plain, say
+from trip_planner.utils import as_duration, logged, plain, say, write_whole
 
 AIRPORTS_URL = "https://davidmegginson.github.io/ourairports-data/airports.csv"   # OurAirports, public domain
 AIRPORTS_FILE = ROOT / "resources" / "airports.csv"     # downloaded once, then reused. Only the airports with_flights are kept
@@ -201,7 +201,7 @@ def choose_place(name: str, place: Place) -> None:
     PLACES[plain(name)] = place
 
 def ask_places(settings: TripSettings) -> None:
-    """Text version of the choice between places of the same name, for when the window is not used."""
+    """Text version of the choice between places of the same name, in the terminal (the app asks it in its page)."""
     for setting, name, options in unclear_places(settings):
         say("\n" + tr("place_several", name=name))
         for number, (label, place) in enumerate(options, start=1):
@@ -236,7 +236,7 @@ def load_airports() -> dict[str, dict[str, Any]]:
             AIRPORTS_FILE.parent.mkdir(exist_ok=True)
             response = httpx.get(AIRPORTS_URL, headers={"User-Agent": USER_AGENT}, timeout=120, follow_redirects=True)
             response.raise_for_status()
-            AIRPORTS_FILE.write_text(only_with_flights(response.text), encoding="utf-8", newline="")
+            write_whole(AIRPORTS_FILE, only_with_flights(response.text), newline="")
         with AIRPORTS_FILE.open(encoding="utf-8", newline="") as file:
             for row in csv.DictReader(file):
                 if with_flights(row):
@@ -274,7 +274,7 @@ def airfields() -> set:
             AIRFIELDS = {code for code, airport in load_airports().items()
                          if not airport["large"] and code not in flown and airport["ident"] in longest
                          and longest[airport["ident"]] < AIRLINER_RUNWAY_FT}
-            AIRFIELDS_FILE.write_text(json.dumps(sorted(AIRFIELDS)), encoding="utf-8")
+            write_whole(AIRFIELDS_FILE, json.dumps(sorted(AIRFIELDS)))
         except Exception as e:
             say(f"[airports] {type(e).__name__}: could not tell the airfields from the airports, all of them are listed")
             return set()   # not kept: asked again on the next trip

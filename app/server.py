@@ -80,15 +80,16 @@ def stop(server: ThreadingHTTPServer) -> None:
     server.server_close()
 
 def serve(site: Site, browser: bool = True) -> None:
-    """Serve the site until Ctrl+C, for the terminal. A search still running is stopped with it."""
+    """Serve the site until the Quit button or Ctrl+C. A search or a map still running is stopped with it."""
     server = start(site)
     address = address_of(server)
     print(f"The trip planner is served at {address}. Ctrl+C to stop.", flush=True)
     if browser:
         webbrowser.open(address)
     try:
-        while True:
-            time.sleep(1)
+        while not site.quitting.wait(1):   # until the Quit button, or Ctrl+C (or its terminal window closed)
+            pass
+        time.sleep(0.5)   # the page that says so reaches the browser first
     except KeyboardInterrupt:
         pass
     finally:

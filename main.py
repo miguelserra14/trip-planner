@@ -1,4 +1,4 @@
-"""Open the trip planner in a window:              python main.py     (or double-click TripPlanner.bat)
+"""Open the trip planner in the browser:           python main.py     (or double-click TripPlanner.bat)
 Plan the trip in settings.py in the terminal:     python main.py --terminal
 Check every service the program depends on:       python main.py --check
 The languages there are:                          python main.py --languages
@@ -8,8 +8,9 @@ Locate the terminal of every airport again:       python main.py --terminals all
 Check whether the connections shown really ran:   python main.py --verify          (see trip_planner/tools/verify.py)
 Ask again the ground prices over a day old:        python main.py --prices          (see trip_planner/tools/prices.py)
 
-In the window the trip is typed in a form that starts with what is in settings.py. In the terminal each trip lists
-its airports and asks which ones to drop, and after the result it takes follow-up questions, until an empty line."""
+In the browser (app/) the trip is typed in a form that starts with what is in settings.py, and Discover's map is
+there too; the program runs until its Quit button or until its terminal window is closed. In the terminal each trip
+lists its airports and asks which ones to drop, and after the result it takes follow-up questions, until an empty line."""
 import asyncio
 import sys
 
@@ -48,19 +49,19 @@ def languages(arguments: list[str]) -> int:
             return action(code[0])
     return translate.show_languages()
 
-def in_window() -> int:
+def in_browser() -> int:
     try:
         from settings import SETTINGS
-        from trip_planner import gui
+        from trip_planner import current
+        from app import server
+        from app.site import Site
     except Exception as error:
-        # Started by double-click there is no terminal to read the error in: usually a key missing in env/.env
-        # or a mistake in settings.py
-        import tkinter
-        from tkinter import messagebox
-        tkinter.Tk().withdraw()
-        messagebox.showerror("Trip Planner", f"The trip planner could not start.\n\n{type(error).__name__}: {error}")
+        # Usually a mistake in settings.py: said in the terminal window, which TripPlanner.bat then keeps open
+        print(f"The trip planner could not start.\n\n{type(error).__name__}: {error}")
         return 1
-    return gui.run(SETTINGS)
+    current.SETTINGS = SETTINGS   # the pages are in the language of settings.py
+    server.serve(Site(SETTINGS))
+    return 0
 
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
@@ -84,4 +85,4 @@ if __name__ == "__main__":
     if "--terminals" in arguments:
         from trip_planner.sources import timetables
         sys.exit(1 if timetables.fill_terminals(again="all" in arguments) else 0)
-    sys.exit(in_terminal("--check" in arguments) if {"--check", "--terminal"} & set(arguments) else in_window())
+    sys.exit(in_terminal("--check" in arguments) if {"--check", "--terminal"} & set(arguments) else in_browser())

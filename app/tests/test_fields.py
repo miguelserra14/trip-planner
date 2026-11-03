@@ -1,5 +1,7 @@
-"""The form of a trip read back (fields.py): whatever a setting is changed to, what the browser sends is that setting,
-as TripSettings has it. No network."""
+"""The form of a trip (fields.py, reading trip/form.py). No network.
+
+- Every setting of TripSettings is on the form, and only in one place; every label and hint has its text.
+- Whatever a setting is changed to, what the browser sends is that setting, as TripSettings has it."""
 import dataclasses
 from datetime import date, timedelta
 
@@ -7,7 +9,10 @@ import pytest
 
 from app import fields, job
 from settings import SETTINGS
+from trip_planner.texts import REFERENCE, TEXTS
+from trip_planner.trip import form
 from trip_planner.trip.ground_choice import NO_CHANGE_LIMIT
+from trip_planner.trip.trip_settings import TripSettings
 
 DAY = f"{date.today() + timedelta(days=30):%d/%m/%Y}"
 NEXT = f"{date.today() + timedelta(days=31):%d/%m/%Y}"
@@ -38,6 +43,27 @@ def as_browser_sends(values: dict) -> dict[str, str]:
 
 def read_back(settings):
     return job.settings_for(fields.read(as_browser_sends(fields.values_of(settings)), SETTINGS), SETTINGS)
+
+IN_TABS = [name for title, names in form.TABS for name in names]
+
+def test_every_setting_is_somewhere_on_the_form_and_once_in_the_tabs():
+    shown_anywhere = set(IN_TABS) | set(form.MAIN_SETTINGS) | set(form.CHANGES) | set(form.NOT_IN_TABS)
+    assert {setting.name for setting in dataclasses.fields(TripSettings)} == shown_anywhere
+    assert len(IN_TABS) == len(set(IN_TABS))
+
+def test_every_label_and_hint_has_its_text():
+    keys = [form.LABELS.get(name, f"set_{name}") for name in IN_TABS] + list(form.HINTS.values())
+    keys += [title for title, names in form.TABS]
+    for language in (REFERENCE, "pt-PT"):
+        assert [key for key in keys if key not in TEXTS[language]] == [], language
+
+def test_what_the_form_shows_is_read_back_as_the_same_setting():
+    settings = TripSettings(origin="Coimbra", destination="Antwerp", dates=[DAY], exclude_airports=["LIS", "Faro"],
+                            earliest_leave="", latest_leave="", tiebreak_eur_per_hour=7.5)
+    values = {setting.name: form.shown(setting.name, getattr(settings, setting.name))
+              for setting in dataclasses.fields(TripSettings) if setting.name not in form.NOT_IN_TABS}
+    assert values["exclude_airports"] == "LIS, Faro" and values["earliest_leave"] == "" and values["tiebreak_eur_per_hour"] == "7.5"
+    assert dataclasses.replace(settings, **values) == settings
 
 def test_every_setting_of_the_form_is_changed_by_it():
     assert set(CHANGED) == {*fields.ADVANCED, *fields.SCALES_TICKED}   # a setting added to the form is added here

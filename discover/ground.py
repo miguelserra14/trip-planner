@@ -38,7 +38,7 @@ from trip_planner.texts import tr
 from trip_planner.trip.ground_choice import is_rail
 from trip_planner.trip.places import distance_km, Place
 from trip_planner.trip.trip_settings import USER_AGENT
-from trip_planner.utils import say as print_line
+from trip_planner.utils import say as print_line, write_whole
 
 # The operators shown, by the start of their name in Transitous (lower case): the name shown and where to buy
 OPERATORS = {
@@ -100,8 +100,7 @@ def read() -> dict[str, Any]:
         return {}
 
 def write(content: dict[str, Any]) -> None:
-    GROUND.parent.mkdir(exist_ok=True)
-    GROUND.write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")
+    write_whole(GROUND, json.dumps(content, ensure_ascii=False, indent=1))
 
 def place_key(place: Place) -> str:
     return f"{place.latitude:.2f},{place.longitude:.2f}"
@@ -263,8 +262,7 @@ def cities() -> list[dict[str, Any]]:
             with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
                 rows = archive.read("cities15000.txt").decode("utf-8").splitlines()
             kept = [f"{c[1]}\t{c[8]}\t{c[4]}\t{c[5]}\t{c[14]}" for c in (row.split("\t") for row in rows) if len(c) > 14 and c[7] != "PPLX"]
-            CITIES.parent.mkdir(exist_ok=True)
-            CITIES.write_text("\n".join(kept), encoding="utf-8")
+            write_whole(CITIES, "\n".join(kept))
         for row in CITIES.read_text(encoding="utf-8").splitlines():
             name, country, latitude, longitude, population = row.split("\t")
             if DISTRICT.match(name):

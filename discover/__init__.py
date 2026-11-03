@@ -4,8 +4,8 @@ found to it from the airports around the city, like the "discover" pages of the 
 A feature apart from the trip planner, and a draft. It uses some of the planner's code (places, Kiwi, the price
 estimate) without changing anything in it, and the planner never imports it. What it makes stays in this folder.
 
-    Discover.bat, or python -m discover.window               its own window: a city, the days, a button that opens the map
-    python -m discover Coimbra 12/11/2026 19/11/2026          the same from the terminal, in the repository's folder
+    TripPlanner.bat, then "Discover" at the top of the page   the form: a city, the days; the map opens as it is made
+    python -m discover Coimbra 12/11/2026 19/11/2026          the map as a file, from the terminal, in the repository's folder
     python -m discover Coimbra 12/11/2026 --fast              Ryanair only: a few seconds, its destinations only
     python -m discover Coimbra 12/11/2026 --light             fewer requests to Kiwi
     pytest discover                                           its tests only (plain pytest runs them too)
@@ -43,6 +43,6 @@ by bus, the total, the hours on board, the country) hide what the traveller does
 Kiwi is shared with the planner, so it is asked politely (finder.py): never again in a map after it refused a
 request, and at most KIWI_DAILY times a day by all the maps together.
 
-The map shows flights, not trips: it does not know whether the airport can be reached at that hour. A click on a
-trip opens the planner's window on it (plan.py, through the page served by serve.py), which checks that in real
-timetables. The planner is opened by a new process, so it still never imports this folder."""
+The map shows flights, not trips: it does not know whether the airport can be reached at that hour. In the app a
+click on a trip opens the planner's form on it, filled in (app/maps.py), and the planner checks that in real
+timetables. The app imports both, and neither imports the other's code nor the app's."""

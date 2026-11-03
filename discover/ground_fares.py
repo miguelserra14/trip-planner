@@ -43,7 +43,7 @@ from trip_planner.sources.operators.flixbus import flixbus_price, flixbus_search
 from trip_planner.sources.timetables.client import step_of
 from trip_planner.texts import tr
 from trip_planner.trip.places import distance_km, load_airports, Place
-from trip_planner.utils import say as print_line
+from trip_planner.utils import say as print_line, write_whole
 
 MAX_PRICED = 30       # cities priced per map: each takes a few requests a day priced
 ROUND = 6             # cities priced at once: the least of the others is worked out again after each round
@@ -178,8 +178,7 @@ def keep_rates(rates: dict[str, list[list]], options: list[dict[str, Any]], home
             if way and km > 0:
                 rates.setdefault(option["operator"], []).append([round(km), round(way["price_eur"] / km, 4), today.isoformat()])
     try:
-        RATES.parent.mkdir(exist_ok=True)
-        RATES.write_text(json.dumps({operator: found[-MAX_RATES:] for operator, found in rates.items()}), encoding="utf-8")
+        write_whole(RATES, json.dumps({operator: found[-MAX_RATES:] for operator, found in rates.items()}))
     except OSError:
         pass   # the next maps only ask a little more
 

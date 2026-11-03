@@ -1,6 +1,8 @@
 // The app's only script. Every page works without it; it only adds what a form cannot do by itself:
 // - the calendar to click the days in, which writes them in the field as dd/mm/yyyy (the field can still be typed in);
 // - the language chosen at the top is used at once;
+// - the ↔ that swaps where from and where to, how many advanced settings differ from settings.py while they are
+//   changed, and whether the trip is one way or there and back as its days are written (the page says both too);
 // - the part of the page of a running search is asked for again every few seconds and put in place, so that the page
 //   does not jump to its top as a refresh would. That part is made by the app, its texts escaped there.
 // Nothing here writes markup from text: the calendar is built element by element.
@@ -60,6 +62,7 @@ function calendar(field, form) {
   function write() {
     const days = [...chosen.days].sort().map((day) => written(new Date(`${day}T00:00:00`)));
     field.value = [...days, ...chosen.others].join(", ");
+    field.dispatchEvent(new Event("input", { bubbles: true }));   // as if typed: the kind of trip follows it
   }
 
   function draw() {
@@ -121,6 +124,37 @@ function calendars() {
   }
 }
 
+function swap() {
+  for (const button of document.querySelectorAll("button[data-swap]")) {
+    const fields = button.form.elements;
+    button.hidden = false;
+    button.addEventListener("click", () => {
+      [fields.origin.value, fields.destination.value] = [fields.destination.value, fields.origin.value];
+    });
+  }
+}
+
+function changes() {
+  // The summary of the advanced settings says how many differ from settings.py, each field holding its value there
+  for (const advanced of document.querySelectorAll("details.advanced")) {
+    const summary = advanced.querySelector("summary");
+    const count = () => {
+      const changed = [...advanced.querySelectorAll("[data-default]")].filter((field) =>
+        (field.type === "checkbox" ? (field.checked ? "on" : "") : field.value) !== field.dataset.default).length;
+      summary.textContent = changed ? summary.dataset.changed.replace("{count}", changed) : summary.dataset.none;
+    };
+    advanced.addEventListener("input", count);
+    advanced.addEventListener("change", count);
+  }
+}
+
+function tripKind() {
+  for (const kind of document.querySelectorAll(".trip-kind")) {
+    const back = kind.closest("form").elements.return_dates;
+    back.addEventListener("input", () => { kind.textContent = back.value.trim() ? kind.dataset.round : kind.dataset.one; });
+  }
+}
+
 function language() {
   for (const select of document.querySelectorAll("select[data-submit]")) {
     select.addEventListener("change", () => select.form.submit());
@@ -158,5 +192,8 @@ function poll() {
 window.addEventListener("pageshow", (event) => { if (event.persisted) location.reload(); });
 
 calendars();
+swap();
+changes();
+tripKind();
 language();
 poll();

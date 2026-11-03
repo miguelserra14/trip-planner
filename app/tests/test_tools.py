@@ -1,4 +1,4 @@
-"""The program's own jobs in the app, as the window has them as buttons: the ground prices asked again, the check of
+"""The program's own jobs in the app, its buttons: the ground prices asked again, the check of
 the services, a language added (job.py runs them, as a search) or removed (the app does it, once confirmed).
 No network and no model: the jobs are stood in for, and a language is removed from a copy of the folder."""
 import io

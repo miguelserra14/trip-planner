@@ -3,7 +3,7 @@ way. The planner keeps the trip in globals (trip_planner/current.py), so two sea
 cannot share a process; and the process stays while the traveller asks about the trip, because the conversation
 with the model is kept in it (planner.PLANNED).
 
-It also runs the program's own jobs, which the window has as buttons, when the first line names one instead of a
+It also runs the program's own jobs, which the app has as buttons, when the first line names one instead of a
 trip: {"task": "check" | "prices" | "language" | "map", "name": the language to add, "language": the one to write in};
 a Discover map takes the fields of its form too (map_job.py).
 Each says what it does as a search does, and ends with {"kind": "done", "text": how it went}.
@@ -13,6 +13,7 @@ On stdin, first the trip, then the traveller's answers, each when it is asked fo
     {"index": n}               which of the places of the same name (after "unclear")
     {"dropped": [codes]}       the airports left out (after "airports")
     {"question": text}         a question about the trip planned (after "ready"), as many as wanted
+    {"stop": true}             a map ends at its next city, keeping what it found (map_job.py)
 On stdout, {"kind": ..., "text": ...}:
     say, show                  a progress line (and anything else printed), and Markdown of the result
     unclear                    {"setting", "name", "options": [labels]}: a name of several places; it waits for "index"
@@ -31,13 +32,14 @@ import threading
 import traceback
 from typing import Any, Iterator, TextIO
 
+from trip_planner.trip.form import named
 from trip_planner.trip.trip_settings import TripSettings
 
 def settings_for(values: dict[str, Any], defaults: TripSettings) -> TripSettings:
     """The trip asked for, on top of the defaults: only the settings the form holds. Raises SettingError, in the
     traveller's language, if a value is not valid: the app calls this too, to answer the form at once."""
     from app.fields import ADVANCED, TRIP
-    from trip_planner.gui.advanced import MAIN_SETTINGS
+    from trip_planner.trip.form import MAIN_SETTINGS
     allowed = {*TRIP, *ADVANCED, *MAIN_SETTINGS}
     return dataclasses.replace(defaults, **{name: value for name, value in values.items() if name in allowed})
 
@@ -96,7 +98,7 @@ async def converse(settings: TripSettings, answers: Iterator[str], events: Event
         answer = json.loads(line)
         return answer if isinstance(answer, dict) else {}
 
-    # A name that several places have is chosen first; then the airports are looked for, as in the window
+    # A name that several places have is chosen first; then the airports are looked for
     while unclear := await asyncio.to_thread(where.unclear_places, settings):
         setting, name, options = unclear[0]
         answer = await wait("unclear", {"setting": setting, "name": name, "options": [label for label, _ in options]})
@@ -135,8 +137,8 @@ async def converse(settings: TripSettings, answers: Iterator[str], events: Event
             if events.shown == before:   # the model did not answer: planner.ask said why in a progress line
                 events.send("unanswered", tr("app_no_answer"))
 
-async def run_task(asked: dict[str, Any], events: Events) -> None:
-    """One of the program's own jobs, as the window has them: check every service, ask the ground prices of the
+async def run_task(asked: dict[str, Any], events: Events, answers: Iterator[str] = iter(())) -> None:
+    """One of the program's own jobs: check every service, ask the ground prices of the
     reports again, or translate the program into one more language. Each ends with "done", or with "failed"."""
     from trip_planner import utils
     from trip_planner.texts import TEXTS, tr
@@ -164,9 +166,17 @@ async def run_task(asked: dict[str, Any], events: Events) -> None:
                                      + (f" ({tr('ui_language_incomplete', count=count)})" if count else "") for code, count in left.items()))
     elif asked["task"] == "map":
         from app.map_job import make_map
-        await asyncio.to_thread(make_map, asked, events)   # discover's Session runs its own event loops
+        await asyncio.to_thread(make_map, asked, events, answers)   # discover's Session runs its own event loops
     else:
         events.send("failed", tr("app_not_a_trip"))
+
+def failed(error: Exception, events: Events) -> None:
+    """Something no one foresaw: the traveller is told its last line, and the whole trace goes
+    with the progress lines below it, so that what went wrong can be told apart from that line."""
+    from trip_planner.texts import tr
+    for line in traceback.format_exc().splitlines():
+        events.send("say", line)
+    events.send("failed", tr("ui_failed", error=f"{type(error).__name__}: {error}"))
 
 def main(answers: Iterator[str], events: Events) -> int:
     from settings import SETTINGS
@@ -183,21 +193,21 @@ def main(answers: Iterator[str], events: Events) -> int:
     if isinstance(asked, dict) and "task" in asked:
         try:
             current.SETTINGS = dataclasses.replace(SETTINGS, language=asked.get("language") or SETTINGS.language)
-            asyncio.run(run_task(asked, events))
-        except Exception:
-            events.send("failed", traceback.format_exc())
+            asyncio.run(run_task(asked, events, answers))
+        except Exception as error:
+            failed(error, events)
             return 1
         return 0
     try:
         settings = settings_for(asked.get("settings") or {} if isinstance(asked, dict) else {}, SETTINGS)
     except ValueError as error:
-        events.send("failed", str(error))
+        events.send("failed", named(str(error)))
         return 1
     current.SETTINGS = settings
     try:
         asyncio.run(converse(settings, answers, events))
-    except Exception:
-        events.send("failed", traceback.format_exc())
+    except Exception as error:
+        failed(error, events)
         return 1
     return 0
 

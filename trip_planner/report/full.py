@@ -11,6 +11,7 @@ from trip_planner import current
 from trip_planner.trip import ground_choice
 from trip_planner.trip.trip_settings import LIGHTS, ROOT
 from trip_planner.trip.places import airport_groups, too_far_notice
+from trip_planner.report import options
 from trip_planner.report.formatting import at_destination, grade_text, table
 from trip_planner.sources import timetables
 from trip_planner.texts import tr
@@ -40,6 +41,37 @@ def log_of(report: Path) -> Path:
 def vehicles_of(report: Path) -> Path:
     """The file that goes with a report with the vehicles of the options it shows, for python main.py --verify."""
     return report.with_suffix(".json")
+
+def options_of(report: Path) -> Path:
+    """The file that goes with a report with its options as data, for a page (report/options.py). Not named trip_*.json:
+    --verify and --prices read every one of those as theirs."""
+    return report.with_name(f"options_{report.stem}.json")
+
+def read_options(report: Path) -> dict[str, Any] | None:
+    """The options of a report as data, with the ground prices asked again since (tools/prices.py) in place of the ones
+    it was written with, so that a page shows one total per option. None for a report without them (made before they
+    were kept) or of another version: the report is then shown as Markdown."""
+    try:
+        data = json.loads(options_of(report).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if data.get("version") != options.VERSION:
+        return None
+    try:
+        kept = json.loads(vehicles_of(report).read_text(encoding="utf-8"))
+        asked_again = {option["number"]: option for option in kept["options"]}
+    except (OSError, ValueError, KeyError):
+        return data
+    for option in data["options"]:
+        again = asked_again.get(option["number"])
+        if not again or again.get("total") is None or abs(again["total"] - option["total_eur"]) < 0.01:
+            continue
+        option["total_eur"] = again["total"]
+        for leg in again["legs"]:
+            if leg.get("price_eur") is not None:
+                option[leg["side"]]["price_eur"] = leg["price_eur"]
+        option["prices_read"] = kept.get("prices_read")   # said beside the total: not the price the trip was planned with
+    return options.compare(data)
 
 def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     """Everything behind the recommendation: the settings, what each step found and where it came from,
@@ -151,7 +183,8 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
 REPORTS = ROOT / "reports"           # every trip saves its reports here, and only the newest recent_reports (a setting) stay
 SAVED_REPORTS = REPORTS / "saved"    # the trips the traveller chose to keep. Nothing here is ever deleted
 # Each trip is a folder of its own in one of the two above, named after its first report: the report (.md), the log
-# of the run (.log) and the vehicles of its options (.json). A round trip is one trip: both ways are in one folder.
+# of the run (.log), the vehicles of its options (.json) and its options as data (options_*.json). A round trip is
+# one trip: both ways are in one folder.
 
 def trip_folders(where: Path) -> list[Path]:
     return [folder for folder in where.glob("trip_*") if folder.is_dir()]
@@ -172,6 +205,7 @@ def save_report(response: dict[str, Any], recommendation: str, beside: Path | No
     log_of(path).write_text(render_log(), encoding="utf-8")
     if response.get("verify"):
         vehicles_of(path).write_text(json.dumps(response["verify"], ensure_ascii=False, indent=1), encoding="utf-8")
+    options_of(path).write_text(json.dumps(options.trip_data(response), ensure_ascii=False, indent=1), encoding="utf-8")
     REQUESTS.clear()
     remove_old_reports(keep={path.parent})
     return path

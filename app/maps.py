@@ -11,17 +11,31 @@ from typing import Any
 
 from app.fields import calendar_data
 from discover import confirm
+from discover.page import SCRIPT, STYLE
 from trip_planner.texts import tr
 
 SOURCES = ("light", "full", "fast")   # the ways to search the flights, as in Discover's window (discover_win_source_...)
-DEFAULT_DAYS_AHEAD = 21     # the form starts with a few days in a row to leave on, this far ahead, as the window's
+DEFAULT_DAYS_AHEAD = 21     # the form starts with a few days in a row to leave on, this far ahead
 DEFAULT_DAYS_SPAN = 3
-PLANNER_LINK = "/discover/plan/"   # a trip of the map, by its key: the planner's form filled in with it
-# What the map's page may do. It is Discover's page, which has its script inline and draws the map with Leaflet
-# (checked against its hash) on OpenStreetMap's tiles; it asks this app for its destinations again, and nothing else
-MAP_POLICY = ("default-src 'none'; script-src 'unsafe-inline' https://unpkg.com; style-src 'unsafe-inline' https://unpkg.com; "
+# Each map has an address of its own, its number in this run of the app, with what its page asks for under it: its
+# destinations as they change ("state") and its trips ("plan/<key>", the planner's form filled in with one). The page
+# of a map another one replaced asks there still, and is told the map is gone: never the other map's destinations
+MAPS = "/discover/map/"
+MAPS_KEPT = 5        # the last maps served: a page left open in a tab keeps working while the next ones are made
+# A map asked to stop ends at its next city, its files saved (discover/session.py); killed halfway through writing,
+# a cache of discover/cache would be cut short and read as empty. Killed only if it has not ended in this time
+STOP_SECONDS = 90
+
+def address_of(number: int) -> str:
+    return f"{MAPS}{number}/"
+# What the map's page may do. It is Discover's page, whose script and style are files served beside it (FILES), and
+# which draws the map with Leaflet (checked against its hash) on OpenStreetMap's tiles; it asks this app for its
+# destinations again, and nothing else. No script of its own runs: its data is JSON, read by its script
+MAP_POLICY = ("default-src 'none'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; "
               "img-src https://tile.openstreetmap.org https://unpkg.com data:; connect-src 'self'; base-uri 'none'; "
               "form-action 'none'; frame-ancestors 'none'")
+# The files of the map's page, beside it at each map's address: what each is, and the type it is served as
+FILES = {"map.js": (SCRIPT, "text/javascript; charset=utf-8"), "map.css": (STYLE, "text/css; charset=utf-8")}
 # OpenStreetMap's tile servers want to know the page their tiles are drawn on: without it they answer a tile that
 # says "Access blocked". They are told this app's address only (http://127.0.0.1:port/), never a path
 MAP_REFERRER = "strict-origin-when-cross-origin"
@@ -38,8 +52,8 @@ def read(sent: dict[str, str]) -> dict[str, Any]:
             "source": sent.get("source") if sent.get("source") in SOURCES else "light", "look_up": "look_up" in sent}
 
 def refusal_of(asked: dict[str, Any]) -> str:
-    """Why the form cannot make a map, as the window says it, or nothing. The process reads the days the same way."""
-    from discover.window import read_days
+    """Why the form cannot make a map, or nothing. The process reads the days the same way."""
+    from discover.sources import read_days
     if not asked["city"]:
         return tr("discover_win_no_city")
     try:
@@ -58,14 +72,19 @@ def form(token: str, values: dict[str, Any], refusal: str = "") -> str:
     return (f'<form method="post" action="/discover" class="search"{calendar_data()}><h1>{escape(tr("discover_win_title"))}</h1>'
             f'<p class="muted">{escape(tr("discover_win_intro"))}</p>{error}'
             f'<input type="hidden" name="token" value="{escape(token)}">'
-            f'<label>{escape(tr("discover_win_from"))}<input name="city" value="{escape(values.get("city", ""))}" required></label>'
+            f'<div class="row"><label>{escape(tr("discover_win_from"))}<input name="city" value="{escape(values.get("city", ""))}" required></label>'
             f'<label>{escape(tr("discover_win_leave_on"))}<input name="dates" value="{escape(values.get("dates", ""))}" data-calendar="dates" required></label>'
             f'<label>{escape(tr("discover_win_back_on"))}<input name="return_dates" value="{escape(values.get("return_dates", ""))}" '
-            f'data-calendar="return_dates"><small>{escape(tr("app_return_dates_hint"))}</small></label>'
+            f'data-calendar="return_dates"><small>{escape(tr("app_return_dates_hint"))}</small></label></div>'
             f'<fieldset class="ticks"><legend>{escape(tr("discover_win_flights"))}</legend>{sources}</fieldset>'
             f'<label class="tick"><input type="checkbox" name="look_up"{look_up}> {escape(tr("discover_win_look_up", cities=confirm.MAX_LOOKUPS))}</label>'
-            f'<p class="muted">{escape(tr("discover_win_shared"))}</p>'
-            f'<button type="submit">{escape(tr("discover_win_open"))}</button></form>')
+            f'<div class="actions"><button type="submit">{escape(tr("discover_win_open"))}</button>'
+            f'<p class="muted">{escape(tr("discover_win_shared"))}</p></div></form>')
+
+def part_of(path: str) -> tuple[str, str]:
+    """A path under the maps, /discover/map/<number>/<what>, as (the map's address, what): ("", "") for any other."""
+    number, slash, what = path[len(MAPS):].partition("/") if path.startswith(MAPS) else ("", "", "")
+    return (address_of(int(number)), what) if number.isdigit() and slash else ("", "")
 
 def planner_values(trip: list[str], values: dict[str, Any]) -> dict[str, Any]:
     """The planner's form filled in with a trip of the map, [origin, destination, day]: one way, on that day. Its

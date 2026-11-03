@@ -1,15 +1,13 @@
-"""One map, from the city typed to the page served: what the command (__main__.py) and the window (window.py) both do.
+"""One map, from the city typed to the page saved: what the command (__main__.py) and the app (app/map_job.py) both do.
 
     session = Session("Coimbra", Days(...))
     session.make()        the flights, the ways to and from the airports, the page saved to discover/maps
-    session.serve()       the page on this computer, address in session.address; a click on a trip opens the planner
     session.look_up()     the cheapest destinations in the real timetables, then the trains and buses priced
-                          (ground_fares.py), the page redrawing itself (blocks)
-    session.stop()        the server stopped
+                          (ground_fares.py), session.live["state"] following them (blocks)
     session.stopping.set()   look_up ends at the next city or phase, keeping what it found (another map is wanted)
 
 Each step blocks, and runs in this process: the planner's own code reads the trip of the moment from globals
-(current.SETTINGS, current.TRIP) that the lookups change, so a map is never made inside the planner's window."""
+(current.SETTINGS, current.TRIP) that the lookups change, so a map has a process of its own, apart from a search."""
 import asyncio
 import json
 import threading
@@ -20,20 +18,18 @@ from discover import confirm, finder, ground, ground_fares
 from discover.breakdown import as_text, breakdown
 from discover.finder import discover, Found
 from discover.page import map_page, map_state
-from discover.plan import trips
-from discover.serve import address_of, new_token, open_window, Planner, start, stop
 from discover.sources import Days
 from settings import SETTINGS
 from trip_planner import current, utils
 from trip_planner.texts import tr
-from trip_planner.trip.places import geocode, load_airports
+from trip_planner.trip.places import geocode
 from trip_planner.utils import plain
 
 MAPS = Path(__file__).parent / "maps"   # the maps made, in this folder: nothing of the planner's is written to
 
 def snapshot(state: dict[str, Any]) -> dict[str, Any]:
-    """What the page is served, apart from the map being worked on: the server writes it out in its own thread while
-    the lookups go on changing the destinations."""
+    """What the page is told, apart from the map being worked on: the app is sent it from another thread while the
+    lookups go on changing the destinations."""
     return json.loads(json.dumps(state, ensure_ascii=False))
 
 class Stopped(Exception):
@@ -51,9 +47,6 @@ class Session:
         self.path: Path | None = None
         self.sources = ""
         self.sections: list = []
-        self.server = None
-        self.address = ""
-        self.planner: Planner | None = None
         self.live = {"state": {}}
         self.lock = threading.Lock()
         # Set when another map is wanted: two maps cannot look up at once, they change the same globals (current.TRIP)
@@ -95,18 +88,6 @@ class Session:
         return "\n".join(lines) + "\n" + as_text(self.sections) + (
             f"\n\n{len(self.found.destinations)} destinations on the map: {self.path}\nEvery request and its flights: {self.path.with_suffix('.json')}")
 
-    def serve(self, looking_up: bool = True) -> str:
-        """Serve the map on this computer. looking_up says the timetables are about to be looked up: the page then
-        asks for the destinations again until look_up ends. Returns the address."""
-        token = new_token()
-        self.planner = Planner(trips(self.found, load_airports()), token, open_window)
-        self.live["state"] = snapshot(map_state(self.found, self.sections, running=looking_up, **times()))
-        page = map_page(self.found, self.sources, self.sections, token=token, running=looking_up,
-                        max_lookups=confirm.MAX_LOOKUPS, **times())
-        self.server = start(page, self.planner, lambda: self.live["state"])
-        self.address = address_of(self.server)
-        return self.address
-
     def look_up(self, timetables: bool = True) -> None:
         """What is searched once the map is open, the served page following it (found.phase), the file saved again
         at the end: the trains and buses priced, in seconds when they are FlixBus's, against the flights' totals as
@@ -114,18 +95,14 @@ class Session:
         and buses priced again for the cities that can now be among the cheapest; then the way back in the
         timetables of the trains and buses with no price for it. When stopping is set it ends at the next city or
         phase, the page and the file keeping what was found up to then."""
-        airports = load_airports()
-
         def changed(found: Found) -> None:
             if self.stopping.is_set():
                 raise Stopped
             with self.lock:
-                if self.planner:
-                    self.planner.trips = trips(found, airports)
                 self.live["state"] = snapshot(map_state(found, breakdown(found), running=True, version=self.live["state"].get("version", 0) + 1, **times()))
 
         def phase(name: str) -> None:
-            # The file is saved as each phase ends: a window closed halfway keeps what was found up to then
+            # The file is saved as each phase ends: a map stopped halfway keeps what was found up to then
             if self.found.phase:
                 self.save()
             self.found.phase = name
@@ -156,8 +133,3 @@ class Session:
             self.save()
             with self.lock:
                 self.live["state"] = snapshot(map_state(self.found, self.sections, running=False, version=self.live["state"].get("version", 0) + 1, **times()))
-
-    def stop(self) -> None:
-        if self.server:
-            stop(self.server)
-            self.server = None

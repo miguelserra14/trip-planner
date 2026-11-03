@@ -46,9 +46,10 @@ def list_section() -> str:
     found = reports()
     body = [f"<h1>{html.escape(tr('app_reports'))}</h1>"]
     for group in ("recent", "saved"):
-        body.append(f"<h2>{html.escape(tr('app_' + group))}</h2>")
+        body.append(f'<section class="card"><h2>{html.escape(tr("app_" + group))}</h2>')
         items = [f"<li>{link(key, path)}</li>" for key, path in found[group].items()]
-        body.append(f"<ul>{''.join(items)}</ul>" if items else f'<p class="muted">{html.escape(tr("app_no_reports"))}</p>')
+        body.append(f'<ul class="reports">{"".join(items)}</ul>' if items else f'<p class="muted">{html.escape(tr("app_no_reports"))}</p>')
+        body.append("</section>")
     return "\n".join(body)
 
 def key_of(path: Path) -> str:

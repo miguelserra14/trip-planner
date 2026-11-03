@@ -15,6 +15,7 @@ from app.site import Site
 from settings import SETTINGS
 from trip_planner import utils
 from trip_planner.texts import tr
+from trip_planner.trip import form
 from trip_planner.trip.ground_choice import NO_CHANGE_LIMIT
 
 DAY = f"{date.today() + timedelta(days=30):%d/%m/%Y}"
@@ -78,11 +79,21 @@ def test_a_request_without_the_token_of_the_page_changes_nothing():
         assert site.post(path, b"origin=Coimbra").status == 403
     assert started == [] and site.token in site.get("/").html
 
+def test_the_first_page_says_when_the_models_key_is_missing(monkeypatch):
+    site, started = site_and_searches()
+    monkeypatch.setenv("GOOGLE_API_KEY", "x")
+    assert tr("app_no_key") not in site.get("/").html
+    monkeypatch.delenv("GOOGLE_API_KEY")
+    assert tr("app_no_key") in site.get("/").html
+
 def test_a_setting_that_is_not_valid_is_answered_on_the_form_as_it_was_sent():
     site, started = site_and_searches()
     reply = site.post("/search", sent(site, destination="Coimbra", extra_wishes="a window seat"))
     assert reply.status == 400 and 'role="alert"' in reply.html and started == []
     assert 'name="destination" value="Coimbra"' in reply.html and 'value="a window seat"' in reply.html
+    reply = site.post("/search", sent(site, fallback_radius_km="far"))
+    # The setting is named as the form names it, not as settings.py does
+    assert "«" + form.label("fallback_radius_km") + "»" in reply.html and "`" not in reply.html
 
 def test_one_search_works_at_a_time_and_one_waiting_for_questions_gives_way():
     site, started = site_and_searches()
@@ -290,3 +301,48 @@ def test_the_process_asks_plans_reports_and_answers(monkeypatch, tmp_path):
     assert said[0]["text"]["options"] == ["Nazaré, Leiria", "Nazaré, Bahia"] and chosen == ["Nazaré"]
     assert [airport["code"] for group in said[1]["text"]["groups"] for airport in group["airports"]] == ["LIS", "ANR"]
     assert said[6]["text"] == "printed by a library" and said[9]["text"] == "**Earlier?**"
+
+def test_the_form_counts_the_advanced_settings_changed_and_says_the_kind_of_trip():
+    site, _ = site_and_searches()
+    assert "Advanced settings</summary>" in site.get("/").html and "One way" in site.get("/").html
+    site.values = {**site.values, "options_shown": "9", "allow_estimated_prices": not SETTINGS.allow_estimated_prices,
+                   "return_dates": DAY}
+    home = site.get("/").html
+    assert "Advanced settings (2 changed)</summary>" in home and "Round trip" in home
+    assert 'name="options_shown" value="9" min="1" max="10" step="1" data-default="' + str(SETTINGS.options_shown) + '"' in home
+    assert 'data-swap hidden' in home   # shown by the script only: without it there is nothing to swap with
+
+def test_restore_brings_every_setting_back_but_the_places_and_the_days():
+    site, started = site_and_searches()
+    site.values = {**site.values, "options_shown": "9"}
+    restored = site.post("/restore", sent(site, origin="Porto", destination="Ghent", options_shown="9"))
+    assert restored.status == 200 and 'role="status"' in restored.html and started == []
+    assert site.values["options_shown"] == fields.values_of(SETTINGS)["options_shown"]
+    assert site.values["origin"] == "Porto" and site.values["destination"] == "Ghent" and site.values["dates"] == DAY
+
+def test_quit_stops_what_runs_and_then_the_server_and_only_from_the_app():
+    site, started = site_and_searches()
+    site.post("/search", sent(site))
+    assert site.post("/quit", sent(site, token="another")).status == 403 and not site.quitting.is_set()
+    closed = site.post("/quit", sent(site))
+    assert closed.status == 200 and started[0].stopped and site.quitting.is_set()
+
+def test_what_no_one_foresaw_is_told_in_a_line_and_its_trace_goes_with_the_progress(monkeypatch):
+    import trip_planner.tools.check as check
+
+    async def broken():
+        raise RuntimeError("boom")
+    monkeypatch.setattr(check, "check_setup", broken)
+    out = io.StringIO()
+    events = job.Events(out)
+    monkeypatch.setattr(sys, "stdout", job.Printed(events))
+    assert job.main(iter([json.dumps({"task": "check", "language": "en"})]), events) == 1
+    said = [json.loads(line) for line in out.getvalue().splitlines()]
+    assert said[-1] == {"kind": "failed", "text": tr("ui_failed", error="RuntimeError: boom")}
+    assert said[0] == {"kind": "say", "text": "Traceback (most recent call last):"} and {event["kind"] for event in said[:-1]} == {"say"}
+
+def test_an_answer_to_a_process_that_has_ended_is_dropped_quietly():
+    found = search.Job({}, [sys.executable, "-c", "pass"])
+    assert wait_until(lambda: not found.running)
+    found.answer({"question": "Still there?"})   # its pipe is closed: nothing to tell, nothing raised
+    assert found.failure == ""

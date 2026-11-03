@@ -7,8 +7,10 @@ __pycache__/
 !/reports/saved/
 # Crash dumps of command-line tools
 *.stackdump
-# Languages added by a model are made again with one click (Languages... in the window), so only the two
+# Languages added by a model are made again with one click (More languages, in the app), so only the two
 # written by hand belong in the repository
 /trip_planner/texts/languages/*.py
 !/trip_planner/texts/languages/en.py
 !/trip_planner/texts/languages/pt-PT.py
+# A cache being written whole (utils.write_whole), left behind if its process was stopped at that moment
+*.writing

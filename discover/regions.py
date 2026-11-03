@@ -43,9 +43,10 @@ REGIONS = {
     "Turkey": ("TR",),
     "Caucasus": ("GE", "AM", "AZ"),
 }
-# The two regions by position, inside a country of another region
-ISLANDS = {"Canary Islands": lambda airport: airport["country"] == "ES" and airport["latitude"] < 30,
-           "Madeira and the Azores": lambda airport: airport["country"] == "PT" and airport["longitude"] < -12}
+# The two regions by position, inside a country of another region. A flight may land at an airport the list of
+# airports does not know: it has no country, and no region
+ISLANDS = {"Canary Islands": lambda airport: airport.get("country") == "ES" and airport["latitude"] < 30,
+           "Madeira and the Azores": lambda airport: airport.get("country") == "PT" and airport["longitude"] < -12}
 
 def region_name(region: str) -> str:
     """A region's name in the traveller's language: its text is discover_region_ and the name, in lower case."""

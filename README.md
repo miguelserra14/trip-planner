@@ -17,11 +17,13 @@ nothing they write is ever shown as confirmed.
 
 Two tools share the same code:
 
-- **The trip planner** (`TripPlanner.bat`): from A to B on the dates you give, one way or there and back. Up to
-  five options, compared side by side, each with its timeline, its sources and the links to book every part.
-- **Discover** (`Discover.bat`, a draft): from your city, on the free days you give, a map of every place you can
-  reach cheaply, by plane, train or bus, with the way to and from the airports counted in the price. A click on a
-  destination opens the planner on that trip, to check it in the real timetables.
+- **The trip planner**: from A to B on the dates you give, one way or there and back. Up to five options, compared
+  side by side, each with its timeline, its sources and the links to book every part.
+- **Discover** (a draft): from your city, on the free days you give, a map of every place you can reach cheaply, by
+  plane, train or bus, with the way to and from the airports counted in the price. A click on a destination opens
+  the planner on that trip, to check it in the real timetables.
+
+Both open in your browser, served by the program on your own computer only (`TripPlanner.bat`).
 
 ## How to use it
 
@@ -31,7 +33,11 @@ Two tools share the same code:
 2. Get a free Google AI Studio key at <https://aistudio.google.com/apikey>. Two more keys are optional: Tavily (web
    search, <https://app.tavily.com>) and Mistral (a second model when Gemini has no quota left, <https://console.mistral.ai>).
 3. Double-click `TripPlanner.bat`. It creates the environment, which takes a few minutes, then opens `env/.env` in
-   Notepad: paste the keys after the `=` signs, save and close. The window opens.
+   Notepad: paste the keys after the `=` signs, save and close. The program opens in your browser.
+
+The program runs in a small window of its own, started minimised, which shows its address. Close that window, or
+press **Quit** at the top of the page, to close the program. If a page is closed by mistake, the address in that
+window opens it again.
 
 Nothing else needs installing. Your keys stay on your computer (`env/.env` is not in the repository).
 On macOS or Linux, see [Set up by hand](#set-up-by-hand).
@@ -43,29 +49,32 @@ On macOS or Linux, see [Set up by hand](#set-up-by-hand).
    two places, you are asked which.
 2. The airports around both cities are listed: untick the ones you do not want and press **Search** again. It takes
    five to eight minutes, and the progress is shown.
-3. Read the result in the window: the comparison first, then each option from door to door. Links open in the
-   browser, and **Open the full report** opens the file saved in `reports/`, in a folder of its own for each trip.
-   Only the last 5 trips stay there: tick **Keep this report** to move this one to `reports/saved/`, where nothing is deleted.
-4. Ask about the trip in the box at the bottom ("and if I leave a day later?"). Questions are answered without searching again.
-5. Prices change. Once a report's prices are over a day old, **Refresh prices** asks the coach and train operators
-   again, before you book. Flight prices are not asked again: check them on the airline's site.
+3. Read the result: the comparison first, then each option from door to door, and the link to the full report,
+   saved in `reports/`, in a folder of its own for each trip. Every report is listed on the first page. Only the last
+   5 trips stay there: **Keep this report** moves one to `reports/saved/`, where nothing is deleted.
+4. Ask about the trip in the box under the result ("and if I leave a day later?"). Questions are answered without
+   searching again.
+5. Prices change. Once a report's prices are over a day old, **Refresh prices** on the first page asks the coach and
+   train operators again, before you book. Flight prices are not asked again: check them on the airline's site.
 
-**Advanced settings** in the window, or `settings.py`, hold every other rule: how long before a flight to be at
-the airport, by train or by bus only, how many changes, how much an extra hour of travel is worth to you. Point at
-a setting to see what it means.
+**Advanced settings**, under the form, or `settings.py`, hold every other rule: how long before a flight to be at
+the airport, by train or by bus only, how many changes, how much an extra hour of travel is worth to you. The ones
+that need it say what they mean under them, and **Back to settings.py** undoes every change.
 
-**Check the services** in the window makes one small request to every service the program depends on and says
-which ones answer. Use it whenever a search fails.
+**Check the services**, on the first page, makes one small request to every service the program depends on and
+says which ones answer. Use it whenever a search fails.
 
 ### Find where to go (Discover)
 
-1. Double-click `Discover.bat` (after `TripPlanner.bat` has created the environment once).
+1. Press **Discover** at the top of the page.
 2. Write your city, click the days you could leave on and, for a return trip, the days you could come back on.
-3. Press **Open the map**. The map opens in the browser in a minute or two: one dot per destination, its colour by
+3. Press **Open the map**. In a minute or two the link to the map appears: one dot per destination, its colour by
    the total price. Then it improves by itself for a few minutes, while the cheapest destinations are looked up in
-   the real timetables and the trains and buses are priced. Keep the window open while you use the map.
+   the real timetables and the trains and buses are priced. A new map waits for the last one to save what it found;
+   the pages of the last five maps keep working.
 4. Use the filters above the map (flights, trains, buses, total price, hours on board, country), click a dot to see
-   the trip, and press the button there to open the planner on it.
+   the trip, and follow the link there: the planner's form opens filled in with that trip, and nothing is searched
+   until you press **Search**.
 
 The first map of a place takes longer than the next ones: what it finds about each airport is kept for 90 days.
 Discover asks Kiwi, its source for every airline but Ryanair, at most 150 times a day for all the maps together, so
@@ -75,7 +84,7 @@ Better not to make a map while the planner is searching: they use the same servi
 ### When nothing fits
 
 Every setting is checked before anything is searched: a date that does not exist or has passed, a time that is not
-a time, limits that contradict each other. The reason is shown in the window, and settings that are allowed but will
+a time, limits that contradict each other. The reason is shown on the form, and settings that are allowed but will
 probably disappoint (such as leaving at 06:30 and arriving by 09:00) are pointed out before the search starts.
 
 If no trip respects every requirement, the program shows the closest ones instead, each with what it breaks, what
@@ -111,34 +120,33 @@ dates, the airports you allowed and what the real timetables say are never given
 - It books nothing: it gives the link of each part, to book on the operator's own site.
 - Discover counts the transport only, not where to sleep.
 - Dutch and Belgian rail fares are estimated from the distance: their operators do not let a program read them.
-- Discover's window and map are in English only; the planner speaks every language of `trip_planner/texts/languages/`.
-- The one-click launchers are for Windows.
+- The one-click launcher is for Windows: elsewhere, `python main.py` opens the program.
 
 ### From the command line
 
 ```
-env\.venv\Scripts\python main.py              the window
-env\.venv\Scripts\python main.py --terminal   no window: the trip in settings.py, questions asked in the terminal
+env\.venv\Scripts\python main.py              the program in the browser, until Quit or Ctrl+C (as TripPlanner.bat)
+env\.venv\Scripts\python -m app --no-browser  the same, served without opening the browser: the address is printed
+env\.venv\Scripts\python main.py --terminal   the trip in settings.py, in the terminal, questions asked there
 env\.venv\Scripts\python main.py --check      check the services
 env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/tools/verify.py)
 env\.venv\Scripts\python main.py --prices     ask again the ground prices of the reports read over a day ago (trip_planner/tools/prices.py)
 
-env\.venv\Scripts\python -m discover.window                         the Discover window
-env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map from the terminal, leaving between the two days
+env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map as a file (discover/maps/), leaving between the two days
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 --fast      Ryanair only: a few seconds
-
-env\.venv\Scripts\python -m app               the planner and Discover in the browser: the whole form, the search, questions about it, the reports, the maps (see app/)
 ```
 
-`python -m discover --help` lists the other options (`--light`, `--max-stops`, `--no-confirm`, `--no-browser`).
+`python -m discover --help` lists the other options (`--light`, `--max-stops`, `--no-confirm`). A map made this way
+is saved once its timetables are looked up; it has no planner to open, only the trips.
 
 ### Languages
 
 Each language is one file in `trip_planner/texts/languages/`, named after its code (`en.py`, `pt-PT.py`). Whatever file is
-there is a language of the program: it appears in the window and can be used in `settings.py`, with nothing else to change.
+there is a language of the program: it appears in the list at the top of the page and can be used in `settings.py`,
+with nothing else to change.
 
-In the window, **Languages...** next to the language list adds one (write its name or its code) and removes one.
+**More languages**, on the first page, adds one (write its name or its code) and removes one.
 Only `en.py` and `pt-PT.py`, written by hand, are in the repository: a language added by a model stays on your
 computer (`.gitignore`), because it is made again with one click.
 From the command line:
@@ -166,7 +174,7 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
    python -m venv env\.venv
    env\.venv\Scripts\python -m pip install --no-deps -r env\requirements.lock
    ```
-   macOS or Linux (the window needs Tk: `python3-tk` on Debian and Ubuntu):
+   macOS or Linux:
    ```
    python3.12 -m venv env/.venv
    env/.venv/bin/python -m pip install -r env/requirements.txt
@@ -196,7 +204,7 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 ### How a trip is planned
 
 ```
- window (gui/) or terminal ── TripSettings, checked
+ browser (app/) or terminal ── TripSettings, checked
             │
             ▼
  1. places (trip/places.py)       the two cities on OpenStreetMap; the airports around each, by distance and
@@ -229,7 +237,7 @@ A round trip is two one-way trips, the way back on the same airports, then a sum
 ### How a Discover map is made
 
 ```
- window (discover/window.py) or terminal ── session.py
+ browser (app/maps.py) or terminal ── session.py
             │
             ▼
  1. the airports around the city with the most routes (finder.py, flown.py)
@@ -238,18 +246,35 @@ A round trip is two one-way trips, the way back on the same airports, then a sum
  4. the cities reached straight by train or bus (ground.py, Transitous)
             │
             ▼
- page served on 127.0.0.1 (page.py, serve.py) ── opens in the browser
+ the page (page.py), served by the app ── or saved as a file, from the terminal
             │  then, while the page redraws itself:
             ▼
  5. the trains and buses priced for the days (ground_fares.py, the planner's operators)
  6. the cheapest destinations looked up in the real timetables (confirm.py, the planner's code, no model)
             │
             ▼
- a click on a trip ── plan.py ── the planner's window, in a process of its own, with the form filled
+ a click on a trip ── the planner's form in the app, filled in with it: nothing searched until asked
 ```
 
-Discover may import the planner; the planner never imports Discover. A map is made in a process of its own because
-the planner's code reads the trip being planned from module globals (`trip_planner/current.py`).
+Discover may import the planner; the planner never imports Discover. The app imports both, and neither imports the
+app. A search and a map are each made in a process of their own because the planner's code reads the trip being
+planned from module globals (`trip_planner/current.py`).
+
+### How the app works
+
+```
+ browser ── 127.0.0.1 only ── server.py, site.py   every page; a POST must carry the token of the app's own forms
+                                   │
+                ┌──────────────────┴──────────────────┐
+                ▼                                     ▼
+ a search: job.py, a process of its own     a map: job.py → map_job.py, a process of its own
+   which place? which airports? questions     its page, its destinations as they change, its trips
+                │                                     │
+                └──────── JSON lines, both ways ──────┘
+                                   │
+                                   ▼
+ the reports (reports.py, report_page.py)   the saved Markdown as pages: tables, colours, each option to scale
+```
 
 ### How the code is organised
 
@@ -263,7 +288,8 @@ trip_planner/
 │   ├── trip_settings.py   TripSettings: every setting of a trip, its default and its check
 │   ├── dates.py           travel dates as travellers write them
 │   ├── ground_choice.py   by train, by bus or either, and how many changes, on each side of the flight
-│   └── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
+│   ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
+│   └── form.py            how a form shows the settings: the main card, the tabs, the labels and hints
 ├── texts/             every text the traveller reads
 │   ├── __init__.py        tr(): reads the languages and gives each text in the right one
 │   ├── translate.py       adds, removes and checks languages
@@ -302,21 +328,28 @@ trip_planner/
 │   ├── summary.py         the result shown to the traveller
 │   ├── full.py            the full report saved to reports/
 │   └── formatting.py      tables, grades and sources
-├── gui/               the window: form, airport list, progress, result, questions
-│   ├── window.py          the main window, and the work it hands to the planner's thread
-│   ├── output.py          the text where the progress and the result are written
-│   ├── advanced.py        the advanced settings
-│   ├── dialogs.py         which place a name means, the calendar, the languages
-│   └── style.py           colours, fonts and the styles of the widgets
 └── tools/             the maintenance commands of main.py
     ├── check.py           --check: whether every outside service answers
     ├── verify.py          --verify: whether the connections of the kept reports really ran
     └── prices.py          --prices and Refresh prices: the ground prices over a day old, asked again before booking
 
+app/
+├── __main__.py        python -m app: the app served, the browser opened
+├── server.py          the pages served on 127.0.0.1 only, and what each may do (its security headers)
+├── site.py            what is answered at each address, and the token every POST must carry
+├── fields.py          the form of a trip: every setting of TripSettings, read back as the browser sends it
+├── search.py          a search or a job in a process of its own, and the part of the page that follows it
+├── job.py             that process: the search, its questions, the program's own jobs (check, prices, languages, a map)
+├── maps.py            Discover's form, and its maps served by their address
+├── map_job.py         a Discover map made in that process, told to the app as it changes
+├── reports.py         the saved reports, listed, kept or put back
+├── report_page.py     a report as a page
+├── page.js            the only script of the app's pages, which work without it: the calendar, the parts that change
+└── tests/             its tests; pytest --browser also runs them in Edge or Chrome
+
 discover/
-├── window.py          the Discover window: the city, the days, the button that opens the map
-├── __main__.py        the same from the terminal
-├── session.py         one map, from the city typed to the page served and improved
+├── __main__.py        a map from the terminal, saved as a file
+├── session.py         one map, from the city typed to the page saved and improved
 ├── finder.py          the departure airports, every source asked, the cheapest way to each destination; Kiwi's daily limit
 ├── sources.py         Ryanair's fare finder and Kiwi asked by country
 ├── regions.py         a few more requests for the regions of Europe with fewest cities found
@@ -329,9 +362,7 @@ discover/
 ├── ground_fares.py    their prices for the days of the trip, with the planner's operators
 ├── confirm.py         the cheapest destinations checked in the real timetables, with the planner's code
 ├── breakdown.py       what was searched and what may have been missed, under the map
-├── page.py            the map page (Leaflet and OpenStreetMap)
-├── serve.py           the page served on this computer only, and the button that opens the planner
-├── plan.py            the planner's window opened on a trip of the map
+├── page.py            the map page (Leaflet and OpenStreetMap), and the trips of a map the planner can be opened on
 └── tests/             its own tests, run by plain pytest too
 ```
 
@@ -341,9 +372,12 @@ discover/
   written to a report or a log.
 - Web pages are untrusted text: what the models bring back from them is cleaned, its links are kept only when they
   came from a search result, and its figures are graded C. The number of web searches is counted by code, not by the model.
-- The Discover map is served on `127.0.0.1` only, answers only requests addressed to that address (no DNS
-  rebinding), and opens the planner only for a trip of the map, by its key, with the page's random token: nothing a
-  page sends becomes part of a command. The map's script (Leaflet) is checked against its known hash.
+- The app is served on `127.0.0.1` only and answers only requests addressed to that address (no DNS rebinding).
+  Whatever changes something (a search, an answer, a report kept, a language) must carry the random token of the
+  app's own forms, which another site cannot read: no page elsewhere can start a search that spends your quota.
+  Each page says what it may do (Content-Security-Policy). A trip of a map opens the planner's form by its key among
+  that map's own trips, and fills it in only: nothing is searched until you ask. The map's script (Leaflet) is
+  checked against its known hash.
 - Wikidata gets a contact address only if you put one in `env/.env` as `WIKIMEDIA_CONTACT`.
 - Reports and maps stay on your computer. The ones in `reports/saved/` are in the repository: keep it private if
   your trips are.
@@ -352,12 +386,11 @@ discover/
 
 | Path | What it is |
 | :-- | :-- |
-| `TripPlanner.bat` | Double-click to open the program. Sets up the environment the first time |
-| `Discover.bat` | Double-click to open Discover, once the environment is there |
+| `TripPlanner.bat` | Double-click to open the program in the browser. Sets up the environment the first time |
 | `settings.py` | The trip the form starts with, and every setting the form does not show |
-| `main.py` | Runs the program: in a window, in the terminal (`--terminal`), or checks the setup (`--check`) |
+| `main.py` | Runs the program: in the browser, in the terminal (`--terminal`), or checks the setup (`--check`) |
 | `trip_planner/` | The program, see above |
-| `app/` | The program in the browser, being built in phases to replace the two windows (the plan is in `app/__init__.py`). Today it has the whole form of the window, each search in a process of its own that asks which place and which airports, takes questions about the trip, and shows and keeps the reports; and Discover's maps, a trip of a map opening the form filled in |
+| `app/` | The program in the browser: the form, each search in a process of its own that asks which place and which airports and takes questions about the trip, the reports, the program's own jobs, and Discover's maps, a trip of a map opening the form filled in |
 | `discover/` | Discover, see above. Its maps go to `discover/maps/` and what it remembers to `discover/cache/`, both left out of the repository |
 | `env/requirements.txt` | Direct dependencies, pinned |
 | `env/requirements.lock` | Every package of the tested environment, pinned |
@@ -371,7 +404,7 @@ discover/
 | `resources/operators/` | What the coach and train operators' booking systems need and do not give with each answer, one file per operator (see the README there) |
 | `resources/timezones.json` | Cache of time zones, filled as trips are planned |
 | `reports/` | One folder for each of the last 5 trips, older ones deleted. In it the Markdown report (result, sources, reasoning and timings), its log (`.log`) and the vehicles and prices of its options for `--verify` and `--prices` (`.json`). A round trip is one folder with both ways. Not in the repository |
-| `reports/saved/` | The trips you chose to keep, with **Keep this report** in the window, a folder each as above. Never deleted |
+| `reports/saved/` | The trips you chose to keep, with **Keep this report**, a folder each as above. Never deleted |
 
 ## Tests
 
@@ -382,6 +415,7 @@ pytest --live                   asks the real services again and saves new check
 pytest --live tests/departure   the same for one direction
 pytest --live -k BRU            the same for one airport
 pytest discover                 Discover's tests only
+pytest app --browser            the app's tests, the pages also in Edge or Chrome
 ```
 
 The tests follow the ground transport between an airport and a place, in both directions: `tests/arrival/` from
@@ -404,7 +438,7 @@ The **results** are not, and cannot be. Each run reads live data, so two runs a 
 trips:
 
 - Flight prices (Kiwi, Ryanair) and coach prices (FlixBus, Rede Expressos, Movelia, Obilet) change by the hour.
-  A report keeps when its prices were read: once they are over 24 hours old, **Refresh prices** in the window (or
+  A report keeps when its prices were read: once they are over 24 hours old, **Refresh prices** on the first page (or
   `--prices`) asks the operators' booking systems again for the ground prices of its options, and adds what changed
   at the end of the report. The flights are not asked again.
 - The models (Gemini) do not answer the same way twice. They only write the recommendation and the unverified

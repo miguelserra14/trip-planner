@@ -11,7 +11,7 @@ from trip_planner.trip.trip_settings import ROOT, USER_AGENT
 from trip_planner.trip.ground_choice import is_rail
 from trip_planner.trip.places import distance_km
 from trip_planner.sources.timetables.modes import LIFT_MODES
-from trip_planner.utils import logged, plain, say
+from trip_planner.utils import logged, plain, say, write_whole
 
 # Where the passenger terminal of each airport is, or null where OpenStreetMap has none. Worked out once for every
 # airport (python main.py --terminals) and kept in the repository: a search only asks for an airport that is not here.
@@ -92,8 +92,7 @@ def ask_terminals(missing: list[dict[str, Any]], seconds: int = 25) -> bool:
 def save_terminals() -> None:
     """One airport per line, in order: a change shows as the line of its airport."""
     lines = [f"{json.dumps(code)}: {json.dumps(TERMINALS[code])}" for code in sorted(TERMINALS)]
-    TERMINALS_FILE.parent.mkdir(exist_ok=True)
-    TERMINALS_FILE.write_text("{\n" + ",\n".join(lines) + "\n}\n", encoding="utf-8", newline="\n")
+    write_whole(TERMINALS_FILE, "{\n" + ",\n".join(lines) + "\n}\n", newline="\n")
 
 def fill_terminals(again: bool = False) -> int:
     """Work out the terminal of every airport airlines fly from, a few airports per request, and save them.
@@ -186,5 +185,4 @@ def keep_airport_stops(code: str, terminal: list[float] | None, stops: list[tupl
     """One airport per line, in order, as in the file of the terminals."""
     AIRPORT_STOPS[code] = {"read": date.today().isoformat(), "terminal": terminal, "stops": [list(stop) for stop in stops]}
     lines = [f"{json.dumps(code)}: {json.dumps(AIRPORT_STOPS[code], ensure_ascii=False)}" for code in sorted(AIRPORT_STOPS)]
-    AIRPORT_STOPS_FILE.parent.mkdir(exist_ok=True)
-    AIRPORT_STOPS_FILE.write_text("{\n" + ",\n".join(lines) + "\n}\n", encoding="utf-8", newline="\n")
+    write_whole(AIRPORT_STOPS_FILE, "{\n" + ",\n".join(lines) + "\n}\n", newline="\n")

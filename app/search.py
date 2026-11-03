@@ -3,7 +3,7 @@ page that shows how it goes. One search at a time: each one spends the models' q
 requests are already spread over its services. The program's own jobs (checking the services, asking the ground
 prices again, adding a language) run the same way, one at a time with the searches.
 
-The process asks the traveller things on the way, as the window does: which place a name means, which airports
+The process asks the traveller things on the way: which place a name means, which airports
 to leave out; once the trip is planned it takes questions about it. Each of those is a form in the page, sent
 back here and passed on to the process (site.py). While the process works the page asks for its part again every
 few seconds (page.js), or, without the script, the whole page."""
@@ -51,6 +51,7 @@ class Job:
         self.stopped = False
         self.done = ""                  # how one of the program's own jobs went, once it ended (job.run_task)
         self.map_page = ""              # for a Discover map: its page, its trips by key, and its state as it changes
+        self.map_link = ""              # ... and its address in the app (maps.address_of), given by the app
         self.trips: dict[str, list[str]] = {}
         self.map_state: dict[str, Any] = {}
         self.asked: tuple[str, Any] | None = None   # what the process waits for: ("unclear" | "airports" | "ready", what)
@@ -61,7 +62,7 @@ class Job:
             try:
                 self.process.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
                 self.process.stdin.flush()
-            except OSError:   # the process has ended: what it said is already read
+            except (OSError, ValueError):   # the process has ended, its pipe closed: what it said is already read
                 pass
 
     def read(self) -> None:
@@ -73,6 +74,12 @@ class Job:
                 kind, text = "say", line.rstrip("\n")   # a warning of a library, on stderr: a line like any other
             self.read_event(kind, text)
         code = self.process.wait()
+        with self.lock:   # nothing more is told to it, nor read: an app open for days does not keep them
+            for pipe in (self.process.stdin, self.process.stdout):
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
         self.asked = None
         if code and not self.failure and not self.stopped:
             self.failure = tr("app_search_ended", code=code)
@@ -131,6 +138,13 @@ class Job:
             self.conversation.append({"question": message["question"], "answer": "", "unanswered": ""})
         self.tell(message)
 
+    def ask_to_stop(self) -> None:
+        """Ask the process to end at its next step, keeping what it found (a Discover map: map_job.py). It may take a
+        while: stop() is for one that has not ended in time."""
+        if self.running:
+            self.stopped = True
+            self.tell({"stop": True})
+
     def stop(self) -> None:
         if self.process.poll() is None:
             self.stopped = True
@@ -148,7 +162,7 @@ def place_form(asked: dict[str, Any], token: str) -> str:
             f'<button type="submit">{html.escape(tr("ui_place_use"))}</button></form>')
 
 def airports_form(asked: dict[str, Any], token: str, refusal: str) -> str:
-    """Every airport found, ticked, by group: the ones unticked are left out, as in the window."""
+    """Every airport found, ticked, by group: the ones unticked are left out."""
     groups = []
     for group in asked["groups"]:
         boxes = "".join(f'<label class="tick"><input type="checkbox" name="keep" value="{html.escape(airport["code"])}" checked> '
@@ -204,9 +218,9 @@ def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html:
                      f'{html.escape(tr("app_stop"))}</button></form>')
     elif job.done:
         parts.append(f'<p role="status">{html.escape(job.done)}</p>')
-    if job.map_page:   # a Discover map can be opened as soon as its flights are found, while the rest goes on
+    if job.map_page and job.map_link:   # a Discover map can be opened as soon as its flights are found, while the rest goes on
         parts.insert(1 if job.failure or job.done else 0,
-                     f'<p><a href="/discover/map" target="_blank" class="open">{html.escape(tr("app_open_map"))}</a></p>')
+                     f'<p><a href="{html.escape(job.map_link)}" target="_blank" class="open">{html.escape(tr("app_open_map"))}</a></p>')
     elif job.reports:
         links = "".join(f"<li>{report_link(path)}</li>" for path in job.reports)
         notes = "".join(f'<li class="muted">{html.escape(line)}</li>' for line in job.lines[job.result_at or len(job.lines):])

@@ -6,16 +6,11 @@
     --light       fewer requests to Kiwi: the countries with most known routes only
     --max-stops N most stops each way of the flights Kiwi gives, 0 (direct only) by default
     --no-confirm  do not look the cheapest destinations up in the timetables: the ways to the airports stay estimates
-    --no-browser  make the map without serving or opening it: the timetables are looked up first, then it is saved
 
-The map is served on this computer until Ctrl+C, so that a click on a trip opens the planner's window on it
-(serve.py), while the cheapest destinations are looked up in the real timetables and the page redraws itself
-(confirm.py). It is also saved as a file, again once the lookups end, which works without the planner's button."""
+The map is saved as a file in discover/maps, once its flights are found and again once the lookups end (confirm.py).
+In the app (python -m app) the same map opens as it is made, and a click on a trip opens the planner's form."""
 import argparse
 import sys
-import threading
-import time
-import webbrowser
 from datetime import datetime
 
 from discover import finder
@@ -37,7 +32,6 @@ def read_arguments(arguments: list[str]) -> argparse.Namespace:
     parser.add_argument("--light", action="store_true", help=f"at most {finder.KIWI_LIGHT_REQUESTS} requests to Kiwi instead of {finder.KIWI_REQUESTS}")
     parser.add_argument("--max-stops", type=int, default=finder.MAX_STOPS, choices=range(0, 4), metavar="N", help=f"most stops each way of the flights Kiwi gives (default {finder.MAX_STOPS})")
     parser.add_argument("--no-confirm", action="store_true", help="do not look the cheapest destinations up in the timetables")
-    parser.add_argument("--no-browser", action="store_true", help="make the map without serving or opening it")
     asked = parser.parse_args(arguments)
     if len(asked.days) > 2 or asked.back and len(asked.back) > 2:
         parser.error("give one or two days to leave on, and one or two to come back on")
@@ -53,30 +47,13 @@ def main(arguments: list[str]) -> int:
     days = Days(asked.days[0], asked.days[-1], *((asked.back[0], asked.back[-1]) if asked.back else ()))
     session = Session(asked.city, days, fast=asked.fast, light=asked.light, max_stops=asked.max_stops)
     session.make()
+    print(session.report(), flush=True)
     # The trains and buses are priced whether or not the flights are looked up in the timetables
-    if asked.no_browser:
-        session.look_up(timetables=not asked.no_confirm)
-        print(session.report())
-        return 0
-    print(session.report())
-    address = session.serve(looking_up=True)
-    print(f"The map is served at {address}: a click on a trip there opens the planner on it. Ctrl+C to stop.", flush=True)
-    webbrowser.open(address)
-
-    def looking() -> None:
-        try:
-            session.look_up(timetables=not asked.no_confirm)
-        except Exception as error:   # the map stays as it is: the lookups are a refinement of it
-            print(f"[discover] the lookups stopped: {type(error).__name__}: {error}", flush=True)
-        print(session.report(), flush=True)
-    threading.Thread(target=looking, daemon=True).start()
     try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
+        session.look_up(timetables=not asked.no_confirm)
+    except KeyboardInterrupt:   # look_up saved what it found before it stopped
         pass
-    finally:
-        session.stop()
+    print(session.report())
     return 0
 
 if __name__ == "__main__":

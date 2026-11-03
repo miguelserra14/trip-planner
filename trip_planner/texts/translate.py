@@ -4,7 +4,7 @@
     python main.py --add-language it       write languages/it.py, translated from English by a model
     python main.py --remove-language it    delete languages/it.py
 
-The window does the same with its Languages button (gui/dialogs.py), through `add`, `remove` and `refresh`.
+The app does the same in its page of languages (app/site.py), through `add`, `remove` and `refresh`.
 
 Adding a language that is already there only fills in the texts it is missing, so it is also how to bring every
 language up to date after new texts were written in en.py: python main.py --add-language all"""
@@ -215,7 +215,7 @@ def in_settings(code: str) -> bool:
     return bool(re.search(rf"language\s*=\s*[\"']{re.escape(code)}[\"']", settings))
 
 def refresh() -> None:
-    """In a program that stays open (the window), take in a language that was just added or removed."""
+    """In a program that stays open (the app), take in a language that was just added or removed."""
     read_languages()
     dates.read_words()
 
@@ -227,7 +227,7 @@ def add_language(name: str) -> int:
         print(error)
         return 1
     print("Every language is up to date." if name == "all" else
-          f'It is ready to use: choose it in the window, or set language="{list(left)[-1]}" in settings.py.')
+          f'It is ready to use: choose it in the list of languages at the top of the page, or set language="{list(left)[-1]}" in settings.py.')
     return 0
 
 def remove_language(name: str) -> int:

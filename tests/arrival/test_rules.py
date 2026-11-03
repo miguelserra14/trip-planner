@@ -185,3 +185,22 @@ def test_a_refused_stop_with_nothing_at_the_point_is_a_way_no_timetable_covers()
         finally:
             await transit.close()
     assert asyncio.run(work()) == timetables.NOT_COVERED
+
+def test_a_cache_is_written_whole_or_left_as_it_was(tmp_path, monkeypatch):
+    from trip_planner import utils
+    cache = tmp_path / "cache" / "kept.json"
+    utils.write_whole(cache, '{"old": 1}')
+    real_write = type(cache).write_text
+
+    def cut_short(path, text, *arguments, **named):   # the process stopped halfway through writing
+        real_write(path, text[:3], *arguments, **named)
+        raise KeyboardInterrupt
+    monkeypatch.setattr(type(cache), "write_text", cut_short)
+    try:
+        utils.write_whole(cache, '{"new": 2}')
+    except KeyboardInterrupt:
+        pass
+    monkeypatch.undo()
+    assert cache.read_text(encoding="utf-8") == '{"old": 1}'   # the half-written file is beside it, never in its place
+    utils.write_whole(cache, '{"new": 2}')
+    assert cache.read_text(encoding="utf-8") == '{"new": 2}' and [path.name for path in cache.parent.iterdir()] == ["kept.json"]

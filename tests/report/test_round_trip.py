@@ -209,7 +209,8 @@ def test_keeping_a_round_trip_keeps_both_reports(tmp_path, monkeypatch, settings
     back = full.save_report({}, "", beside=there)
     assert there.exists() and back.exists()   # one trip is kept, and both ways are that trip
     assert not older.parent.exists() and full.trip_folders(tmp_path) == [there.parent] == [back.parent]
-    assert sorted(path.name for path in there.parent.iterdir()) == sorted([there.name, full.log_of(there).name, back.name, full.log_of(back).name])
+    assert sorted(path.name for path in there.parent.iterdir()) == sorted(
+        path.name for report in (there, back) for path in (report, full.log_of(report), full.options_of(report)))
     trip = {"report": back, "there": {"report": there}}
     planner.keep_trip(trip, True)
     for report in (trip["report"], trip["there"]["report"]):

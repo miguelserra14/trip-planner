@@ -17,7 +17,8 @@ from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.itineraries import selection
 from trip_planner.itineraries.ground_only import ground_options, price_all
 from trip_planner.itineraries.legs import Rejected
-from trip_planner.itineraries.ranking import check_itinerary, closeness, price_itineraries, price_itinerary, rank_itineraries
+from trip_planner.itineraries.ranking import (cheapest_by_date, check_itinerary, closeness, price_itineraries, price_itinerary,
+                                              rank_itineraries)
 from trip_planner.trip.places import describe_airport
 from trip_planner.report.formatting import day_text, listed
 from trip_planner.report.summary import ground_lines, render_closest, render_report
@@ -419,6 +420,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
         "recommended": number,
         "shown": shown,                   # the options of the report, in its order: a round trip pairs them with those of the way back
         "ground_only": by_ground,         # the trips without a plane shown after them
+        "by_date": cheapest_by_date(kept, current.SETTINGS.iso_dates),   # what each travel date would cost (report/options.py)
         "verify": verify.record(shown),   # the vehicles of the options shown, kept next to the report for --verify
         "message": f"{report}\n\nThe rules recommend option {number}." + ground_note}
 

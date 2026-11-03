@@ -5,7 +5,10 @@ models' quota (see server.py)."""
 import dataclasses
 import html
 import json
+import os
 import secrets
+import threading
+import time
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 from urllib.parse import parse_qs, quote, unquote
@@ -17,8 +20,10 @@ from trip_planner import current
 from trip_planner.report.full import keep_report
 from trip_planner.texts import LANGUAGES, REFERENCE, TEXTS, tr, translate
 from trip_planner.tools.prices import PRICE_VALID_HOURS, stale_reports
+from trip_planner.trip.form import named
 from trip_planner.trip.trip_settings import TripSettings
 
+KEY = "GOOGLE_API_KEY"   # the models' key, the only one a search cannot do without (tools/check.py)
 SCRIPT = Path(__file__).with_name("page.js")   # the page's only script: the calendar, and the part of a search asked again
 
 class Reply(NamedTuple):
@@ -40,7 +45,13 @@ class Site:
         self.stale = stale                            # the reports whose ground prices are too old to believe
         self.languages_added = False                  # a language job ran: the languages are read again once it ends
         self.map_job: search.Job | None = None        # the last Discover map, in a process of its own (map_job.py)
+        self.maps: dict[str, search.Job] = {}         # the last maps (maps.MAPS_KEPT), by their address
         self.map_values = maps.values_of(defaults.origin)   # what Discover's form shows
+        self.maps_made = 0                            # how many maps were asked for: each one's address is its number
+        self.map_next: dict[str, Any] | None = None   # a map asked for while the last one stops: it starts once that one ended
+        self.stop_asked = 0.0                         # when the last map was asked to stop (time.monotonic), or 0
+        self.maps_lock = threading.Lock()             # the pages are answered in threads of their own: one map starts at a time
+        self.quitting = threading.Event()             # set by the Quit button: the server stops (server.serve)
 
     def begin(self, first: dict[str, Any], title: str) -> Reply:
         """Start a search or one of the program's own jobs, and show how it goes."""
@@ -50,7 +61,7 @@ class Site:
         return Reply(303, location="/search")
 
     def languages_read(self) -> None:
-        """Once a language job ended, its file is there: read the languages again, as the window does."""
+        """Once a language job ended, its file is there: read the languages again."""
         if self.languages_added and not (self.job is not None and self.job.running):
             self.languages_added = False
             translate.refresh()
@@ -64,17 +75,21 @@ class Site:
         header = (f'<header><a href="/" class="name">{html.escape(tr("ui_title"))}</a>'
                   f'<nav class="inline"><a href="/">{html.escape(tr("app_plan_title"))}</a> <a href="/discover">{html.escape(tr("discover_win_title"))}</a></nav>'
                   f'<form method="post" action="/language">{search.hidden(self.token)}<label class="inline">{html.escape(tr("ui_language"))} '
-                  f'<select name="language" data-submit>{languages}</select></label><noscript><button type="submit">OK</button></noscript></form></header>')
+                  f'<select name="language" data-submit>{languages}</select></label><noscript><button type="submit">OK</button></noscript></form>'
+                  f'<form method="post" action="/quit">{search.hidden(self.token)}<button type="submit" class="quiet">{html.escape(tr("app_quit"))}</button></form></header>')
         return page(title, header + body, current.SETTINGS.language, refresh=3 if working else 0)
 
-    def home(self, refusal: str = "") -> str:
-        body = fields.trip_form(self.token, self.values, self.defaults, refusal, self.busy())
+    def home(self, refusal: str = "", note: str = "") -> str:
+        # The key is read from env/.env when the settings are (trip_settings.py): without it every search fails, so it
+        # is said before one is tried
+        missing = "" if os.environ.get(KEY) else f'<p class="refusal" role="alert">{html.escape(tr("app_no_key"))}</p>'
+        body = missing + fields.trip_form(self.token, self.values, self.defaults, refusal, self.busy(), note)
         if self.job is not None:
             body += f'<p><a href="/search">{html.escape(tr("app_last_search"))}</a></p>'
         return self.page(tr("app_plan_title"), body + reports.list_section() + self.tools())
 
     def tools(self) -> str:
-        """The program's own jobs, as the window has them: the ground prices asked again (when some are too old),
+        """The program's own jobs: the ground prices asked again (when some are too old),
         the check of the services, and the languages."""
         def button(path: str, text: str, note: str = "", disabled: bool = False) -> str:
             off = " disabled" if disabled or self.busy() else ""
@@ -84,7 +99,7 @@ class Site:
         stale = len(self.stale())
         prices = button("/prices", tr("ui_prices_count", count=stale) if stale else tr("ui_prices"),
                         "" if stale else tr("prices_none", hours=PRICE_VALID_HOURS), disabled=not stale)
-        return (f'<h2>{html.escape(tr("app_tools"))}</h2><div class="tools">{prices}'
+        return (f'<h2>{html.escape(tr("app_tools"))}</h2><div class="tools card">{prices}'
                 f'{button("/check", tr("ui_check"), tr("app_check_note"))}'
                 f'<p><a href="/languages">{html.escape(tr("ui_languages"))}</a></p></div>')
 
@@ -115,7 +130,7 @@ class Site:
                f'<button type="submit"{off}>{html.escape(tr("ui_language_add"))}</button>'
                f'<small>{html.escape(tr("ui_languages_hint"))}</small></form>')
         body = (f'<p><a href="/">{html.escape(tr("app_all_reports"))}</a></p><h1>{html.escape(tr("app_languages"))}</h1>{said}'
-                f'<div class="table"><table><tbody>{"".join(rows)}</tbody></table></div>{add}')
+                f'<div class="table card"><table><tbody>{"".join(rows)}</tbody></table></div>{add}')
         return self.page(tr("app_languages"), body)
 
     def search_page(self) -> str:
@@ -159,7 +174,7 @@ class Site:
                    "/ask": self.post_question, "/keep": self.post_keep, "/language": self.post_language,
                    "/check": self.post_check, "/prices": self.post_prices, "/language/add": self.post_add_language,
                    "/language/remove": self.post_remove_language, "/discover": self.post_discover,
-                   "/discover/stop": self.post_discover_stop}
+                   "/discover/stop": self.post_discover_stop, "/restore": self.post_restore, "/quit": self.post_quit}
         return answers[path](one, sent) if path in answers else self.not_found()
 
     def post_search(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
@@ -170,7 +185,7 @@ class Site:
             settings = settings_for(values, self.defaults)   # checked here too, so that a mistake is answered on the form at once
         except ValueError as error:
             self.values = self.form_values(one)
-            return Reply(400, self.home(str(error)))
+            return Reply(400, self.home(named(str(error))))
         self.values = fields.values_of(settings)   # as the settings read them: "sexta" becomes its day
         current.SETTINGS = dataclasses.replace(current.SETTINGS, language=settings.language)   # the pages follow the trip's language
         return self.begin({"settings": values}, f"{settings.origin} → {settings.destination}")
@@ -185,6 +200,24 @@ class Site:
         values["arrival_scale"] = "wide" if "arrival_scale" in one else "near"
         values["max_stopovers"] = fields.stopovers(one)
         return values
+
+    def post_restore(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        """Every setting back to what settings.py says, the main card's ticks included: the
+        places, the days and the language stay as the form has them."""
+        kept = {name: one.get(name, "") for name in fields.TRIP if name in one}
+        self.values = {**fields.values_of(self.defaults), **kept}
+        return Reply(200, self.home(note=tr("ui_restored")))
+
+    def post_quit(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        """The program closed from its page: the search stops and the map is asked to, then the server stops and
+        gives the map its while to end (server.serve, close)."""
+        self.map_next = None
+        if self.job is not None and self.job.running:
+            self.job.stop()
+        if self.map_job is not None and self.map_job.running:
+            self.ask_map_to_stop()
+        self.quitting.set()
+        return Reply(200, page(tr("app_quit"), f'<p role="status">{html.escape(tr("app_quit_done"))}</p>', current.SETTINGS.language))
 
     def post_stop(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         if self.job is not None and self.job.running:
@@ -229,11 +262,14 @@ class Site:
     # ---------------------------------------------------------------- Discover (maps.py)
     def discover_page(self, refusal: str = "") -> str:
         body = maps.form(self.token, self.map_values, refusal)
+        if self.map_next is not None:
+            body += f'<p role="status">{html.escape(tr("discover_win_stopping"))}</p>'
         if self.map_job is not None:
             body += self.map_live() + (f'<form method="post" action="/discover/stop" class="tool">{search.hidden(self.token)}'
                                        f'<button type="submit" class="quiet">{html.escape(tr("app_stop"))}</button></form>'
                                        if self.map_job.working else "")
-        return self.page(tr("discover_win_title"), body, working=self.map_job is not None and self.map_job.working)
+        return self.page(tr("discover_win_title"), body, working=self.map_next is not None or
+                         (self.map_job is not None and self.map_job.working))
 
     def map_live(self) -> str:
         return search.live_part(self.map_job, self.token, reports.link_to, lambda markdown: to_html(markdown)[0], part="/discover/part")
@@ -241,21 +277,28 @@ class Site:
     def get_discover(self, path: str) -> Reply:
         """The form and how the map goes; the map's page and its destinations as they change; a trip of the map
         opening the planner's form, by its key among the map's own trips."""
+        self.map_turn()
         if path == "/discover":
             return Reply(200, self.discover_page())
-        job = self.map_job
-        if job is None:
+        if self.map_job is None:
             return Reply(303, location="/discover")
         if path == "/discover/part":
             return Reply(200, self.map_live())
-        if path == "/discover/map":
+        address, what = maps.part_of(path)
+        job = self.maps.get(address)
+        if job is None:   # not a map, or one too old to be kept
+            return self.not_found()
+        if what == "":
             if not job.map_page:
                 return Reply(303, location="/discover")
             return Reply(200, job.map_page, policy=maps.MAP_POLICY, referrer=maps.MAP_REFERRER)
-        if path == "/discover/state":
+        if what == "state":
             return Reply(200, json.dumps(job.map_state, ensure_ascii=False), kind="application/json; charset=utf-8")
-        if path.startswith(maps.PLANNER_LINK):
-            trip = job.trips.get(unquote(path[len(maps.PLANNER_LINK):]))
+        if what in maps.FILES:   # the page's script and style
+            file, kind = maps.FILES[what]
+            return Reply(200, file.read_text(encoding="utf-8"), kind=kind)
+        if what.startswith("plan/"):
+            trip = job.trips.get(unquote(what[len("plan/"):]))
             if trip:
                 self.values = maps.planner_values(trip, self.values)
                 return Reply(303, location="/")
@@ -267,15 +310,41 @@ class Site:
         refusal = maps.refusal_of(asked)
         if refusal:
             return Reply(400, self.discover_page(refusal))
-        if self.map_job is not None and self.map_job.running:   # two maps cannot look up at once (discover/session.py)
-            self.map_job.stop()
-        self.map_job = self.start({"task": "map", "language": current.SETTINGS.language, "planner_link": maps.PLANNER_LINK, **asked})
+        with self.maps_lock:
+            self.map_next = {"task": "map", "language": current.SETTINGS.language, **asked}   # the form as it is now
+        if self.map_job is not None and self.map_job.running:   # two maps would write the same caches (discover/cache)
+            self.ask_map_to_stop()
+        self.map_turn()
         return Reply(303, location="/discover")
 
     def post_discover_stop(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        self.map_next = None
         if self.map_job is not None and self.map_job.running:
-            self.map_job.stop()
+            self.ask_map_to_stop()
         return Reply(303, location="/discover")
+
+    def ask_map_to_stop(self) -> None:
+        if not self.stop_asked:   # once: the time it was asked is the one it is given
+            self.stop_asked = time.monotonic()
+            self.map_job.ask_to_stop()
+
+    def map_turn(self) -> None:
+        """A map asked to stop is killed if it has not ended in time; once it ended, the map asked for next starts.
+        Asked at each look at Discover's pages, which ask again every few seconds while a map works or waits."""
+        with self.maps_lock:
+            last = self.map_job
+            if last is not None and last.running and self.stop_asked and time.monotonic() - self.stop_asked > maps.STOP_SECONDS:
+                last.stop()
+            if last is not None and last.running or self.map_next is None:
+                return
+            asked, self.map_next, self.stop_asked = self.map_next, None, 0.0
+            self.maps_made += 1
+            address = maps.address_of(self.maps_made)
+            self.map_job = self.start({**asked, "planner_link": address + "plan/"})
+            self.map_job.map_link = address
+            self.maps[address] = self.map_job
+            while len(self.maps) > maps.MAPS_KEPT:   # the oldest first: a dict keeps its order
+                del self.maps[next(iter(self.maps))]
 
     def post_check(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         if self.busy():
@@ -310,7 +379,7 @@ class Site:
         except ValueError as error:
             return Reply(400, self.languages_page(refusal=str(error)))
         translate.refresh()
-        # A page or a trip in a language that is gone carries on in English, as in the window
+        # A page or a trip in a language that is gone carries on in English
         if current.SETTINGS.language not in LANGUAGES:
             current.SETTINGS = dataclasses.replace(current.SETTINGS, language=REFERENCE)
         if self.values.get("language") not in LANGUAGES:
@@ -319,6 +388,14 @@ class Site:
         return Reply(200, self.languages_page(note=note))
 
     def close(self) -> None:
-        for job in (self.job, self.map_job):
-            if job is not None and job.running:
-                job.stop()
+        """The program closing: the search stops, the map is asked to, and given a while to save what it found."""
+        self.map_next = None
+        if self.map_job is not None and self.map_job.running:
+            self.ask_map_to_stop()
+        if self.job is not None and self.job.running:
+            self.job.stop()
+        ends = time.monotonic() + maps.STOP_SECONDS
+        while self.map_job is not None and self.map_job.running and time.monotonic() < ends:
+            time.sleep(0.2)
+        if self.map_job is not None and self.map_job.running:
+            self.map_job.stop()

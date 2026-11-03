@@ -10,7 +10,7 @@ A return can leave from another airport than the one flown to, and land at anoth
 Kiwi combines them when it is cheaper (Birmingham out, Manchester back)."""
 import json
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -18,7 +18,7 @@ import httpx
 
 from trip_planner import current
 from trip_planner.sources import kiwi
-from trip_planner.texts import REFERENCE, text_in
+from trip_planner.texts import REFERENCE, text_in, tr
 from trip_planner.utils import logged
 
 RYANAIR = "https://www.ryanair.com/api/farfnd/v4"
@@ -81,6 +81,32 @@ class Days:
         out = shown(self.out_days, self.first, self.last)
         return out + (say("discover_days_back", days=shown(self.back_days, self.back_first, self.back_last)) if self.round_trip
                       else say("discover_days_one_way"))
+
+# The days as a form writes them (the app's Discover form): dd/mm/yyyy, by commas
+def read_day(text: str) -> str:
+    """dd/mm/yyyy as yyyy-mm-dd. Raises ValueError with what is wrong."""
+    try:
+        return datetime.strptime(text.strip(), "%d/%m/%Y").date().isoformat()
+    except ValueError:
+        raise ValueError(tr("discover_win_bad_day", day=text.strip()))
+
+def read_list(text: str) -> list[str]:
+    """Days written dd/mm/yyyy and separated by commas, as the calendar writes them: yyyy-mm-dd, in order, once each."""
+    return sorted({read_day(entry) for entry in text.split(",") if entry.strip()})
+
+def read_days(out: str, back: str = "", today: date | None = None) -> Days:
+    """The days of the form, checked: real days, from today on, the return not before the leaving. The days clicked
+    stay as they are: a map asks for the flights of those days only."""
+    today = today or date.today()
+    leaving = read_list(out)
+    if not leaving:
+        raise ValueError(tr("discover_win_no_day"))
+    if date.fromisoformat(leaving[0]) < today:
+        raise ValueError(tr("discover_win_past_day"))
+    coming = read_list(back)
+    if back.strip() and coming[-1] < leaving[0]:
+        raise ValueError(tr("discover_win_back_before"))
+    return Days.clicked(leaving, coming or None)
 
 def ryanair_leg(flight: dict[str, Any]) -> dict[str, Any]:
     start, end = flight["departureAirport"], flight["arrivalAirport"]

@@ -1,4 +1,4 @@
-"""The ground prices of the options a report shows, asked again before booking: Refresh prices in the window, or
+"""The ground prices of the options a report shows, asked again before booking: the prices button of the app, or
 python main.py --prices. Operators change their prices by the hour (dynamic pricing), so a price read more than
 PRICE_VALID_HOURS ago is no longer believed, and every report whose prices are that old can be refreshed.
 

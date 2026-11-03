@@ -14,8 +14,9 @@ from trip_planner.sources.timetables.days import local_to_utc, minutes_since, re
 from trip_planner.sources.timetables.modes import GROUND_MODES
 from trip_planner.utils import logged, to_minutes
 
-WINDOW_HOURS = 3          # the timetables are asked from the earliest time the traveller leaves, then every this many hours:
-                          # each answer is the fastest few after that time, so one request does not cover a whole day
+WINDOW_HOURS = 3          # the timetables are asked from the earliest time the traveller leaves, then from the last connection
+                          # of each answer, and at least this many hours later: one answer may cover two hours (Brussels to
+                          # Paris) or ten (Antwerp to Coimbra), and never more requests are made than one every this many hours
 MAX_HOURS = 36            # a trip longer than this on the ground is not compared with flying
 FLIXBUS_CITY_KM = 25      # FlixBus's city is the traveller's when its centre is this close
 
@@ -42,14 +43,22 @@ async def published(timetables: Timetables, start: tuple, end: tuple, day: str, 
     earliest, latest = to_minutes(settings.earliest_leave), to_minutes(settings.latest_leave)
     walk = settings.city_walk_minutes * 60
 
-    async def window(minutes: int) -> list[dict[str, Any]]:
-        found = await timetables.get("plan", {
-            "fromPlace": f"{start[0]},{start[1]}", "toPlace": f"{end[0]},{end[1]}", "time": local_to_utc(service, minutes, zones[0]),
-            "arriveBy": "false", "numItineraries": PAGE_SIZE, "maxPreTransitTime": walk, "maxPostTransitTime": walk,
-            "transitModes": GROUND_MODES})
-        return [made for made in (connection(service, day, itinerary, zones) for itinerary in found.get("itineraries") or []) if made]
-    answers = await asyncio.gather(*(window(minutes) for minutes in range(earliest, latest + 1, WINDOW_HOURS * 60)), return_exceptions=True)
-    return [found for answer in answers if isinstance(answer, list) for found in answer]
+    found: list[dict[str, Any]] = []
+    minutes = earliest
+    while minutes <= latest:
+        try:
+            # Asked after the flights' connections: the search waits for those (Timetables.get)
+            answer = await timetables.get("plan", {
+                "fromPlace": f"{start[0]},{start[1]}", "toPlace": f"{end[0]},{end[1]}", "time": local_to_utc(service, minutes, zones[0]),
+                "arriveBy": "false", "numItineraries": PAGE_SIZE, "maxPreTransitTime": walk, "maxPostTransitTime": walk,
+                "transitModes": GROUND_MODES}, later=True)
+        except Exception:
+            answer = {}   # this window is left out, not the ones after it
+        itineraries = answer.get("itineraries") or []
+        found += [made for made in (connection(service, day, itinerary, zones) for itinerary in itineraries) if made]
+        last = max((minutes_since(service, itinerary["startTime"], zones[0]) for itinerary in itineraries), default=minutes)
+        minutes = max(last + 1, minutes + WINDOW_HOURS * 60)
+    return found
 
 def sold_by_flixbus(origin, destination, day: str) -> list[dict[str, Any]]:
     """What FlixBus sells from the origin city to the destination city on the travel date, with its price: the
@@ -77,12 +86,14 @@ def sold_by_flixbus(origin, destination, day: str) -> list[dict[str, Any]]:
         })
     return found
 
-async def all_the_way(days: list[str]) -> dict[str, Any]:
+async def all_the_way(days: list[str], timetables: Timetables | None = None) -> dict[str, Any]:
     """Every way found from the origin to the destination on the ground, on each travel date: {"connections": ...,
-    "requests": ...}. A source that fails only leaves out what it would have found."""
+    "requests": ...}. A source that fails only leaves out what it would have found. timetables is the client of the
+    whole search, when there is one: it is then not closed here, and "requests" counts the requests of the search."""
     origin, destination = current.TRIP.origin, current.TRIP.destination
     start, end = (origin.latitude, origin.longitude), (destination.latitude, destination.longitude)
-    timetables = Timetables()
+    own = timetables is None
+    timetables = timetables or Timetables()
     try:
         zones = tuple(await asyncio.gather(timetables.zone(*start), timetables.zone(*end)))
         answers = await asyncio.gather(*(published(timetables, start, end, day, zones) for day in days),
@@ -91,4 +102,5 @@ async def all_the_way(days: list[str]) -> dict[str, Any]:
         return {"connections": [one for one in found if one["minutes"] <= MAX_HOURS * 60], "requests": timetables.requests,
                 "zones": zones}
     finally:
-        await timetables.close()
+        if own:
+            await timetables.close()

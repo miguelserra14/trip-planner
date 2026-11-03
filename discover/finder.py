@@ -50,7 +50,7 @@ KIWI_AT_ONCE = 2
 KIWI_PAUSE_SECONDS = 1.0
 # ... and every map of one day together at most this many times, counted in this file. The planner's own requests
 # are not counted here: the limit leaves room for them.
-KIWI_DAILY = 150
+KIWI_DAILY = 10000
 KIWI_COUNT = Path(__file__).parent / "cache" / "kiwi_requests.json"
 # What Kiwi answered, by the airports asked from, what was asked for and the days: the same request within this many
 # hours (as long as the planner believes a price) is answered from the file, and neither counted nor waited for. A

@@ -5,6 +5,8 @@ __pycache__/
 # The recent reports come and go. Only the ones kept on purpose, in reports/saved/, belong in the repository
 /reports/*
 !/reports/saved/
+# The answers of the timetables, kept a day for the next searches (sources/timetables/client.py)
+/cache/
 # Crash dumps of command-line tools
 *.stackdump
 # Languages added by a model are made again with one click (More languages, in the app), so only the two

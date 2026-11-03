@@ -147,22 +147,25 @@ async def ask_destination_agent(flights: list[dict[str, Any]], only: set | None 
             for route in (plan.routes if plan else [])
         ]
 
-async def read_timetables(flights: list[dict[str, Any]]) -> dict[str, Any]:
+async def read_timetables(flights: list[dict[str, Any]], transit: timetables.Timetables | None, known: dict[str, Any] | None) -> dict[str, Any]:
     with timed("2c real timetables"):
-        return await timetables.ground_transport_for(flights)
+        return await timetables.ground_transport_for(flights, transit, known)
 
-async def ground_transport(checked: list[dict[str, Any]], asked: set = frozenset()) -> tuple:
+async def ground_transport(checked: list[dict[str, Any]], asked: set = frozenset(), transit: timetables.Timetables | None = None,
+                           known: dict[str, Any] | None = None) -> tuple:
     """The timetables and what the two specialists found, for the flights whose ground transport is looked up.
-    asked is the airports the specialists were already asked about, as ("to" or "from", code): not asked again."""
+    asked is the airports the specialists were already asked about, as ("to" or "from", code): not asked again.
+    transit and known are the client of the search and what earlier rounds found (timetables.ground_transport_for)."""
     leaving = {flight["departure_airport"] for flight in checked if ("to", flight["departure_airport"]) not in asked}
     landing = {flight["arrival_airport"] for flight in checked if ("from", flight["arrival_airport"]) not in asked}
     # On a side where the traveller chose how to travel, what a model finds cannot be checked and is not used: not asked
     leaving, landing = (set() if ground_choice.restricted(True) else leaving), (set() if ground_choice.restricted(False) else landing)
     if await asyncio.to_thread(web.available):
-        return tuple(await asyncio.gather(read_timetables(checked), ask_transfer_agent(checked, leaving), ask_destination_agent(checked, landing)))
+        return tuple(await asyncio.gather(read_timetables(checked, transit, known), ask_transfer_agent(checked, leaving),
+                                          ask_destination_agent(checked, landing)))
     # Plan B, without the web search: the timetables first, then the specialists only for the airports no
     # timetable covers. They cannot search, so they answer from what the model knows, graded C as always.
-    ground = await read_timetables(checked)
+    ground = await read_timetables(checked, transit, known)
     leaving, landing = leaving & not_covered(checked, ground, "to_airport"), landing & not_covered(checked, ground, "from_airport")
     say(tr("progress_no_web", count=len(leaving) + len(landing)))
     transfers, trains = await asyncio.gather(ask_transfer_agent(checked, leaving, 0), ask_destination_agent(checked, landing, 0))
@@ -202,8 +205,9 @@ def itineraries_of(flights: list[dict[str, Any]], ground: dict[str, Any], transf
     # One whose operator says a connection does not run that day cannot win, nor stop the search for the others
     return {flight_id: itinerary if itinerary and not itinerary["not_running"] else None for flight_id, itinerary in made.items()}
 
-async def look_up_in_rounds(flights: list[dict[str, Any]]) -> tuple:
-    """The ground transport of the flights that can still win, a few at a time (see selection.py).
+async def look_up_in_rounds(flights: list[dict[str, Any]], transit: timetables.Timetables | None = None) -> tuple:
+    """The ground transport of the flights that can still win, a few at a time (see selection.py), all through
+    transit, the client of the search, so that a round reuses what the ones before asked.
     Returns (the flights looked up, ground, transfers, trains, why it stopped)."""
     checked: list[dict[str, Any]] = []
     ground: dict[str, Any] = {"operators": {}, "operators_from": {}, "requests": 0}
@@ -215,12 +219,12 @@ async def look_up_in_rounds(flights: list[dict[str, Any]]) -> tuple:
         if not batch:
             return checked, ground, transfers, trains, reason
         asked = {("to", transfer["airport"]) for transfer in transfers} | {("from", route["airport"]) for route in trains}
-        found, new_transfers, new_trains = await ground_transport(batch, asked)
+        # The operators' rides of this round are added to ground's own, the ones of earlier rounds are not asked again
+        found, new_transfers, new_trains = await ground_transport(batch, asked, transit, ground)
         for side in ("operators", "operators_from"):
-            for code, days in (found.pop(side, None) or {}).items():
-                for day, rides in days.items():
-                    ground[side].setdefault(code, {}).setdefault(day, rides)
-        ground["requests"] += found.pop("requests", 0)
+            ground[side] = found.pop(side)
+        # The client of the search counts its own requests: those of this round alone when there is none
+        ground["requests"] = found.pop("requests", 0) + (0 if transit else ground["requests"])
         ground.setdefault("not_on_sale", []).extend(found.pop("not_on_sale", []))
         ground.update(found)
         transfers += new_transfers
@@ -229,12 +233,12 @@ async def look_up_in_rounds(flights: list[dict[str, Any]]) -> tuple:
         looked_up.update(await asyncio.to_thread(itineraries_of, batch, ground, transfers, trains))
         say(tr("progress_round", checked=len(checked), itineraries=sum(1 for itinerary in looked_up.values() if itinerary)))
 
-async def without_a_plane() -> dict[str, Any]:
+async def without_a_plane(transit: timetables.Timetables | None = None) -> dict[str, Any]:
     """The ways from the origin to the destination by train or coach on the travel dates (all_the_way.py), to
     compare with flying. A failure only leaves them out of the report."""
     with timed("2d whole trip by train or coach"):
         try:
-            found = await all_the_way(current.SETTINGS.iso_dates)
+            found = await all_the_way(current.SETTINGS.iso_dates, transit)
             found["priced"] = await asyncio.to_thread(price_all, found)
             return found
         except Exception as error:
@@ -247,14 +251,21 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
     The whole trip by train or coach is looked up at the same time."""
     flights = state["flights"]
     with timed("2 ground transport (the three below run at the same time)"):
-        whole_way = asyncio.ensure_future(without_a_plane())
-        if state.get("report"):
-            # No flight fits the traveller's limits: the closest ones are looked up, the ones that break the least first
-            checked, stopped = timetables.flights_to_check(flights), "limit"
-            ground, transfers, trains = await ground_transport(checked)
-        else:
-            checked, ground, transfers, trains, stopped = await look_up_in_rounds(sorted(flights, key=lambda flight: flight["price_eur"]))
-        found_whole_way = await whole_way
+        # One client of the timetables for every round and for the trip without a plane: they share what was asked,
+        # and the answers of the last searches (KEPT_HOURS in client.py)
+        transit = timetables.Timetables(keep=True)
+        try:
+            whole_way = asyncio.ensure_future(without_a_plane(transit))
+            if state.get("report"):
+                # No flight fits the traveller's limits: the closest ones are looked up, the ones that break the least first
+                checked, stopped = timetables.flights_to_check(flights), "limit"
+                ground, transfers, trains = await ground_transport(checked, transit=transit)
+            else:
+                checked, ground, transfers, trains, stopped = await look_up_in_rounds(sorted(flights, key=lambda flight: flight["price_eur"]), transit)
+            found_whole_way = await whole_way
+            ground["requests"] = transit.requests
+        finally:
+            await transit.close()
     legs = [ground[flight["id"]][side] for flight in checked for side in ("to_airport", "from_airport")]
     covered = sum(leg["covered"] for leg in legs)
     say(tr("progress_ground", flights=len(checked), covered=covered, legs=len(legs), requests=ground.get("requests", 0)))

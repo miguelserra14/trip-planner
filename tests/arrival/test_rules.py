@@ -2,7 +2,7 @@
 import asyncio
 import math
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -206,6 +206,130 @@ def test_a_cache_is_written_whole_or_left_as_it_was(tmp_path, monkeypatch):
     assert cache.read_text(encoding="utf-8") == '{"old": 1}'   # the half-written file is beside it, never in its place
     utils.write_whole(cache, '{"new": 2}')
     assert cache.read_text(encoding="utf-8") == '{"new": 2}' and [path.name for path in cache.parent.iterdir()] == ["kept.json"]
+
+# ---------------------------------------------------------------- how often the timetables are asked
+def test_flights_asking_about_the_same_place_at_once_share_its_stations(monkeypatch):
+    from trip_planner.sources.timetables import client
+    monkeypatch.setattr(client, "by_road", lambda point, hubs: hubs)
+
+    async def asked(at_once: int) -> int:
+        transit, count = timetables.Timetables(), []
+
+        async def get(path, params):
+            count.append(path)
+            await asyncio.sleep(0)
+            return []   # no station near the place: every radius is asked
+        transit.get = get
+        await asyncio.gather(*(transit.hubs((40.0, -8.0)) for _ in range(at_once)))
+        await transit.close()
+        return len(count)
+    assert asyncio.run(asked(3)) == asyncio.run(asked(1)) > 0
+
+def test_a_question_that_failed_is_asked_again_by_the_next_flight():
+    asked = []
+
+    async def ask():
+        asked.append(1)
+        if len(asked) == 1:
+            raise httpx.ConnectError("no answer")
+        return ["found"]
+
+    async def work():
+        transit, answers = timetables.Timetables(), {}
+        with pytest.raises(httpx.ConnectError):
+            await transit.shared(answers, ("route",), ask)
+        found = await transit.shared(answers, ("route",), ask)
+        again = await transit.shared(answers, ("route",), ask)
+        await transit.close()
+        return found, again
+    assert asyncio.run(work()) == (["found"], ["found"]) and len(asked) == 2
+
+def test_the_flights_ask_the_timetables_before_the_trip_without_a_plane():
+    async def work():
+        transit, order = timetables.Timetables(), []
+        for _ in range(timetables.client.TIMETABLE_CONCURRENCY):
+            await transit.turn(False)   # every turn taken
+
+        async def take(name: str, later: bool):
+            await transit.turn(later)
+            order.append(name)
+        waiting = [asyncio.ensure_future(take("without a plane", True))]
+        await asyncio.sleep(0)   # it is waiting for its turn when the flight's request comes
+        waiting.append(asyncio.ensure_future(take("flight", False)))
+        await asyncio.sleep(0)
+        transit.semaphore.release()
+        await asyncio.sleep(0.01)
+        first = list(order)
+        transit.semaphore.release()
+        await asyncio.gather(*waiting)
+        await transit.close()
+        return first, order
+    assert asyncio.run(work()) == (["flight"], ["flight", "without a plane"])
+
+VEHICLE = {"mode": "BUS", "legGeometry": {"points": "a long shape"}, "steps": [{"walk": "directions"}]}
+
+def answering(transit: timetables.Timetables, asked: list) -> None:
+    """The timetables, answering every request with one connection of one vehicle and counting them."""
+    def answer(request):
+        asked.append(str(request.url))
+        return httpx.Response(200, json={"itineraries": [{"legs": [VEHICLE]}]})
+    transit.http = httpx.AsyncClient(transport=httpx.MockTransport(answer))
+
+def plan_at(hours_ahead: float) -> dict:
+    moment = datetime.now(timezone.utc) + timedelta(hours=hours_ahead)
+    return {"fromPlace": "40.2,-8.4", "toPlace": "51.2,4.4", "time": moment.strftime("%Y-%m-%dT%H:00:00Z"), "arriveBy": "false",
+            "transitModes": timetables.GROUND_MODES}
+
+@pytest.fixture
+def kept_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(timetables.client, "KEPT_DIR", tmp_path / "timetables")
+    return tmp_path / "timetables"
+
+def test_an_answer_is_kept_for_the_next_search_and_not_asked_again(kept_dir):
+    async def search(keep: bool) -> tuple:
+        transit, asked = timetables.Timetables(keep=keep), []
+        answering(transit, asked)
+        found = await transit.get("plan", plan_at(30))
+        await transit.close()
+        return found, len(asked), transit.requests
+    asked = {"itineraries": [{"legs": [VEHICLE]}]}
+    assert asyncio.run(search(True)) == (asked, 1, 1)
+    # The next search asks nothing, and gets the vehicle without what nothing reads
+    assert asyncio.run(search(True)) == ({"itineraries": [{"legs": [{"mode": "BUS"}]}]}, 0, 0)
+    assert asyncio.run(search(False)) == (asked, 1, 1)  # a client that does not keep always asks
+
+def test_connections_of_the_next_hours_and_old_answers_are_not_kept(kept_dir, monkeypatch):
+    async def asked_for(params: dict) -> int:
+        transit, asked = timetables.Timetables(keep=True), []
+        answering(transit, asked)
+        await transit.get("plan", params)
+        await transit.close()
+        return len(asked)
+    soon = plan_at(timetables.client.KEPT_FROM_HOURS - 1)
+    assert asyncio.run(asked_for(soon)) == 1 and asyncio.run(asked_for(soon)) == 1
+    asyncio.run(asked_for(plan_at(30)))
+    later = timetables.client.time.time() + (timetables.client.KEPT_HOURS + 1) * 3600
+    monkeypatch.setattr(timetables.client.time, "time", lambda: later)
+    assert asyncio.run(asked_for(plan_at(30))) == 1
+
+# ---------------------------------------------------------------- the flight search split when Kiwi's answer is full
+def test_a_full_answer_is_split_by_date_then_by_airport_only_for_a_date_still_full(monkeypatch):
+    from trip_planner.sources import flight_search, kiwi
+    asked = []
+
+    async def search(fly_from, fly_to, first_day, last_day, stopovers=None):
+        asked.append((fly_to, first_day, last_day))
+        full = first_day != last_day or (first_day == "2026-12-17" and "," in fly_to)
+        return [{"flight": len(asked)}] * (kiwi.RESULT_CAP if full else 3)
+    monkeypatch.setattr(flight_search, "search", search)
+    monkeypatch.setattr(flight_search, "register_flight", lambda itinerary: None)
+    monkeypatch.setattr(flight_search, "SEARCHED", set())
+    monkeypatch.setattr(flight_search, "FLIGHT_GAPS", [])
+    asyncio.run(flight_search.search_airport_flights("BRU", ["OPO", "LIS", "FAO"], ["2026-12-17", "2026-12-18"]))
+    assert sorted(asked) == sorted([("OPO,LIS,FAO", "2026-12-17", "2026-12-18"), ("OPO,LIS,FAO", "2026-12-17", "2026-12-17"),
+                                    ("OPO,LIS,FAO", "2026-12-18", "2026-12-18"),
+                                    *((code, "2026-12-17", "2026-12-17") for code in ("OPO", "LIS", "FAO"))])
+    assert len(flight_search.SEARCHED) == 6 and not flight_search.FLIGHT_GAPS
 
 # ---------------------------------------------------------------- settings.py once its dates have passed
 def today_is(monkeypatch, day: date) -> None:

@@ -1,7 +1,8 @@
 """The whole trip by train or coach, compared with flying (sources/timetables/all_the_way.py and
 itineraries/ground_only.py): read from the timetables and FlixBus, held to the traveller's limits, priced by the
 operators and never by a guess for the main vehicles, and compared with the recommended option. No network."""
-from datetime import date, timedelta
+import asyncio
+from datetime import date, datetime, timedelta
 
 import pytest
 
@@ -153,6 +154,30 @@ def test_a_connection_of_the_timetables_keeps_its_vehicles_and_its_real_length()
     found = all_the_way.connection(DAY, DAY, itinerary, ("Europe/Lisbon", "Europe/Madrid"))
     assert found["minutes"] == 6 * 60 + 15 and len(found["steps"]) == 1
     assert found["arrive"] - found["leave"] == 7 * 60 + 15   # the clocks of Lisbon and Madrid differ by an hour
+
+class Answering:
+    """The timetables: each answer has PAGE_SIZE connections from the time asked, spread over a number of hours."""
+    def __init__(self, hours: float):
+        self.hours, self.asked = hours, []
+
+    async def get(self, path, params, later=False):
+        assert later   # the flights' connections go first
+        self.asked.append(params["time"])
+        start = datetime.fromisoformat(params["time"].replace("Z", "+00:00"))
+        moments = [start + timedelta(hours=self.hours * number / (all_the_way.PAGE_SIZE - 1)) for number in range(all_the_way.PAGE_SIZE)]
+        text = lambda moment: moment.strftime("%Y-%m-%dT%H:%M:%SZ")
+        legs = lambda moment: [{"mode": "RAIL", "startTime": text(moment), "endTime": text(moment + timedelta(hours=5)), "displayName": "IC",
+                                "agencyName": "", "from": {"name": "a", "lat": 40.2, "lon": -8.4}, "to": {"name": "b", "lat": 40.4, "lon": -3.7}}]
+        return {"itineraries": [{"startTime": text(moment), "legs": legs(moment)} for moment in moments]}
+
+def test_the_whole_way_is_asked_from_the_last_connection_found_but_never_more_often_than_before(settings):
+    def asked(hours: float) -> int:
+        answering = Answering(hours)
+        assert asyncio.run(all_the_way.published(answering, (40.2, -8.4), (40.4, -3.7), DAY, ("UTC", "UTC")))
+        return len(answering.asked)
+    windows = len(range(0, 24 * 60, all_the_way.WINDOW_HOURS * 60))
+    assert asked(10) == 3          # each answer reaches ten hours further: three requests cover the day
+    assert asked(1) == windows     # an answer of one hour: still one request every WINDOW_HOURS, as many as before
 
 def test_a_plane_in_the_timetables_is_not_a_trip_on_the_ground():
     leg = {"mode": "AIRPLANE", "startTime": "2026-11-16T05:00:00Z", "endTime": "2026-11-16T06:00:00Z", "from": {}, "to": {}}

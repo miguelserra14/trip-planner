@@ -31,11 +31,16 @@ def flights_to_check(flights: list[dict[str, Any]]) -> list[dict[str, Any]]:
             chosen.append(flight)
     return chosen
 
-async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
+async def ground_transport_for(flights: list[dict[str, Any]], timetables: Timetables | None = None,
+                               known: dict[str, Any] | None = None) -> dict[str, Any]:
     """Real ground transport for every flight: to its departure airport and from its arrival airport.
     Returns {flight id: {"to_airport": ..., "from_airport": ...}}, the operator rides under "operators"
-    and the number of timetable requests under "requests"."""
-    timetables = Timetables()
+    and the number of timetable requests under "requests".
+    timetables is the client of the whole search, when there is one (it is then not closed here, and "requests"
+    counts the requests of the whole search). known is what earlier rounds found: its operators' rides are not asked
+    for again, and the rides found now are added to them."""
+    own = timetables is None
+    timetables = timetables or Timetables()
     origin, destination = (current.TRIP.origin.latitude, current.TRIP.origin.longitude), (current.TRIP.destination.latitude, current.TRIP.destination.longitude)
     try:
         used = {flight["departure_airport"] for flight in flights} | {flight["arrival_airport"] for flight in flights}
@@ -73,9 +78,9 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
             return flight["id"], {"to_airport": to_airport, "from_airport": from_airport}
 
         in_landing_order = sorted(flights, key=lambda flight: (flight["arrival_airport"], landing_day(flight), flight["arrival_time"]))
-        ground: dict[str, Any] = dict(await asyncio.gather(*(one(flight) for flight in in_landing_order)))
 
-        # Operators with their own booking system: real rides and prices for the day, on both sides of the flight
+        # Operators with their own booking system: real rides and prices for the day, on both sides of the flight.
+        # Asked at the same time as the timetables: they do not need them.
         not_on_sale: list[dict[str, Any]] = []
 
         async def rides(name: str, source, code: str, day: str, to_airport: bool) -> tuple:
@@ -99,10 +104,15 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
                 say(f"[timetables] {name} {code} {day}: {type(e).__name__}")
                 return to_airport, code, day, None
         # An operator's rides are by coach: not asked for on a side the traveller wants to make by train
+        operators, operators_from = (known or {}).get("operators", {}), (known or {}).get("operators_from", {})
+        seen = lambda code, day, to_airport: day in (operators if to_airport else operators_from).get(code, {})
         wanted = sorted({(flight["departure_airport"], flight["date"], True) for flight in flights if ground_choice.road_allowed(True)}
                         | {(flight["arrival_airport"], landing_day(flight), False) for flight in flights if ground_choice.road_allowed(False)})
-        found = await asyncio.gather(*(rides(name, source, *asked) for name, source in fares.RIDE_SOURCES.items() for asked in wanted))
-        ground["operators"], ground["operators_from"] = {}, {}
+        legs, found = await asyncio.gather(
+            asyncio.gather(*(one(flight) for flight in in_landing_order)),
+            asyncio.gather(*(rides(name, source, *asked) for name, source in fares.RIDE_SOURCES.items() for asked in wanted if not seen(*asked))))
+        ground: dict[str, Any] = dict(legs)
+        ground["operators"], ground["operators_from"] = operators, operators_from
         for to_airport, code, day, rides_found in found:
             if rides_found is not None:
                 ground["operators" if to_airport else "operators_from"].setdefault(code, {}).setdefault(day, []).extend(rides_found)
@@ -111,4 +121,5 @@ async def ground_transport_for(flights: list[dict[str, Any]]) -> dict[str, Any]:
         ground["requests"] = timetables.requests
         return ground
     finally:
-        await timetables.close()
+        if own:
+            await timetables.close()

@@ -110,38 +110,45 @@ async def search(fly_from: str, fly_to: str, first_day: str, last_day: str,
 async def search_airport_flights(departure: str, arrivals: list[str], days: list[str]) -> None:
     """Every flight from one departure airport. Starts with one search for all arrival airports and all dates.
     Kiwi returns at most kiwi.RESULT_CAP flights per search, so a full answer is split into smaller searches
-    until nothing can have been cut off.
+    until nothing can have been cut off: by date first, then, for a date still full, by arrival airport. The
+    smaller searches are made at the same time (Kiwi takes a few at once, see kiwi.py).
     With many arrival airports that is dozens of searches per departure airport, and Kiwi refuses a client that
     asks that much. Then the split is by date only. A full answer for a date holds the cheapest flights of that
     date, and only the cheapest few per airport and date are looked at further (see timetables.flights_to_check)."""
     # An answer from Google Flights was asked route by route: nothing was cut, and some routes may be missing
     backup = lambda found: isinstance(found, google_flights.FullAnswer)
     missed: set = set()
-    found = await search(departure, ",".join(arrivals), min(days), max(days))
-    searches = [(arrivals, days)] if found is not None and (backup(found) or len(found) < kiwi.RESULT_CAP) else []
-    if backup(found):
-        missed.update(found.missing)
-    groups = [[arrival] for arrival in arrivals] if len(arrivals) * len(days) <= MAX_SPLIT_SEARCHES else [arrivals]
-    if not searches and found is not None and len(groups) == 1 and len(days) == 1:
-        # Nothing smaller to ask for: the same search again would give the same answer
-        FLIGHT_GAPS.append(tr("gap_capped", route=f"{departure} -> {','.join(arrivals)}", day=days[0], cap=kiwi.RESULT_CAP))
-        searches.append((arrivals, days))
-    elif not searches:
-        # Failed or possibly cut off: one search per arrival airport (or for all of them) and per date
-        for group in groups:
-            for day in days:
-                route = f"{departure} -> {','.join(group)}"
-                part = await search(departure, ",".join(group), day, day)
-                if part is None:
-                    FLIGHT_GAPS.append(tr("gap_no_answer", route=route, day=day))
-                    continue
-                if backup(part):
-                    missed.update(part.missing)
-                elif len(part) >= kiwi.RESULT_CAP:
-                    FLIGHT_GAPS.append(tr("gap_capped", route=route, day=day, cap=kiwi.RESULT_CAP))
-                found = list(found or []) + part
-                searches.append((group, [day]))
-    for itinerary in found or []:
+    found: list[dict[str, Any]] = []
+    searches: list[tuple] = []
+    by_airport = len(arrivals) * len(days) <= MAX_SPLIT_SEARCHES
+
+    async def complete(group: list[str], some_days: list[str]) -> None:
+        """One search, and the smaller ones its answer needs when it failed or may have been cut off."""
+        route = f"{departure} -> {','.join(group)}"
+        part = await search(departure, ",".join(group), min(some_days), max(some_days))
+        if part is not None:
+            found.extend(part)
+            if backup(part):
+                missed.update(part.missing)
+            if backup(part) or len(part) < kiwi.RESULT_CAP:
+                searches.append((group, some_days))
+                return
+        if len(some_days) > 1:
+            smaller = [(group, [day]) for day in some_days]
+        elif len(group) > 1 and by_airport:
+            smaller = [([arrival], some_days) for arrival in group]
+        elif part is None:
+            FLIGHT_GAPS.append(tr("gap_no_answer", route=route, day=some_days[0]))
+            return
+        else:
+            # Nothing smaller to ask for: the same search again would give the same answer
+            FLIGHT_GAPS.append(tr("gap_capped", route=route, day=some_days[0], cap=kiwi.RESULT_CAP))
+            searches.append((group, some_days))
+            return
+        await asyncio.gather(*(complete(*smaller_one) for smaller_one in smaller))
+
+    await complete(arrivals, days)
+    for itinerary in found:
         register_flight(itinerary)
     FLIGHT_GAPS.extend(tr("gap_no_answer", route=f"{departure} -> {arrival}", day=day) for arrival, day in sorted(missed))
     for searched_arrivals, searched_days in searches:

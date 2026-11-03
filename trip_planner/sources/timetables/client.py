@@ -1,11 +1,14 @@
 """Connections in the published timetables, read through Transitous: between a city and an airport on one day, and
 mixed legs where no timetable reaches one of the two ends."""
 import asyncio
+import hashlib
 import json
 import math
 import random
 import time
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -39,6 +42,14 @@ PAGE_SIZE = 8                    # connections asked for per request
 LAST_RIDES_MINUTES = 120         # how long before the latest time the traveller leaves at the last connections are asked from
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
 TIMEZONES: dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}
+# The answers of a search are kept for the next ones (Timetables(keep=True)): the same trip searched again asks
+# nothing it asked in the last KEPT_HOURS. One file per request, named by what was asked.
+KEPT_DIR = ROOT / "cache" / "timetables"
+KEPT_HOURS = 24
+KEPT_FROM_HOURS = 6              # connections sooner than this are always asked: the timetables then carry delays and cancellations.
+                                 # The typical timetable of a far date is often read for the next days (reference_day): that one is kept
+NOT_KEPT = ("legGeometry", "steps")   # what a connection's vehicle carries that nothing here reads: its shape on the map and the
+                                      # directions of a walk, four fifths of an answer
 
 NOT_COVERED = {"covered": False, "service_day": None, "grade": "C", "options": []}
 
@@ -79,6 +90,24 @@ async def first_found(ends: list[tuple], ask: Callable[[tuple | str, int], Await
         if found:
             return found
     return []
+
+def kept_file(path: str, params: dict[str, Any]) -> Path:
+    """Where the answer to a request is kept."""
+    return KEPT_DIR / f"{hashlib.sha1(json.dumps([path, params], sort_keys=True).encode()).hexdigest()}.json"
+
+def soon(path: str, params: dict[str, Any]) -> bool:
+    """Whether a request asks for connections in the next KEPT_FROM_HOURS."""
+    if path != "plan":
+        return False
+    return datetime.fromisoformat(params["time"].replace("Z", "+00:00")) < datetime.now(timezone.utc) + timedelta(hours=KEPT_FROM_HOURS)
+
+def slim(answer: Any) -> Any:
+    """An answer as it is kept: without NOT_KEPT."""
+    if not isinstance(answer, dict) or "itineraries" not in answer:
+        return answer
+    return {**answer, "itineraries": [{**itinerary, "legs": [{key: value for key, value in leg.items() if key not in NOT_KEPT}
+                                                             for leg in itinerary.get("legs") or []]}
+                                      for itinerary in answer["itineraries"] or []]}
 
 def asked(path: str, params: dict[str, Any]) -> str:
     """A request to the timetables in a few words, for the log of the run."""
@@ -157,11 +186,19 @@ def with_stretch(found: list[Connection], stretch: Step, before: bool, start: st
     return joined
 
 class Timetables:
-    """Looks connections up in the published timetables, a few requests at a time."""
+    """Looks connections up in the published timetables, a few requests at a time. One is used for a whole search,
+    so that what one round of flights asked serves the next ones. keep=True also keeps the answers for the next
+    searches (KEPT_HOURS), and uses those of the last ones."""
 
-    def __init__(self):
+    def __init__(self, keep: bool = False):
         self.http = httpx.AsyncClient(headers={"User-Agent": USER_AGENT}, timeout=40)
         self.semaphore = asyncio.Semaphore(TIMETABLE_CONCURRENCY)
+        self.waiting = 0                         # requests waiting for their turn that the later ones let go first
+        self.nobody_waiting = asyncio.Event()
+        self.nobody_waiting.set()
+        self.keep = keep
+        if keep:
+            self.forget_old_answers()
         self.probes: dict[tuple, Any] = {}       # routes already asked about in the middle of the day
         self.last_rides: dict[tuple, Any] = {}   # last connections to an airport before the latest time the traveller leaves at
         self.first_rides: dict[tuple, Any] = {}  # first connections of the day to an airport
@@ -172,12 +209,61 @@ class Timetables:
         self.station_cache: dict[tuple, Any] = {}   # where an operator's coach station is, by its name
         self.next_slot = 0.0
 
-    async def get(self, path: str, params: dict[str, Any]) -> Any:
+    def forget_old_answers(self) -> None:
+        """Delete the kept answers older than KEPT_HOURS."""
+        try:
+            for file in KEPT_DIR.glob("*.json"):
+                if time.time() - file.stat().st_mtime > KEPT_HOURS * 3600:
+                    file.unlink(missing_ok=True)
+        except OSError:
+            pass   # OneDrive may hold a file a moment: it is deleted by the next search
+
+    def kept_answer(self, path: str, params: dict[str, Any]) -> Any:
+        """The answer an earlier search got to the same request in the last KEPT_HOURS, or None. Not for
+        connections that have come within KEPT_FROM_HOURS since."""
+        if not self.keep or soon(path, params):
+            return None
+        try:
+            saved = json.loads(kept_file(path, params).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        if time.time() - saved["at"] > KEPT_HOURS * 3600:
+            return None
+        # In the log, apart from the requests: nothing was asked of the service
+        with logged("Transitous (kept)", asked(path, params)) as entry:
+            entry["result"] = f"ok: answer of {time.strftime('%d/%m %H:%M', time.localtime(saved['at']))}"
+        return saved["answer"]
+
+    async def turn(self, later: bool) -> None:
+        """Wait for a request's turn and take it: self.semaphore is then released by the caller. A later request
+        also lets every other request waiting go first."""
+        while later:
+            await self.nobody_waiting.wait()
+            await self.semaphore.acquire()
+            if self.nobody_waiting.is_set():
+                return
+            self.semaphore.release()   # another request came while this one waited for its turn: it goes first
+        self.waiting += 1
+        self.nobody_waiting.clear()
+        try:
+            await self.semaphore.acquire()
+        finally:
+            self.waiting -= 1
+            if not self.waiting:
+                self.nobody_waiting.set()
+
+    async def get(self, path: str, params: dict[str, Any], later: bool = False) -> Any:
         """One request, in its turn, tried again when the service says it is receiving too many, when it fails
-        on its side (a 5xx answer) or when it does not answer in time."""
+        on its side (a 5xx answer) or when it does not answer in time.
+        later is for the requests of the trip without a plane: the service answers so many a second, however many
+        are sent, and the search waits for the flights' connections, so those go first."""
+        kept = self.kept_answer(path, params)
+        if kept is not None:
+            return kept
         for attempt in range(6):
             queued = time.time()
-            async with self.semaphore:
+            await self.turn(later)
+            try:
                 # Requests leave at a steady pace: a burst gets refused and costs more time than it saves
                 wait = self.next_slot - time.time()
                 self.next_slot = max(time.time(), self.next_slot) + TIMETABLE_SPACING_SECONDS
@@ -194,11 +280,23 @@ class Timetables:
                     if attempt == 5:
                         raise
                     response = None
+            finally:
+                self.semaphore.release()
             if response is not None and response.status_code != 429 and response.status_code < 500:
                 response.raise_for_status()
-                return response.json()
+                found = response.json()
+                if self.keep and not soon(path, params):
+                    write_whole(kept_file(path, params), json.dumps({"at": time.time(), "answer": slim(found)}))
+                return found
             await asyncio.sleep(1.5 * (attempt + 1) + random.random())
         response.raise_for_status()
+
+    async def shared(self, answers: dict[tuple, Any], key: tuple, ask: Callable[[], Awaitable[Any]]) -> Any:
+        """The answer to a question several flights ask at once, asked once and shared through answers. One that
+        failed is asked again by whoever asks next: a failure is not kept for the rounds that follow."""
+        if key not in answers or (answers[key].done() and (answers[key].cancelled() or answers[key].exception() is not None)):
+            answers[key] = asyncio.ensure_future(ask())
+        return await answers[key]
 
     async def station_point(self, name: str, near: tuple) -> tuple | None:
         """Where a coach station an operator names is ("Zagreb Central Bus Station"), found by name in the
@@ -312,11 +410,9 @@ class Timetables:
 
     async def is_covered(self, start: tuple | str, end: tuple | str, day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
         """Whether any timetable covers a route: is there a connection in the middle of the day, by any vehicle?"""
-        key = (start, end, day)
-        if key not in self.probes:   # several flights ask about the same route at once: they share the answer
-            self.probes[key] = asyncio.ensure_future(self.plan(start, end, day, 11 * 60, arrive_by=False, zones=zones, to_airport=to_airport,
-                                                               terminal_known=terminal_known, any_way=True))
-        return bool(await self.probes[key])
+        # Several flights ask about the same route at once: they share the answer
+        return bool(await self.shared(self.probes, (start, end, day), lambda: self.plan(
+            start, end, day, 11 * 60, arrive_by=False, zones=zones, to_airport=to_airport, terminal_known=terminal_known, any_way=True)))
 
     async def covers(self, city: tuple, airport: tuple, stops: list[tuple], day: str, zones: tuple, to_airport: bool, terminal_known: bool) -> bool:
         """Whether any timetable covers the way between the city and an airport at all: to or from the airport's first
@@ -347,9 +443,11 @@ class Timetables:
         coach stops, then bus stops, nearest first, within max_estimate_km. As stops of the timetables, each with
         its distance from the place under "km". Railway stations are looked for further before a stop is accepted:
         the stops nearest to a place no timetable reaches are often ones nothing reaches either."""
-        key = (round(point[0], 3), round(point[1], 3))
-        if key in self.hub_cache:
-            return self.hub_cache[key]
+        # Several flights ask about the same place at once: they share the answer
+        return await self.shared(self.hub_cache, (round(point[0], 3), round(point[1], 3)), lambda: self.find_hubs(point))
+
+    async def find_hubs(self, point: tuple) -> list[dict[str, Any]]:
+        """The stations of hubs, asked of the timetables."""
         limit = current.SETTINGS.max_estimate_km
         found: list[dict[str, Any]] = []
         for km in [radius for radius in HUB_RADII_KM if radius < limit] + [limit]:
@@ -371,9 +469,7 @@ class Timetables:
                         if all(distance_km(stop["lat"], stop["lon"], other["lat"], other["lon"]) > SAME_HUB_KM for other in found):
                             found.append(stop)
                 break
-        found = await asyncio.to_thread(by_road, point, found)
-        self.hub_cache[key] = found
-        return found
+        return await asyncio.to_thread(by_road, point, found)
 
     async def mixed_to_airport(self, city: tuple, airport: tuple, flight: dict[str, Any], zones: tuple, known: bool,
                                stops: list[tuple], service: str, at_terminal: int) -> list[Connection]:
@@ -454,15 +550,11 @@ class Timetables:
                 found += await ask(at_terminal, True, "")
             if not any(map(fits, found)):
                 key = (start, target, service)   # the same question for every flight of that airport and day: asked once
-                if key not in self.first_rides:
-                    self.first_rides[key] = asyncio.ensure_future(ask(earliest, False, ""))
-                found += await self.first_rides[key]
+                found += await self.shared(self.first_rides, key, lambda: ask(earliest, False, ""))
                 if latest < at_terminal:
                     # A flight late in the day: the connections that arrive last all leave after the traveller's latest
                     # time, and the first ones of the day would leave the traveller waiting for hours at the airport
-                    if key not in self.last_rides:
-                        self.last_rides[key] = asyncio.ensure_future(ask(max(earliest, latest - LAST_RIDES_MINUTES), False, ""))
-                    found += await self.last_rides[key]
+                    found += await self.shared(self.last_rides, key, lambda: ask(max(earliest, latest - LAST_RIDES_MINUTES), False, ""))
             return found
 
         found = await first_found([*stops, (airport, 0)], reaching)

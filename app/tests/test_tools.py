@@ -22,9 +22,10 @@ def site_with(stale=()):
 
 def test_the_prices_can_only_be_asked_again_when_some_are_too_old():
     site, started = site_with()
-    assert '<button type="submit" class="quiet" disabled>Refresh prices</button>' in site.get("/").html
+    assert '<button type="submit" class="quiet" disabled>Refresh prices</button>' in site.get("/program").html
+    assert "too long ago" not in site.get("/").html
     site, started = site_with(stale=["a.json", "b.json"])
-    assert "Refresh prices (2)" in site.get("/").html
+    assert "Refresh prices (2)" in site.get("/program").html and "2 report(s) have ground prices read too long ago" in site.get("/").html
     assert site.post("/prices", sent(site)).location == "/search"
     assert started[0].first["task"] == "prices" and "Refresh prices" in site.get("/search").html
 
@@ -84,6 +85,12 @@ def test_the_language_of_the_pages_falls_back_to_english_when_it_is_removed(lang
     site.post("/language", sent(site, language="it"))
     site.post("/language/remove", sent(site, code="it", confirm="1"))
     assert 'lang="en"' in site.get("/").html and site.values["language"] == "en"
+
+def test_no_text_a_model_wrote_can_become_code_in_a_language_file(languages):
+    sneaky = '""" + str(1 / 0) + """'   # run as code, it would raise
+    translate.write_language("xx", {"language_name": sneaky, "language_english_name": "X\\", "option_word": sneaky + '\\"'})
+    found = texts.load_languages()["xx"]
+    assert found["option_word"] == sneaky + '\\"' and found["language_name"] == sneaky
 
 def run(monkeypatch, asked: dict) -> list[dict]:
     from trip_planner import utils

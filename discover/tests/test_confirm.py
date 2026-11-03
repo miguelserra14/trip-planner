@@ -134,6 +134,21 @@ def test_a_way_looked_up_replaces_its_estimate_and_an_impossible_one_takes_its_f
     assert access.leg("OPO", True, HOME, TODAY)["how"].startswith("looked up on")   # remembered for the next maps
     assert "no destination left" in found.confirm_stop
 
+def test_a_lookup_is_the_planners_trip_only_while_it_runs_even_when_it_fails(monkeypatch):
+    seen = []
+
+    async def failing(flights: list) -> dict:
+        seen.append((current.SETTINGS.destination, [airport["code"] for airport in current.TRIP.arrival]))
+        raise RuntimeError("the timetables are down")
+    monkeypatch.setattr(timetables, "ground_transport_for", failing)
+    the_map, its_places = current.SETTINGS, current.TRIP
+    flight = {**kiwi_leg("OPO", "MAD", "10:00", "12:15", 75), "price_eur": 20.0, "back": None}
+    centres = {"MAD": MADRID}
+    found = Found(HOME, Days(DAY, DAY), [], finder.one_per_city([finder.with_access(flight, HOME, centres, TODAY)], load_airports()), [], [],
+                  centres=centres)
+    asyncio.run(confirm.confirm(found))
+    assert seen == [("Madrid", ["MAD"])] and current.SETTINGS is the_map and current.TRIP is its_places
+
 def test_the_duration_of_a_ryanair_flight_comes_from_the_time_zones_of_its_airports():
     flight = confirm.planner_flight(kiwi_leg("OPO", "MAD", "07:00", "09:15", 0), 20.0, load_airports())
     assert flight["duration_minutes"] == 75 and flight["timezone_shift_minutes"] == -60   # Madrid is an hour ahead of Porto

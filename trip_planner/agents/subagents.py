@@ -18,14 +18,13 @@ from langchain.messages import ToolMessage
 from trip_planner import current
 from trip_planner.agents import models
 from trip_planner.agents.models import SUBAGENT_MODEL
-from trip_planner.agents.schemas import FlightShortlist, TrainPlan, TransferPlan
+from trip_planner.agents.schemas import TrainPlan, TransferPlan
 from trip_planner.agents.state import SearchState
 from trip_planner.trip.trip_settings import LANGUAGES, TripSettings
-from trip_planner.sources import flight_search, web
+from trip_planner.sources import web
 from trip_planner.utils import to_time
 
 # Limits used in the prompts of the agents
-SHORTLIST_SIZE = 10                 # flights the flight agent may shortlist, when it is used
 TRANSFER_SEARCH_LIMIT = 8           # web searches of the airport transfer agent
 DESTINATION_SEARCH_LIMIT = 8        # web searches of the destination transport agent
 OLD_RESULT_CHARACTERS = 400         # what is kept of each search result once the model has read it
@@ -38,39 +37,7 @@ def stopovers_rule(settings: TripSettings) -> str:
         return "The traveller only accepts direct flights."
     return f"The traveller accepts at most {settings.max_stopovers} stopover(s) per flight."
 
-# Flight agent. Only used when SETTINGS.use_flight_agent is True: the code searches every route anyway.
 # Every prompt is built from SETTINGS on each call, so it always states the limits of the current trip.
-@dynamic_prompt
-def flight_prompt(request: ModelRequest) -> str:
-    s = current.SETTINGS
-    return f"""
-    You are a flight specialist. Search for one-way flights with the search_route tool.
-    You are not allowed to ask any more follow up questions, you must find the best flight options based on the following criteria:
-    - Price (lowest). This is by far the most important criterion.
-    - Duration (shortest). Between two flights with a similar price, prefer the one with fewer stopovers.
-
-    The traveller's limits:
-    - {stopovers_rule(s)}
-    - The traveller leaves the origin city between {s.earliest_leave} and {s.latest_leave} and must be at the airport
-      at least {s.min_airport_minutes} minutes before departure. No flight departing before {to_time(s.earliest_flight_minutes)} can be caught.
-    - The traveller needs {s.min_landing_minutes} minutes to leave the arrival airport, then ground transport,
-      and must reach the final destination {s.arrival_window}.
-    search_route already applies these limits where it can, so many routes return nothing.
-
-    You will be given the travel dates, the primary departure airports, the fallback departure airports and the allowed arrival airports.
-    Search every primary departure airport against every arrival airport, on every travel date.
-    Then search the fallback departure airports the same way. A fallback airport is further away, and extra hours of
-    travel must be paid for by a saving ({s.extra_hours_table(s.fallback_saving_eur_per_hour)}).
-    Never search an arrival airport that is not in the allowed list. If a search fails, try it again.
-    Return a shortlist of at most {SHORTLIST_SIZE} flight ids, copied exactly from the search_route results.
-    """
-
-flight_agent = create_agent(
-    model=SUBAGENT_MODEL,
-    tools=[flight_search.search_route],
-    response_format=ToolStrategy(FlightShortlist),
-    middleware=[*models.subagent_guards(), flight_prompt],
-)
 
 # Two middlewares shared by the agents that search the web
 @wrap_model_call

@@ -14,8 +14,9 @@ from typing import Any, Callable, NamedTuple
 from urllib.parse import parse_qs, quote, unquote
 
 from app import fields, maps, reports, search
+from app.icons import icon
 from app.job import settings_for
-from app.report_page import page, to_html
+from app.report_page import page, STYLE, to_html
 from trip_planner import current
 from trip_planner.report.full import keep_report
 from trip_planner.texts import LANGUAGES, REFERENCE, TEXTS, tr, translate
@@ -52,6 +53,7 @@ class Site:
         self.stop_asked = 0.0                         # when the last map was asked to stop (time.monotonic), or 0
         self.maps_lock = threading.Lock()             # the pages are answered in threads of their own: one map starts at a time
         self.quitting = threading.Event()             # set by the Quit button: the server stops (server.serve)
+        self.theme = ""                               # "light" or "dark" once chosen in the header; "" follows the computer
 
     def begin(self, first: dict[str, Any], title: str) -> Reply:
         """Start a search or one of the program's own jobs, and show how it goes."""
@@ -69,15 +71,22 @@ class Site:
     def busy(self) -> bool:
         return self.job is not None and self.job.working
 
-    def page(self, title: str, body: str, working: bool = False) -> str:
+    def page(self, title: str, body: str, working: bool = False, here: str = "") -> str:
+        """A page with the header: the parts of the app (here is the one shown), the language of the pages, light or
+        dark, and the button that closes the program."""
+        escape = lambda text: html.escape(str(text))
         languages = "".join(f'<option value="{code}"{" selected" if code == current.SETTINGS.language else ""}>'
-                            f'{html.escape(TEXTS[code].get("language_name", code))}</option>' for code in LANGUAGES)
-        header = (f'<header><a href="/" class="name">{html.escape(tr("ui_title"))}</a>'
-                  f'<nav class="inline"><a href="/">{html.escape(tr("app_plan_title"))}</a> <a href="/discover">{html.escape(tr("discover_win_title"))}</a></nav>'
-                  f'<form method="post" action="/language">{search.hidden(self.token)}<label class="inline">{html.escape(tr("ui_language"))} '
+                            f'{escape(TEXTS[code].get("language_name", code))}</option>' for code in LANGUAGES)
+        parts = "".join(f'<a href="{path}"{" aria-current=\"page\"" if path == here else ""}>{escape(tr(key))}</a>'
+                        for path, key in (("/", "app_plan_title"), ("/discover", "discover_win_title"), ("/program", "app_tools")))
+        theme = (f'<form method="post" action="/theme" data-theme-form>{search.hidden(self.token)}<input type="hidden" name="shown">'
+                 f'<input type="hidden" name="back"><button type="submit" class="quiet theme" '
+                 f'title="{escape(tr("app_theme"))}" aria-label="{escape(tr("app_theme"))}">{icon("moon")}{icon("sun")}</button></form>')
+        header = (f'<header><a href="/" class="name">{escape(tr("ui_title"))}</a><nav class="inline">{parts}</nav>'
+                  f'<form method="post" action="/language">{search.hidden(self.token)}<label class="inline"><span class="visually-hidden">{escape(tr("ui_language"))}</span>'
                   f'<select name="language" data-submit>{languages}</select></label><noscript><button type="submit">OK</button></noscript></form>'
-                  f'<form method="post" action="/quit">{search.hidden(self.token)}<button type="submit" class="quiet">{html.escape(tr("app_quit"))}</button></form></header>')
-        return page(title, header + body, current.SETTINGS.language, refresh=3 if working else 0)
+                  f'{theme}<form method="post" action="/quit">{search.hidden(self.token)}<button type="submit" class="quiet">{escape(tr("app_quit"))}</button></form></header>')
+        return page(title, header + body, current.SETTINGS.language, refresh=3 if working else 0, theme=self.theme)
 
     def home(self, refusal: str = "", note: str = "") -> str:
         # The key is read from env/.env when the settings are (trip_settings.py): without it every search fails, so it
@@ -85,8 +94,14 @@ class Site:
         missing = "" if os.environ.get(KEY) else f'<p class="refusal" role="alert">{html.escape(tr("app_no_key"))}</p>'
         body = missing + fields.trip_form(self.token, self.values, self.defaults, refusal, self.busy(), note)
         if self.job is not None:
-            body += f'<p><a href="/search">{html.escape(tr("app_last_search"))}</a></p>'
-        return self.page(tr("app_plan_title"), body + reports.list_section() + self.tools())
+            body += f'<p class="notice"><a href="/search">{html.escape(tr("app_last_search"))}</a></p>'
+        stale = len(self.stale())
+        if stale:   # the prices are asked again on the program's page: said here, where the reports are
+            body += f'<p class="notice">{html.escape(tr("app_prices_old", count=stale))} <a href="/program">{html.escape(tr("ui_prices"))}</a></p>'
+        return self.page(tr("app_plan_title"), body + reports.list_section(), here="/")
+
+    def program_page(self) -> str:
+        return self.page(tr("app_tools"), f'<h1>{html.escape(tr("app_tools"))}</h1>{self.tools()}', here="/program")
 
     def tools(self) -> str:
         """The program's own jobs: the ground prices asked again (when some are too old),
@@ -99,7 +114,7 @@ class Site:
         stale = len(self.stale())
         prices = button("/prices", tr("ui_prices_count", count=stale) if stale else tr("ui_prices"),
                         "" if stale else tr("prices_none", hours=PRICE_VALID_HOURS), disabled=not stale)
-        return (f'<h2>{html.escape(tr("app_tools"))}</h2><div class="tools card">{prices}'
+        return (f'<div class="tools card">{prices}'
                 f'{button("/check", tr("ui_check"), tr("app_check_note"))}'
                 f'<p><a href="/languages">{html.escape(tr("ui_languages"))}</a></p></div>')
 
@@ -129,9 +144,9 @@ class Site:
                f'<label>{html.escape(tr("app_language_new"))}<input name="name" required maxlength="40"></label>'
                f'<button type="submit"{off}>{html.escape(tr("ui_language_add"))}</button>'
                f'<small>{html.escape(tr("ui_languages_hint"))}</small></form>')
-        body = (f'<p><a href="/">{html.escape(tr("app_all_reports"))}</a></p><h1>{html.escape(tr("app_languages"))}</h1>{said}'
+        body = (f'<p class="back"><a href="/program">← {html.escape(tr("app_tools"))}</a></p><h1>{html.escape(tr("app_languages"))}</h1>{said}'
                 f'<div class="table card"><table><tbody>{"".join(rows)}</tbody></table></div>{add}')
-        return self.page(tr("app_languages"), body)
+        return self.page(tr("app_languages"), body, here="/program")
 
     def search_page(self) -> str:
         return self.page(self.title, f"<h1>{html.escape(self.title)}</h1>{self.live()}", working=self.job.working)
@@ -145,14 +160,20 @@ class Site:
 
     def get(self, path: str) -> Reply:
         self.languages_read()
+        path, _, query = path.partition("?")
+        asked = {name: values[0] for name, values in parse_qs(query).items()}
         if path == "/languages":
             return Reply(200, self.languages_page())
+        if path == "/program":
+            return Reply(200, self.program_page())
         if path.startswith("/discover"):
             return self.get_discover(path)
         if path in ("/", "/index.html"):
             return Reply(200, self.home())
         if path == "/page.js":
             return Reply(200, SCRIPT.read_text(encoding="utf-8"), kind="text/javascript; charset=utf-8")
+        if path == "/page.css":
+            return Reply(200, STYLE.read_text(encoding="utf-8"), kind="text/css; charset=utf-8")
         if path in ("/search", "/search/part"):
             if self.job is None:
                 return Reply(303, location="/")
@@ -160,7 +181,12 @@ class Site:
         report = reports.find(path)
         if not report:
             return self.not_found()
-        return Reply(200, reports.report_page(report, self.token, lambda title, body: self.page(title, body)))
+        trip = reports.trip_of(report) if "edit" in asked else None
+        if trip:   # the planner's form filled in with the report's trip, as a trip of the map fills it: nothing is searched yet
+            self.values = {**self.values, **trip}
+            return Reply(303, location="/")
+        return Reply(200, reports.report_page(report, self.token, lambda title, body: self.page(title, body),
+                                              view=asked.get("view", ""), sort=asked.get("sort", "")))
 
     def post(self, path: str, body: bytes) -> Reply:
         try:
@@ -174,7 +200,8 @@ class Site:
                    "/ask": self.post_question, "/keep": self.post_keep, "/language": self.post_language,
                    "/check": self.post_check, "/prices": self.post_prices, "/language/add": self.post_add_language,
                    "/language/remove": self.post_remove_language, "/discover": self.post_discover,
-                   "/discover/stop": self.post_discover_stop, "/restore": self.post_restore, "/quit": self.post_quit}
+                   "/discover/stop": self.post_discover_stop, "/restore": self.post_restore, "/quit": self.post_quit,
+                   "/theme": self.post_theme}
         return answers[path](one, sent) if path in answers else self.not_found()
 
     def post_search(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
@@ -253,6 +280,13 @@ class Site:
         moved = keep_report(report, keep)
         return Reply(303, location=reports.REPORT_PATH + quote(f"{'saved' if keep else 'recent'}/{moved.stem}"))
 
+    def post_theme(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        """Dark if the pages were light, light if they were dark. Until then they follow the computer: the first
+        choice is the other one of what the page shows, which the page says in a field (page.js), dark without it."""
+        shown = self.theme or one.get("shown", "light")
+        self.theme = "light" if shown == "dark" else "dark"
+        return Reply(303, location=one.get("back", "/") if one.get("back", "").startswith("/") else "/")
+
     def post_language(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         if one.get("language") in LANGUAGES:
             current.SETTINGS = dataclasses.replace(current.SETTINGS, language=one["language"])
@@ -269,7 +303,7 @@ class Site:
                                        f'<button type="submit" class="quiet">{html.escape(tr("app_stop"))}</button></form>'
                                        if self.map_job.working else "")
         return self.page(tr("discover_win_title"), body, working=self.map_next is not None or
-                         (self.map_job is not None and self.map_job.working))
+                         (self.map_job is not None and self.map_job.working), here="/discover")
 
     def map_live(self) -> str:
         return search.live_part(self.map_job, self.token, reports.link_to, lambda markdown: to_html(markdown)[0], part="/discover/part")

@@ -1,5 +1,5 @@
-"""The map page: one dot per destination, its colour by the total price, the list below, and under it what was
-searched (breakdown.py). Clicking a dot or a row explains that trip: when to be at the airport, each flight with
+"""The map page: one dot per destination, its colour by the total price, each destination as a card beside the map
+(below it on a phone), and under them what was searched (breakdown.py). Clicking a dot or a row explains that trip: when to be at the airport, each flight with
 the day and time it leaves and lands, the connections, the way back, the prices, and the links to book it, to
 compare it and to reach the airports. And, in the app (app/maps.py), a link that opens the planner's form on it;
 a map opened as a file has no planner to open. The map is OpenStreetMap's, drawn by Leaflet, whose
@@ -171,12 +171,10 @@ PAGE = """<!doctype html>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 __STYLE__</head><body>
-<header><h1 id="title"></h1><p id="about"></p><p id="status"></p><p class="legend" id="legend"></p></header>
+<header><a id="back" hidden></a><h1 id="title"></h1><p id="about"></p><p id="status"></p><p class="legend" id="legend"></p></header>
 <div id="filters"></div>
-<div id="map"></div>
-<p id="tiles" hidden></p>
-<section id="detail" hidden></section>
-<div class="wrap"><table><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table></div>
+<div class="split"><ol id="rows" class="cards"></ol>
+<div class="side"><div id="map"></div><p id="tiles" hidden></p><section id="detail" hidden></section></div></div>
 <div id="by-ground" hidden><h2 id="by-ground-title"></h2>
 <p class="note" id="by-ground-note"></p>
 <div class="wrap"><table><thead><tr id="ground-head"></tr></thead><tbody id="ground-rows"></tbody></table></div></div>

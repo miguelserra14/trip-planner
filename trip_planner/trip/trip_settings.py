@@ -1,8 +1,10 @@
 """The settings that define a trip (TripSettings), and where the project's files are."""
 import dataclasses
+import importlib
 import re
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field, fields
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -40,6 +42,9 @@ FAR_DAYS_AHEAD = 300         # ... and beyond this few flights are on sale yet
 CONFIRMED_DAYS_AHEAD = 8     # timetables for the travel date itself (grade A) are only read this close to it
 TIGHT_DAY_MINUTES = 90       # time left for all the travel, below which the leave and arrival limits hardly fit
 NARROW_LEAVE_MINUTES = 60    # a window to leave in shorter than this rarely contains a connection
+# Whether the travel dates that have passed are moved forward instead of refused: only while settings.py is read for
+# the app, Discover and the program's own jobs (settings_file)
+MOVING_PAST_DATES = False
 
 class SettingError(ValueError):
     """A setting that cannot be used. Its reason is one of the texts of the languages (texts/), in the traveller's language."""
@@ -142,8 +147,6 @@ class TripSettings:
     # Reports (report/full.py)
     recent_reports: int = 5               # trips kept in reports/, a folder each. Older ones are deleted, except those kept in reports/saved/
 
-    # Speed
-    use_flight_agent: bool = False        # True adds a model that also searches flights. Slower, and the code searches every route anyway
     extra_wishes: str = ""                # anything else the coordinator should know, in plain text
 
     def __post_init__(self):
@@ -203,23 +206,34 @@ class TripSettings:
 
     def check_dates(self) -> None:
         """Real days, from today on, no further than airlines sell, in order and without repeats. The way back,
-        when there is one, the same, and not before the first day of the way there."""
+        when there is one, the same, and not before the first day of the way there. While settings.py is read
+        (settings_file), days that have passed are moved forward by whole weeks instead: moved_weeks says how many."""
         if not self.dates:
             raise self.refusal("dates_required")
-        going = self.read_days(self.dates)
-        coming = self.read_days(self.return_dates)
+        self.moved_weeks = self.weeks_passed() if MOVING_PAST_DATES else 0
+        going = self.read_days(self.dates, self.moved_weeks)
+        coming = self.read_days(self.return_dates, self.moved_weeks)
         if coming and coming[0] < going[0]:
             raise self.refusal("return_before_outbound", value=f"{coming[0]:%d/%m/%Y}", first=f"{going[0]:%d/%m/%Y}")
         self.dates, self.return_dates = [f"{day:%d/%m/%Y}" for day in going], [f"{day:%d/%m/%Y}" for day in coming]
 
-    def read_days(self, written: list[str]) -> list[date]:
+    def weeks_passed(self) -> int:
+        """The fewest whole weeks that bring the first day of the trip to today or later: 0 when it has not passed.
+        Whole weeks keep each day's weekday, and the same weeks for the way back keep the days in between."""
+        try:
+            first = min(read_dates(self.dates, date.today()))
+        except (UnreadableDate, ValueError):
+            return 0   # read_days refuses it, with its reason
+        return max(0, -(-(date.today() - first).days // 7))
+
+    def read_days(self, written: list[str], weeks: int = 0) -> list[date]:
         fail = self.refusal
         today, days = date.today(), set()
         try:
             read = read_dates(written, today) if written else []   # "17/12", "17-19 dez", "sexta": see dates.py
         except UnreadableDate as error:
             raise fail(error.key, **error.values)
-        for day in read:
+        for day in (day + timedelta(weeks=weeks) for day in read):
             if day < today:
                 raise fail("date_past", value=f"{day:%d/%m/%Y}", today=f"{today:%d/%m/%Y}")
             if (day - today).days > MAX_DAYS_AHEAD:
@@ -372,6 +386,25 @@ class TripSettings:
     def extra_hours_table(self, first_hour_eur: float) -> str:
         """The cost of 1 to 4 extra hours, in words, for the prompts and the report."""
         return ", ".join(f"{hours}h = {self.extra_hours_cost(first_hour_eur, hours):.0f} EUR" for hours in (1, 2, 3, 4))
+
+@contextmanager
+def past_dates_moved():
+    """While it lasts, a trip whose dates have passed has them moved forward (check_dates) instead of refused."""
+    global MOVING_PAST_DATES
+    before, MOVING_PAST_DATES = MOVING_PAST_DATES, True
+    try:
+        yield
+    finally:
+        MOVING_PAST_DATES = before
+
+def settings_file(move_past_dates: bool = True):
+    """settings.py, read once: its SETTINGS start the app's form and give Discover and the program's own jobs their
+    language and their rules. Its dates pass, and the program must still open after they have: they are moved
+    forward by whole weeks, and SETTINGS.moved_weeks says by how many. main.py --terminal plans that very trip, so
+    it asks for them as written (move_past_dates=False) and is refused a day that has passed. Every module reads
+    settings.py through this: whichever reads it first decides for the whole process."""
+    with past_dates_moved() if move_past_dates else nullcontext():
+        return importlib.import_module("settings")
 
 
 

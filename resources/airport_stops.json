@@ -69,6 +69,7 @@
 "RTM": {"read": "2026-10-14", "terminal": [51.9491345, 4.4341375], "stops": [["nl-OpenOV_3990518", 5]]},
 "SAW": {"read": "2026-10-22", "terminal": [40.9044114, 29.3095715], "stops": [["tr-istanbul-iett_774", 10]]},
 "SCQ": {"read": "2026-10-14", "terminal": [42.89765, -8.42007], "stops": [["es-Autobuses-Xunta-de-Galicia_SP16149", 10], ["eu-blablacar-bus_SCQ", 10]]},
+"SDR": {"read": "2026-11-03", "terminal": [43.42334, -3.82425], "stops": [["es-Autobús-en-Cantabria_1651", 5]]},
 "STN": {"read": "2026-10-22", "terminal": [51.8894, 0.2538], "stops": [["gb-great-britain_9100STANAIR2", 8], ["gb-great-britain_9100STANAIR", 10]]},
 "SUF": {"read": "2026-10-23", "terminal": [38.9094121, 16.2453856], "stops": [["it-Calabria-CORE_23057", 5]]},
 "SVQ": {"read": "2026-10-22", "terminal": [37.4234066, -5.8992977], "stops": [["es-Autobús-y-tranvía-de-Sevilla_1002", 5], ["eu-flixbus_4da73c00-ab54-4d42-ad56-282af784e949", 5]]},

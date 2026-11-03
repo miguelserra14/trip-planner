@@ -1,7 +1,6 @@
-"""A Discover map made in the search's process (job.py, task "map"), and told to the app instead of served by a
-server of its own (discover/serve.py): the app serves the page, the destinations as they change, and a click on a
-trip opens the planner's form in the app, filled in (maps.py). The map is made by discover's own Session, as the
-window and the command make it; nothing of it changes.
+"""A Discover map made in the search's process (job.py, task "map"), and told to the app: the app serves the page,
+the destinations as they change, and a click on a trip opens the planner's form in the app, filled in (maps.py).
+The map is made by discover's own Session, as the command (python -m discover) makes it; nothing of it changes.
 
 The process says, besides its progress lines:
     map      the page, once the flights and the ways to the airports are found
@@ -19,9 +18,10 @@ from typing import Any, Iterator
 WATCH_SECONDS = 1   # how often the map's state is looked at, to tell the app when it changed
 
 def make_map(asked: dict[str, Any], events, answers: Iterator[str] | None = None) -> None:
-    import settings
     from trip_planner import current
     from trip_planner.texts import tr
+    from trip_planner.trip.trip_settings import settings_file
+    settings = settings_file()
     # discover's Session reads the language of its texts from settings.py: the one of the app's pages instead
     settings.SETTINGS = dataclasses.replace(settings.SETTINGS, language=current.SETTINGS.language)
     from discover import confirm, finder

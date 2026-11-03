@@ -8,6 +8,7 @@ import dataclasses
 import html
 from typing import Any
 
+from app.icons import icon
 from trip_planner.trip.form import CHANGES, HINTS, MAIN_SETTINGS, TABS as FORM_TABS, label, same, shown
 from trip_planner.texts import LANGUAGES, REFERENCE, TEXTS, tr
 from trip_planner.trip.ground_choice import CHOICES, NO_CHANGE_LIMIT
@@ -57,6 +58,8 @@ def read(sent: dict[str, str], defaults: TripSettings) -> dict[str, Any]:
         values[name] = "wide" if name in sent else "near"
     values["max_stopovers"] = stopovers(sent)
     values["language"] = values["language"] or defaults.language
+    if sent.get("trip_kind") == "one":   # the days to come back are hidden then, not emptied: they are not a trip's
+        values["return_dates"] = ""
     return values
 
 def changed(values: dict[str, Any], defaults: TripSettings) -> list[str]:
@@ -108,42 +111,53 @@ def calendar_data() -> str:
 
 def trip_form(token: str, values: dict[str, Any], defaults: TripSettings, refusal: str = "", busy: bool = False,
               note: str = "") -> str:
-    """The whole form: the main card first, with the ↔ that swaps the two places (page.js) and the
-    kind of trip under it; the advanced settings folded under it, with how many differ from settings.py and the
-    button that brings them all back. note is said at the top, as refusal is, when nothing went wrong."""
+    """The whole form, in the way of a flight search site: one way or there and back, then one bar with where from,
+    the ⇄ that swaps the two places (page.js), where to, the days and the button; the three ticks of the trip
+    under it; and every other setting folded under "Advanced settings", by tab, with how many differ from
+    settings.py and the button that brings them all back. note is said at the top, as refusal is, when nothing
+    went wrong."""
     escape = lambda text: html.escape(str(text))
-    entry = lambda name, key, extra="": (f'<label>{escape(tr(key))}<input name="{name}" value="{escape(values.get(name, ""))}"{extra}>'
-                                         f"</label>")
-    tick = lambda name, key, on: f'<label class="tick"><input type="checkbox" name="{name}"{" checked" if on else ""}> {escape(tr(key))}</label>'
-    dates = lambda name, key, hint_key: (
-        f'<label>{escape(tr(key))}<input name="{name}" value="{escape(values.get(name, ""))}" data-calendar="{name}"'
+    entry = lambda name, key, place: (f'<label class="{place}">{escape(tr(key))}<input name="{name}" value="{escape(values.get(name, ""))}" '
+                                      f'required></label>')
+    chip = lambda name, key, on: f'<label class="chip"><input type="checkbox" name="{name}"{" checked" if on else ""}> {escape(tr(key))}</label>'
+    dates = lambda name, key, hint_key, place: (
+        f'<label class="{place}">{escape(tr(key))}<input name="{name}" value="{escape(values.get(name, ""))}" data-calendar="{name}"'
         f'{" required" if name == "dates" else ""}><small>{escape(tr(hint_key, maximum=MAX_DATES))}</small></label>')
     languages = {code: TEXTS[code].get("language_name", code) for code in LANGUAGES}
-    tabs = "".join(f'<fieldset><legend>{escape(tr(title))}</legend>{"".join(field(name, values.get(name), defaults) for name in names)}</fieldset>'
-                   for title, names in TABS if names)
+    shown_tabs = [(title, names) for title, names in TABS if names]
+    # One tab shown at a time where the browser can choose it without a script (page.css), every tab otherwise
+    tab_names = "".join(f'<label><input type="radio" name="tab" id="tab-{number}"{" checked" if number == 1 else ""}> {escape(tr(title))}</label>'
+                        for number, (title, _) in enumerate(shown_tabs, start=1))
+    tabs = "".join(f'<fieldset data-tab="{number}"><legend>{escape(tr(title))}</legend>'
+                   f'{"".join(field(name, values.get(name), defaults) for name in names)}</fieldset>'
+                   for number, (title, names) in enumerate(shown_tabs, start=1))
     error = (f'<p class="refusal" role="alert">{escape(refusal)}</p>' if refusal else
              f'<p role="status">{escape(note)}</p>' if note else "")
     # The search button comes before Restore, which also sends the form: Enter in a field presses the first one.
     # While another search runs it is there but off, so that Enter does nothing, beside the way to that search
-    button = (f'<p><button type="submit" disabled>{escape(tr("ui_search"))}</button> '
-              f'<a href="/search">{escape(tr("app_search_running"))}</a></p>' if busy
-              else f'<button type="submit">{escape(tr("ui_search"))}</button>')
+    button = (f'<button type="submit" disabled>{escape(tr("ui_search"))}</button><a href="/search">{escape(tr("app_search_running"))}</a>'
+              if busy else f'<button type="submit">{escape(tr("ui_search"))}</button>')
     count = len(changed(values, defaults))
     summary = (f'<summary data-changed="{escape(tr("ui_advanced_changed", count="{count}"))}" data-none="{escape(tr("ui_advanced"))}">'
                f'{escape(tr("ui_advanced_changed", count=count) if count else tr("ui_advanced"))}</summary>')
+    round_trip = bool(values.get("return_dates"))
+    kinds = "".join(f'<label><input type="radio" name="trip_kind" value="{value}"{" checked" if (value == "round") == round_trip else ""}> '
+                    f'{escape(tr(key))}</label>' for value, key in (("one", "app_one_way"), ("round", "app_round_trip")))
     kind = (f'<p class="muted trip-kind" data-one="{escape(tr("ui_trip_kind"))}" data-round="{escape(tr("ui_trip_kind_return"))}">'
-            f'{escape(tr("ui_trip_kind_return" if values.get("return_dates") else "ui_trip_kind"))}</p>')
-    swap = f'<button type="button" class="quiet swap" data-swap hidden title="{escape(tr("app_swap"))}" aria-label="{escape(tr("app_swap"))}">↔</button>'
+            f'{escape(tr("ui_trip_kind_return" if round_trip else "ui_trip_kind"))}</p>')
+    swap = (f'<button type="button" class="quiet swap" data-swap hidden title="{escape(tr("app_swap"))}" aria-label="{escape(tr("app_swap"))}">'
+            f'{icon("swap")}</button>')
     restore = f'<button type="submit" formaction="/restore" formnovalidate class="quiet">{escape(tr("ui_restore"))}</button>'
     return (f'<form method="post" action="/search" class="search"{calendar_data()}>'
             f'<h1>{escape(tr("app_plan_title"))}</h1>{error}'
             f'<input type="hidden" name="token" value="{escape(token)}">'
-            f'<div class="pair">{entry("origin", "ui_from", " required")}{swap}{entry("destination", "ui_to", " required")}</div>'
-            f'<div class="pair">{dates("dates", "ui_dates", "app_dates_hint")}{dates("return_dates", "ui_return_dates", "app_return_dates_hint")}</div>'
-            f'<div class="ticks">{tick("departure_scale", "app_nearby_origin", values.get("departure_scale") == "wide")}'
-            f'{tick("arrival_scale", "app_nearby_destination", values.get("arrival_scale") == "wide")}'
-            f'{tick(DIRECT, "ui_direct", str(values.get("max_stopovers")) == "0")}</div>'
-            f'<div class="actions">{button}{kind}<label class="inline">{escape(tr("ui_language"))}'
-            f'{choice("language", values.get("language", REFERENCE), languages)}</label></div>'
+            f'<div class="kind"><div class="segmented" role="radiogroup">{kinds}</div>{kind}</div>'
+            f'<div class="bar">{entry("origin", "ui_from", "from")}{swap}{entry("destination", "ui_to", "to")}'
+            f'{dates("dates", "ui_dates", "app_dates_hint", "dates")}{dates("return_dates", "ui_return_dates", "app_return_dates_hint", "return")}'
+            f'<div class="go">{button}</div></div>'
+            f'<div class="chips">{chip("departure_scale", "app_nearby_origin", values.get("departure_scale") == "wide")}'
+            f'{chip("arrival_scale", "app_nearby_destination", values.get("arrival_scale") == "wide")}'
+            f'{chip(DIRECT, "ui_direct", str(values.get("max_stopovers")) == "0")}</div>'
             f'<details class="advanced">{summary}<p class="muted">{escape(tr("app_advanced_hint"))}</p>'
-            f"{tabs}{restore}</details></form>")
+            f'<label class="language">{escape(tr("ui_language"))}{choice("language", values.get("language", REFERENCE), languages)}</label>'
+            f'<div class="tabs">{tab_names}</div>{tabs}{restore}</details></form>')

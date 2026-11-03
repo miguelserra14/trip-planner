@@ -28,7 +28,7 @@ CHANGED = dict(
     small_estimate_eur=3.5, unverified_price_factor=2.5, city_walk_minutes=30, wide_city_walk_minutes=60, airport_walk_minutes=15,
     min_reliability="A", tiebreak_eur_per_hour=7.5, fallback_saving_eur_per_hour=12.0, extra_hour_growth=2.0, options_shown=7,
     extra_wishes="a window seat, and no night bus", airport_floor_minutes=40, night_minutes=200, min_trip_km=60,
-    city_airport_radius_km=40, ambiguous_importance=0.3, recent_reports=8, use_flight_agent=True,
+    city_airport_radius_km=40, ambiguous_importance=0.3, recent_reports=8,
     departure_scale="near", arrival_scale="near", max_stopovers=2,
 )
 

@@ -1,5 +1,5 @@
-"""The app's pages, served on this computer only. The same rules as the map's server (discover/serve.py), because
-any web page the traveller has open could send a request to this computer:
+"""The app's pages, served on this computer only. Any web page the traveller has open could send a request to this
+computer, so:
 - it listens on 127.0.0.1 and answers only requests whose Host is that address (a name that points there, DNS
   rebinding, is refused);
 - a POST, which starts or stops a search, must carry the token of the app's own forms (site.py), and is small;
@@ -17,9 +17,10 @@ from app.site import Reply, Site
 
 HOST = "127.0.0.1"
 MAX_BODY_BYTES = 16000  # the form of a trip with every advanced setting, a few wishes in words included
-# What the pages may do: their own inline style, the app's script, and forms and requests sent back here.
+# What the pages may do: the app's own style (page.css, and inline for what is drawn to scale), the app's script, and
+# forms and requests sent back here.
 # Links still open, in a new tab
-POLICY = ("default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; "
+POLICY = ("default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; base-uri 'none'; "
           "form-action 'self'; frame-ancestors 'none'")
 
 class Server(ThreadingHTTPServer):

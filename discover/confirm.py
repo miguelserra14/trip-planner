@@ -125,17 +125,17 @@ def checked_leg(flight: dict[str, Any], ground: dict[str, Any], to_airport: bool
         return "not covered", None, tr("discover_not_covered")
     return "found", found, ""
 
-async def ground_between(origin: Place, destination: Place, flights: list[dict[str, Any]], base) -> dict[str, Any]:
-    """The planner's ground lookup for flights between two places, as if they were the trip being planned. A real
-    connection whose price is not known is kept with an estimate (grade C): without it the planner would reject it,
-    and a way that exists would be taken for one that cannot be made."""
-    current.SETTINGS = dataclasses.replace(base, origin=origin.written, destination=destination.written,
-                                           dates=sorted({date.fromisoformat(flight["date"]).strftime("%d/%m/%Y") for flight in flights}),
-                                           include_airports=[], exclude_airports=[], allow_estimated_prices=True)
-    current.TRIP = TripPlaces(origin, destination,
-                              primary=[airport_from(origin, code) for code in sorted({flight["departure_airport"] for flight in flights})],
-                              fallback=[], arrival=[airport_from(destination, code) for code in sorted({flight["arrival_airport"] for flight in flights})])
-    return await timetables.ground_transport_for(flights)
+def trip_between(origin: Place, destination: Place, flights: list[dict[str, Any]], base) -> tuple:
+    """The planner's trip for flights between two places: (its settings, its places), to look their ground transport
+    up with the planner's code (current.trip). A real connection whose price is not known is kept with an estimate
+    (grade C): without it the planner would reject it, and a way that exists would be taken for one that cannot be made."""
+    settings = dataclasses.replace(base, origin=origin.written, destination=destination.written,
+                                   dates=sorted({date.fromisoformat(flight["date"]).strftime("%d/%m/%Y") for flight in flights}),
+                                   include_airports=[], exclude_airports=[], allow_estimated_prices=True)
+    places = TripPlaces(origin, destination,
+                        primary=[airport_from(origin, code) for code in sorted({flight["departure_airport"] for flight in flights})],
+                        fallback=[], arrival=[airport_from(destination, code) for code in sorted({flight["arrival_airport"] for flight in flights})])
+    return settings, places
 
 def least(option: dict[str, Any], seen: dict[tuple, float]) -> float:
     """The least a destination can cost once looked up (see the top of this module)."""
@@ -196,48 +196,51 @@ async def look_up_city(found: Found, options: list[dict[str, Any]], airports: di
     for entries in trips.values():
         origin, destination = entries[0][0], entries[0][1]
         flights = list({flight["id"]: flight for _, _, _, flight, _ in entries}.values())
-        try:
-            ground = await ground_between(origin, destination, flights, base)
-        except Exception as error:
-            say(tr("discover_say_timetables_failed", origin=origin.english_name, destination=destination.english_name, error=type(error).__name__))
-            continue
-        requests += ground.get("requests", 0)
-        for _, _, option, flight, first in entries:
-            for offset, to_airport in ((0, True), (1, False)):
-                result, leg, why = checked_leg(flight, ground, to_airport)
-                position = first + offset
-                old = option["access"][position]
-                outcome[result] = outcome.get(result, 0) + 1
-                if result == "found":
-                    when = flight["departure_time"] if to_airport else flight["arrival_time"]
-                    summary = {"price_eur": round(leg["price_eur"], 2), "minutes": leg["arrive"] - leg["leave"], "grade": leg["grade"],
-                               "price_grade": access.PRICE_GRADES.get(leg.get("price_kind", ""), "C"),
-                               "for": {"leaving": to_airport, "time": when}}
-                    how, extra = described(leg), {}
-                    city = origin if to_airport else destination
-                    published = access.published_for(old["airport"], city, today)
-                    fare = published_fare(leg, published) if summary["price_grade"] == "C" else None
-                    if part_estimated(leg) and published and published.get("best") and summary["price_grade"] == "C":
-                        # Part of the way is a guess, and the airport's own bus or train is published: that way has a source
-                        best = published["best"]
-                        summary.update(price_eur=best["price_eur"], price_grade="B", minutes=best.get("minutes") or summary["minutes"], grade="C")
-                        how = access.described(best) + "; " + tr("discover_no_ride_from_airport")
-                        extra = {"url": best["url"], "quote": best["quote"]}
-                        fare = None
-                    if fare:   # the timetable has no price: the one published for that kind of transport has a source
-                        summary.update(price_eur=fare["price_eur"], price_grade="B")
-                        how += "; " + tr("discover_published_for_mode", price=(tr("discover_from_price") if fare["from_price"] else "") + fare["price_text"],
-                                         source=fare["source"], mode=tr("discover_page_mode_" + fare["mode"]) if fare["mode"] else "")
-                        extra = {"url": fare["url"], "quote": fare["quote"]}
-                    # urls: where the planner says this very way is sold (its "where to book"), for the page's own
-                    option["access"][position] = {**old, **summary, **extra, "looked_up": True, "how": how,
-                                                  "leave": to_time(leg["leave"]), "arrive": to_time(leg["arrive"]),
-                                                  "urls": [url for url in leg.get("urls") or [] if url.startswith("https://")]}
-                    access.remember(old["airport"], to_airport, origin if to_airport else destination, summary, today)
-                elif result == "impossible":
-                    option.setdefault("impossible", why)
-                else:
-                    option["access"][position] = {**old, "checked": True, "how": old["how"] + "; " + tr("discover_not_covered")}
+        # The planner's code reads the trip of these flights while it looks them up and while their legs are built
+        # from what it found (checked_leg): both within it, and the map's trip is back afterwards
+        with current.trip(*trip_between(origin, destination, flights, base)):
+            try:
+                ground = await timetables.ground_transport_for(flights)
+            except Exception as error:
+                say(tr("discover_say_timetables_failed", origin=origin.english_name, destination=destination.english_name, error=type(error).__name__))
+                continue
+            requests += ground.get("requests", 0)
+            for _, _, option, flight, first in entries:
+                for offset, to_airport in ((0, True), (1, False)):
+                    result, leg, why = checked_leg(flight, ground, to_airport)
+                    position = first + offset
+                    old = option["access"][position]
+                    outcome[result] = outcome.get(result, 0) + 1
+                    if result == "found":
+                        when = flight["departure_time"] if to_airport else flight["arrival_time"]
+                        summary = {"price_eur": round(leg["price_eur"], 2), "minutes": leg["arrive"] - leg["leave"], "grade": leg["grade"],
+                                   "price_grade": access.PRICE_GRADES.get(leg.get("price_kind", ""), "C"),
+                                   "for": {"leaving": to_airport, "time": when}}
+                        how, extra = described(leg), {}
+                        city = origin if to_airport else destination
+                        published = access.published_for(old["airport"], city, today)
+                        fare = published_fare(leg, published) if summary["price_grade"] == "C" else None
+                        if part_estimated(leg) and published and published.get("best") and summary["price_grade"] == "C":
+                            # Part of the way is a guess, and the airport's own bus or train is published: that way has a source
+                            best = published["best"]
+                            summary.update(price_eur=best["price_eur"], price_grade="B", minutes=best.get("minutes") or summary["minutes"], grade="C")
+                            how = access.described(best) + "; " + tr("discover_no_ride_from_airport")
+                            extra = {"url": best["url"], "quote": best["quote"]}
+                            fare = None
+                        if fare:   # the timetable has no price: the one published for that kind of transport has a source
+                            summary.update(price_eur=fare["price_eur"], price_grade="B")
+                            how += "; " + tr("discover_published_for_mode", price=(tr("discover_from_price") if fare["from_price"] else "") + fare["price_text"],
+                                             source=fare["source"], mode=tr("discover_page_mode_" + fare["mode"]) if fare["mode"] else "")
+                            extra = {"url": fare["url"], "quote": fare["quote"]}
+                        # urls: where the planner says this very way is sold (its "where to book"), for the page's own
+                        option["access"][position] = {**old, **summary, **extra, "looked_up": True, "how": how,
+                                                      "leave": to_time(leg["leave"]), "arrive": to_time(leg["arrive"]),
+                                                      "urls": [url for url in leg.get("urls") or [] if url.startswith("https://")]}
+                        access.remember(old["airport"], to_airport, origin if to_airport else destination, summary, today)
+                    elif result == "impossible":
+                        option.setdefault("impossible", why)
+                    else:
+                        option["access"][position] = {**old, "checked": True, "how": old["how"] + "; " + tr("discover_not_covered")}
     for option in options:
         option.update(with_access(option, home, found.centres, today, found.rides))
     there = found.centres.get(options[0]["to"])
@@ -250,34 +253,31 @@ async def confirm(found: Found, on_change: Callable[[Found], None] = lambda foun
     after each: the destinations, cheapest first, without the flights that cannot be made."""
     airports, today, base = load_airports(), date.today(), current.SETTINGS
     options = options_of(found.destinations)
-    try:
-        while True:
-            if len(found.lookups) >= MAX_LOOKUPS:
-                found.confirm_stop = tr("discover_confirm_most", count=MAX_LOOKUPS)
-                break
-            city = next_city(options, airports, found.centres)
-            if not city:
-                found.confirm_stop = tr("discover_confirm_beaten", top=TOP)
-                break
-            # A city not located, or a flight whose times are not all known, cannot be looked up: it keeps its
-            # estimate, and does not use up a lookup
-            for option in city:
-                reason = cannot_look_up(option, found, airports)
-                if reason:
-                    option.update(checked=True, not_looked_up=reason)
-            city = [option for option in city if not option.get("not_looked_up")]
-            if not city:
-                continue
-            say(tr("discover_say_timetables_city", airports=", ".join(option["to"] for option in city), number=len(found.lookups) + 1, most=MAX_LOOKUPS))
-            record = await look_up_city(found, city, airports, base, today)
-            found.lookups.append(record)
-            found.discarded += [{"to": option["to"], "from": option["from"], "date": option["date"], "reason": option["impossible"]}
-                                for option in city if option.get("impossible")]
-            options = [option for option in options if not option.get("impossible")]
-            found.destinations = one_per_city(options, airports, found.centres)
-            on_change(found)
-    finally:
-        current.SETTINGS = base
+    while True:
+        if len(found.lookups) >= MAX_LOOKUPS:
+            found.confirm_stop = tr("discover_confirm_most", count=MAX_LOOKUPS)
+            break
+        city = next_city(options, airports, found.centres)
+        if not city:
+            found.confirm_stop = tr("discover_confirm_beaten", top=TOP)
+            break
+        # A city not located, or a flight whose times are not all known, cannot be looked up: it keeps its
+        # estimate, and does not use up a lookup
+        for option in city:
+            reason = cannot_look_up(option, found, airports)
+            if reason:
+                option.update(checked=True, not_looked_up=reason)
+        city = [option for option in city if not option.get("not_looked_up")]
+        if not city:
+            continue
+        say(tr("discover_say_timetables_city", airports=", ".join(option["to"] for option in city), number=len(found.lookups) + 1, most=MAX_LOOKUPS))
+        record = await look_up_city(found, city, airports, base, today)
+        found.lookups.append(record)
+        found.discarded += [{"to": option["to"], "from": option["from"], "date": option["date"], "reason": option["impossible"]}
+                            for option in city if option.get("impossible")]
+        options = [option for option in options if not option.get("impossible")]
+        found.destinations = one_per_city(options, airports, found.centres)
+        on_change(found)
     found.destinations = one_per_city(options, airports, found.centres)
     say(tr("discover_say_timetables_done", cities=len(found.lookups), left_out=len(found.discarded), stop=found.confirm_stop))
     on_change(found)

@@ -1,9 +1,5 @@
-"""The structured answers of the subagents, so that the coordinator's tools can check them in code."""
+"""The structured answers of the subagents, so that the code can check them."""
 from pydantic import BaseModel, Field
-
-class FlightShortlist(BaseModel):
-    flight_ids: list[str] = Field(description="Flight ids exactly as returned by search_route, best first")
-    notes: str = Field(description="Short notes about the search, such as routes without flights")
 
 class AirportTransfer(BaseModel):
     airport: str = Field(description="IATA code of the departure airport, exactly as given")

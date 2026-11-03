@@ -6,9 +6,11 @@ import dataclasses
 import pytest
 
 from app import reports
-from settings import SETTINGS
 from trip_planner import current
 from trip_planner.report import full
+from trip_planner.trip.trip_settings import settings_file
+
+SETTINGS = settings_file().SETTINGS   # read first here, as the app reads it: the tests' "from settings import" get this one
 
 @pytest.fixture(autouse=True)
 def english(monkeypatch, tmp_path):

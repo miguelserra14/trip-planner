@@ -38,6 +38,30 @@ def test_a_run_that_failed_continues_from_the_step_that_failed(monkeypatch):
     state = asyncio.run(planner.run_search({}))
     assert calls == ["first", "second", "second"] and state["step"] == 2   # the first step was not run again
 
+def test_a_trip_starts_without_what_the_last_one_found(monkeypatch):
+    from trip_planner import current, utils
+    from trip_planner.sources import airlines, web
+    monkeypatch.setattr(current, "SETTINGS", current.SETTINGS)
+    monkeypatch.setattr(current, "TRIP", current.TRIP)
+    for module, name, last in ((steps, "FAULTS", {"F1": "KeyError"}), (airlines, "CHECKED", {"F1": {}}),
+                               (web, "SEEN_DOMAINS", {"made-up.example"}), (utils, "TIMINGS", {"total": 1.0})):
+        monkeypatch.setattr(module, name, last)
+    monkeypatch.setattr(planner, "TIMINGS", utils.TIMINGS)
+    planner.start_trip("the settings", "the places")
+    assert (current.SETTINGS, current.TRIP) == ("the settings", "the places")
+    assert not steps.FAULTS and not airlines.CHECKED and not web.SEEN_DOMAINS and not utils.TIMINGS
+    assert web.safe_url("https://made-up.example/tickets") == ""   # a site of the last trip's searches is not one of this trip's
+
+def test_another_trip_is_the_current_one_only_for_a_while_even_when_it_fails(monkeypatch):
+    from trip_planner import current
+    monkeypatch.setattr(current, "SETTINGS", "the map's settings")
+    monkeypatch.setattr(current, "TRIP", None)
+    with pytest.raises(RuntimeError):
+        with current.trip("a destination's settings", "its places"):
+            assert (current.SETTINGS, current.TRIP) == ("a destination's settings", "its places")
+            raise RuntimeError("the timetables are down")
+    assert (current.SETTINGS, current.TRIP) == ("the map's settings", None)
+
 def test_a_step_that_ends_the_trip_skips_the_others(monkeypatch):
     async def no_flights(state):
         return {"step": 2, "report": "no flight fits", "message": "nothing"}

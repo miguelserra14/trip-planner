@@ -25,7 +25,7 @@ TABS = (
     ("ui_tab_preferences", ("min_reliability", "tiebreak_eur_per_hour", "fallback_saving_eur_per_hour", "extra_hour_growth",
                             "options_shown", "extra_wishes")),
     ("ui_tab_program", ("airport_floor_minutes", "night_minutes", "min_trip_km", "city_airport_radius_km",
-                        "ambiguous_importance", "recent_reports", "use_flight_agent")),
+                        "ambiguous_importance", "recent_reports")),
 )
 # The settings with a label of their own; the others are called set_<name> in the texts
 LABELS = {"earliest_leave": "ui_earliest_leave", "latest_leave": "ui_latest_leave", "latest_arrival": "ui_latest_arrival",

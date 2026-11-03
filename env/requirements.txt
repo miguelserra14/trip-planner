@@ -7,6 +7,9 @@ langchain-mistralai==1.1.6
 langchain-mcp-adapters==0.3.1
 mcp==1.29.0
 fast-flights==3.1.0
+# Brought by fast-flights, but imported by the planner itself (sources/google_flights.py, operators/alsa.py)
+primp==2.0.1
+selectolax==1.0.0
 tavily-python==0.7.27
 httpx==0.28.1
 pydantic==2.13.4

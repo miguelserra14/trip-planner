@@ -14,13 +14,13 @@ from typing import Any, Callable
 from langchain.messages import AIMessage, HumanMessage
 
 from trip_planner import current
-from trip_planner.agents import claims, coordinator, subagents
+from trip_planner.agents import claims, coordinator, steps, subagents
 from trip_planner.agents.steps import run_steps, STEPS
 from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.trip.places import ask_airports, ask_places, choose_airports, codes, return_places, show_airports, TripPlaces
 from trip_planner.report.full import keep_report, save_report
 from trip_planner.report.summary import render_round_trip
-from trip_planner.sources import web
+from trip_planner.sources import airlines, web
 from trip_planner.texts import any_of, tr
 from trip_planner.utils import plain, say, show, TIMINGS
 
@@ -123,14 +123,25 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     back["there"], back["messages"] = there, there["messages"] + back["messages"]
     return {**coming, "there": going}
 
+def start_trip(settings: TripSettings, places: TripPlaces) -> None:
+    """Make a one-way trip the current one, and forget what the last one found. Each way of a round trip is a trip.
+    What a session keeps from one trip to the next (places, airports, the operators' sessions and prices, the models
+    out of quota) is not touched. Two parts of a trip are cleared elsewhere: the flight search by its own step, so
+    that a step run again starts clean (steps.search_flights), and the log of requests when its report is saved,
+    because it starts before this, when the places and the airports are chosen (report/full.py)."""
+    current.SETTINGS = settings
+    current.TRIP = places
+    TIMINGS.clear()
+    steps.FAULTS.clear()
+    airlines.CHECKED.clear()
+    web.SEEN_DOMAINS.clear()   # a link of this trip's models is kept only if its site came up in this trip's searches
+
 async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callable[[dict], str] | None = None,
                        beside: Path | None = None) -> dict[str, Any]:
     """Plan one way: search, show the result, write the recommendation and save the report. after, if given, writes
     from the result what is shown once the recommendation is (the summary of a round trip), saved at the end of the
     report; beside is the report of the way there, which saving this one must not delete to make room."""
-    current.SETTINGS = settings
-    current.TRIP = places
-    TIMINGS.clear()
+    start_trip(settings, places)
     started = time.time()
     for advice in settings.advice():
         say(f"{tr('advice')}: {advice}")
@@ -187,20 +198,21 @@ async def ask(question: str, trip: int = -1) -> None:
     markdown = (f"**{web.clean_text(question)}**\n\n{answer}\n\n> {tr('followup_note')}")
     show(markdown)
 
-responses: list[dict[str, Any]] = []
 PLANNED: list[dict[str, Any]] = []   # every trip run in this session, with what was found and the conversation about it
 
-async def plan_all(trips: list[TripSettings]) -> None:
-    """Plan every trip, one after the other."""
+async def plan_all(trips: list[TripSettings]) -> list[dict[str, Any]]:
+    """Plan every trip, one after the other. Returns what each trip planned found: fewer than the trips if one failed."""
+    planned = []
     try:
         for settings in trips:
-            responses.append(await plan_trip(settings))
+            planned.append(await plan_trip(settings))
     except Exception:
         say(traceback.format_exc())
+    return planned
 
-def show_timings() -> None:
+def show_timings(planned: list[dict[str, Any]]) -> None:
     """The trips planned, and where the time of the last one went."""
-    for trip in responses:
+    for trip in planned:
         print(f"{trip.get('origin')} -> {trip.get('final_destination')}")
     for step, seconds in sorted(TIMINGS.items()):
         print(f"{seconds:6.0f} s  {step}")

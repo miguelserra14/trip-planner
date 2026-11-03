@@ -224,6 +224,10 @@ def test_the_settings_changed_are_counted_as_they_are_changed(tab):
 def test_the_kind_of_trip_follows_the_days_to_come_back(tab):
     kind = "document.querySelector('.trip-kind').textContent"
     one_way = tab.js(kind)
+    hidden = "getComputedStyle(document.querySelector('input[name=return_dates]')).display === 'none' || !document.querySelector('input[name=return_dates]').offsetParent"
+    assert tab.js(hidden)   # one way: there are no days to come back
+    tab.js("document.querySelector('input[name=trip_kind][value=round]').click()")
+    assert not tab.js(hidden) and tab.js("document.activeElement.name") == "return_dates"
     calendar_of(tab, "return_dates")
     turn(tab, 2)
     click_day(tab, 5)
@@ -263,7 +267,7 @@ def test_a_map_in_the_app_runs_no_script_of_its_own_and_its_trip_opens_the_plann
         pytest.skip("Leaflet could not be fetched from unpkg")
     tab.wait("document.getElementById('title').textContent !== ''")
     assert tab.js("violations") == []   # the page's own script and style are files: nothing inline was needed
-    tab.js("document.querySelector('#rows tr').click()")
+    tab.js("document.querySelector('#rows li').click()")
     tab.wait("!!document.querySelector('#detail a[href$=\"/plan/BHX-out\"]')")
     assert tab.js("errors") == []
     tab.js("document.querySelector('#detail a[href$=\"/plan/BHX-out\"]').click()")

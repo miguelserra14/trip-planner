@@ -7,8 +7,11 @@ import dataclasses
 
 import pytest
 
+from trip_planner.trip.trip_settings import settings_file
+
+SETTINGS = settings_file().SETTINGS   # read first here, as the map reads it (discover/session.py imports it too)
+
 from discover import finder, ground, ground_fares
-from settings import SETTINGS
 from trip_planner import current
 
 @pytest.fixture(autouse=True)

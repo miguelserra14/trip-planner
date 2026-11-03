@@ -1,8 +1,9 @@
 """Discover: from one city, where can the traveller fly cheaply? A map of every destination with the cheapest flight
 found to it from the airports around the city, like the "discover" pages of the low-cost companies.
 
-A feature apart from the trip planner, and a draft. It uses some of the planner's code (places, Kiwi, the price
-estimate) without changing anything in it, and the planner never imports it. What it makes stays in this folder.
+A feature apart from the trip planner, and a draft. It uses much of the planner's code (places, Kiwi, the
+timetables, the operators' prices, the legs and their estimates) without changing anything in it, and the planner
+never imports it. What it makes stays in this folder.
 
     TripPlanner.bat, then "Discover" at the top of the page   the form: a city, the days; the map opens as it is made
     python -m discover Coimbra 12/11/2026 19/11/2026          the map as a file, from the terminal, in the repository's folder
@@ -45,4 +46,5 @@ request, and at most KIWI_DAILY times a day by all the maps together.
 
 The map shows flights, not trips: it does not know whether the airport can be reached at that hour. In the app a
 click on a trip opens the planner's form on it, filled in (app/maps.py), and the planner checks that in real
-timetables. The app imports both, and neither imports the other's code nor the app's."""
+timetables. The app imports both; Discover imports the planner, the planner never imports Discover, and neither
+imports the app."""

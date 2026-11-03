@@ -180,6 +180,29 @@ def test_flixbus_is_asked_while_the_flights_are_looked_up_and_the_rounds_take_it
     stopped.set()
     assert ground_fares.prefetch(found, stopped, TODAY) == 0   # the timetables were done before it began
 
+class NoTrip:
+    """Stands in for the trip being planned where nothing may read it."""
+    def __getattr__(self, name):
+        raise AssertionError(f"the trip being planned was read: {name}")
+
+def test_flixbus_asked_beside_the_timetables_never_reads_the_trip_they_are_looking_up(monkeypatch):
+    """prefetch runs in a thread while confirm.py makes each destination the planner's trip (current.trip): it must
+    not read that trip, which is not its own. Its whole way is run, FlixBus's own module included, with no network."""
+    from trip_planner import current
+    from trip_planner.sources.operators import flixbus
+
+    class Answer:
+        def raise_for_status(self):
+            return self
+        def json(self):
+            return {"trips": [{"results": {"r1": ride("2026-11-12T16:50:00+01:00", "2026-11-12T22:25:00+01:00", 20.99)}}], "stations": {}}
+    monkeypatch.setattr(flixbus, "http", type("Http", (), {"get": lambda self, url, params: Answer()})())
+    monkeypatch.setattr(current, "SETTINGS", NoTrip())
+    monkeypatch.setattr(current, "TRIP", NoTrip())
+    cities = [city("Paris", option("FlixBus", "Paris", 48.85, 2.35))]
+    found = Found(ANTWERP, ONE_WAY, [], TEN_FLIGHTS, [], [], by_ground=cities)
+    assert ground_fares.prefetch(found, threading.Event(), TODAY) == 2
+
 def test_the_days_priced_are_the_first_ones_of_each_way_and_none_past():
     assert ground_fares.days_of(Days("2026-10-20", "2026-11-30"), False, TODAY) == ["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27"]
     assert ground_fares.days_of(Days.clicked(["2026-11-12", "2026-11-14"], ["2026-11-13", "2026-11-20"]), True, TODAY, "2026-11-14") == ["2026-11-20"]

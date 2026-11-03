@@ -83,8 +83,11 @@ def show_languages() -> int:
     return 0
 
 def write_language(code: str, texts: dict[str, str]) -> None:
-    """Write a language file in the order and with the sections of the reference, one text per line."""
-    lines = [f'"""{texts.get("language_name", code)} ({texts.get("language_english_name", code)}). Translated from en.py by a model, '
+    """Write a language file in the order and with the sections of the reference, one text per line. The file is
+    Python and is run when the languages are read: every text a model wrote goes in as a JSON string, and the names
+    in its docstring lose their quotes and backslashes, so that no text can end the string and become code."""
+    name = lambda key: re.sub(r'["\\]', "", texts.get(key, code))
+    lines = [f'"""{name("language_name")} ({name("language_english_name")}). Translated from en.py by a model, '
              f'with `python main.py --add-language {code}`:\nread it once. One text per line: a text that is missing here is shown in English.\n'
              'Keep what is between {braces} and between `backticks` exactly as in en.py."""\n', "TEXTS = {"]
     for line in (FOLDER / f"{REFERENCE}.py").read_text(encoding="utf-8").splitlines():
@@ -180,7 +183,7 @@ async def add(name: str) -> dict[str, int]:
     name = find_language(name, languages) or name.strip()
     # Only translating needs a model: listing and removing languages work without the API keys
     from langchain.chat_models import init_chat_model
-    from trip_planner.agents.subagents import SUBAGENT_MODEL
+    from trip_planner.agents.models import SUBAGENT_MODEL   # not from subagents.py, which builds its agents on import
     model = init_chat_model(SUBAGENT_MODEL, max_retries=4)
     if name == "all":
         codes = [code for code in languages if code != REFERENCE]

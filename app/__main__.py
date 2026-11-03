@@ -4,9 +4,12 @@
     python -m app --no-browser   only served: the address is printed"""
 import sys
 
+from trip_planner.trip.trip_settings import settings_file
+
+SETTINGS = settings_file().SETTINGS   # before the app's modules: settings.py read with its passed dates moved
+
 from app import server
 from app.site import Site
-from settings import SETTINGS
 from trip_planner import current
 
 if __name__ == "__main__":

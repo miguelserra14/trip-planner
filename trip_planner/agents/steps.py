@@ -40,21 +40,13 @@ def travel_days(flights: list[dict[str, Any]]) -> str:
 async def search_flights(state: dict[str, Any]) -> dict[str, Any]:
     """Search the flights from every departure airport to every arrival airport on every travel date."""
     with timed("1 flight search"):
+        # What the flight search found: cleared here, not when the trip starts (planner.start_trip), so that the step
+        # run again after a failure starts clean
         flight_search.FLIGHTS.clear()
         flight_search.SEARCHED.clear()
         flight_search.FLIGHT_GAPS.clear()
-        FAULTS.clear()
         kiwi.kiwi_retries.retries = 0
         google_flights.requests = 0
-        if current.SETTINGS.use_flight_agent:
-            # Optional: a model searches too. Whatever it finds lands in the same list, and the code still searches every route.
-            query = (
-                f"Find one-way flights on these dates: {state['travel_dates']}. "
-                f"Primary departure airports: {state['primary_airports']}. "
-                f"Fallback departure airports: {state['fallback_airports'] or 'none'}. "
-                f"Allowed arrival airports: {state['arrival_airports']}."
-            )
-            await subagents.flight_agent.ainvoke({"messages": [HumanMessage(content=query)]}, config={"recursion_limit": 80})
         await flight_search.search_all_flights()
         routes = len(current.TRIP.departure) * len(current.TRIP.arrival) * len(current.SETTINGS.dates)
         flights = sorted(flight_search.FLIGHTS.values(), key=lambda flight: flight["price_eur"])
@@ -254,7 +246,6 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
     real timetables read by code, and the two transport specialists for prices and for what no timetable covers.
     The whole trip by train or coach is looked up at the same time."""
     flights = state["flights"]
-    airlines.CHECKED.clear()
     with timed("2 ground transport (the three below run at the same time)"):
         whole_way = asyncio.ensure_future(without_a_plane())
         if state.get("report"):

@@ -19,11 +19,13 @@ from discover.breakdown import as_text, breakdown
 from discover.finder import discover, Found
 from discover.page import map_page, map_state
 from discover.sources import Days
-from settings import SETTINGS
 from trip_planner import current, utils
 from trip_planner.texts import tr
 from trip_planner.trip.places import geocode
+from trip_planner.trip.trip_settings import settings_file
 from trip_planner.utils import plain
+
+SETTINGS = settings_file().SETTINGS   # its language and its rules: the map has no dates of the planner's to refuse
 
 MAPS = Path(__file__).parent / "maps"   # the maps made, in this folder: nothing of the planner's is written to
 
@@ -112,7 +114,9 @@ class Session:
             ground_fares.price(self.found, changed)
             if timetables:
                 # FlixBus is asked already for the cities the second pricing will likely want, while the flights'
-                # timetables are looked up: its searches do not go through the timetables, so they take nothing from them
+                # timetables are looked up: its searches do not go through the timetables, so they take nothing from them.
+                # Meanwhile each destination is the planner's trip in turn (current.trip): prefetch must never read it
+                # (test_ground_fares.py)
                 stop = threading.Event()
                 prefetching = threading.Thread(target=ground_fares.prefetch, args=(self.found, stop), daemon=True)
                 prefetching.start()

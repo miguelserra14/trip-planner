@@ -1,2 +1,3 @@
 # To run the tests in tests/: pip install -r env/requirements-dev.txt, then pytest
 pytest==9.1.1
+websockets==15.0.1   # pytest --browser drives Edge or Chrome with it (app/tests/browser.py)

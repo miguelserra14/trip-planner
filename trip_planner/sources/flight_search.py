@@ -5,11 +5,8 @@ Two sources, each in its own module and answering in the same shape: Kiwi first 
 (google_flights.py) when Kiwi is not available or does not answer. What they find is kept here, checked against
 the traveller's limits."""
 import asyncio
-import re
 from datetime import date
 from typing import Any
-
-from langchain.tools import tool
 
 from trip_planner import current
 from trip_planner.sources import google_flights, kiwi
@@ -200,19 +197,3 @@ def describe_flight(flight: dict[str, Any]) -> str:
         f"{flight['arrival_airport']} {flight['arrival_time']}{' on ' + flight['arrival_date'] if flight['arrival_day_offset'] else ''} (local times) | route {flight['route']} | "
         f"{flight['stops']} stops | {flight['duration_minutes']} min | {flight['price_eur']:.0f} EUR"
     )
-
-@tool
-async def search_route(fly_from: str, fly_to: str, date: str) -> str:
-    """Search one-way economy flights for one adult between two airports on one date.
-    fly_from and fly_to are IATA codes, date is dd/mm/yyyy.
-    Returns the cheapest flights that fit the traveller's time window and limit on stopovers, each with a flight id."""
-    if not re.fullmatch(r"[0-9]{2}/[0-9]{2}/[0-9]{4}", date):
-        return "date must be dd/mm/yyyy"
-    day = f"{date[6:10]}-{date[3:5]}-{date[0:2]}"
-    found = await search(fly_from.upper(), fly_to.upper(), day, day)
-    if found is None:
-        return f"Search failed for {fly_from} -> {fly_to} on {date}, try again."
-    flights = [flight for flight in (register_flight(itinerary) for itinerary in found) if flight]
-    if not flights:
-        return f"No suitable flights for {fly_from} -> {fly_to} on {date}."
-    return "\n".join(describe_flight(flight) for flight in flights[:5])

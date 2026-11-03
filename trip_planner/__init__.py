@@ -4,7 +4,8 @@ A multi-agent trip planner built with LangChain: a coordinator, two web-search s
 It plans a one-way trip from any city to any city: transport to the airport, flight, and transport at the destination.
 A round trip is two of them (planner.plan_trip), the way back on the same airports, then a summary that pairs them.
 
-To plan a trip, edit settings.py and run main.py. Nothing else needs to change.
+To plan a trip, run main.py (or TripPlanner.bat) and fill in the form in the browser; it starts with settings.py,
+which main.py --terminal plans without a browser.
 
 Who does what, and where:
 
@@ -12,7 +13,7 @@ Who does what, and where:
   written in, and the airports are found by distance: the straight line, then the hours by road (OSRM), so that
   an airport across a sea is left out.
 - Flight search (code, sources/flight_search.py): every departure airport against every arrival airport on every date, on
-  Kiwi. Nothing is retyped by a model.
+  Kiwi, and on Google Flights when Kiwi does not answer. Nothing is retyped by a model.
 - Real timetables (code, sources/timetables/, sources/fares.py and sources/operators/): the ground transport of every
   flight is looked up in published timetables.
 - Airport transfer agent and destination transport agent (models, agents/subagents.py): they search the web for

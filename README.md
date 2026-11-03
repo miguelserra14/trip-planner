@@ -115,8 +115,8 @@ dates, the airports you allowed and what the real timetables say are never given
 
 ### What it does not do (yet)
 
-- It plans trips with a flight. A trip by coach or train all the way is not compared with them in the planner
-  (Discover does show the cities reached by train or bus).
+- The trip by coach or train all the way is compared with flying, but only where a timetable reaches the two cities
+  and an operator can be read for its price; otherwise it is shown without a price, or not at all.
 - It books nothing: it gives the link of each part, to book on the operator's own site.
 - Discover counts the transport only, not where to sleep.
 - Dutch and Belgian rail fares are estimated from the distance: their operators do not let a program read them.

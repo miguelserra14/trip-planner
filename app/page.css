@@ -1,0 +1,319 @@
+/* The look of the app's pages (served at /page.css). The colours are tokens: light by default, dark when the computer
+   asks for it or when the traveller chose it with the button of the header (page.js puts data-theme on <html>).
+   The colours of the grades come from the planner (trip_settings.LIGHT_COLOURS), in a line of the page itself. */
+
+:root {
+  color-scheme: light;
+  --background: #f5f6f8; --surface: #ffffff; --surface-2: #f8f9fb; --text: #1f2328; --muted: #6b7280;
+  --border: #d5d9e0; --hover: #eceff3; --accent: #2563eb; --accent-hover: #1d4ed8; --accent-soft: #e8efff; --on-accent: #ffffff;
+  --error: #b42318; --shadow: 0 1px 2px rgba(16, 24, 40, .06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) {
+    color-scheme: dark;
+    --background: #0f1115; --surface: #171a21; --surface-2: #1c2029; --text: #e6e8eb; --muted: #9aa3af;
+    --border: #2c323d; --hover: #232833; --accent: #6b9bff; --accent-hover: #8bb1ff; --accent-soft: #1c2741; --on-accent: #0f1115;
+    --error: #f97066; --shadow: none;
+  }
+}
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --background: #0f1115; --surface: #171a21; --surface-2: #1c2029; --text: #e6e8eb; --muted: #9aa3af;
+  --border: #2c323d; --hover: #232833; --accent: #6b9bff; --accent-hover: #8bb1ff; --accent-soft: #1c2741; --on-accent: #0f1115;
+  --error: #f97066; --shadow: none;
+}
+
+/* ---------------------------------------------------------------- the page */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { font-size: 15px; }
+body { margin: 0; background: var(--background); color: var(--text); font: 1rem/1.5 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 0 20px 64px; }
+h1 { font-size: 1.5em; line-height: 1.25; margin: 1.4em 0 .5em; } h2 { font-size: 1.2em; margin: 1.4em 0 .5em; }
+h3 { font-size: 1.05em; margin: 1em 0 .3em; }
+a { color: var(--accent); overflow-wrap: anywhere; text-underline-offset: 2px; }
+.muted { color: var(--muted); }
+.refusal { color: var(--error); font-weight: 600; }
+code { font-family: Consolas, monospace; font-size: .92em; }
+blockquote { margin: .5em 0; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+/* An icon of the sprite (icons.py) is drawn in lines of the text's colour: a <use> does not take them from the sprite */
+.icon { width: 1.15em; height: 1.15em; vertical-align: -.2em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8;
+        stroke-linecap: round; stroke-linejoin: round; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+article, form.search, form.ask, .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+                                        padding: 20px 24px; margin: 0 0 20px; box-shadow: var(--shadow); }
+:is(article, form.ask, .card) > :first-child { margin-top: 0; } :is(article, form.ask, .card) > :last-child { margin-bottom: 0; }
+.card h2 { font-size: 1.05em; }
+p.back { margin: 0 0 12px; }
+
+/* ---------------------------------------------------------------- the header */
+header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 14px 0; margin-bottom: 24px;
+         border-bottom: 1px solid var(--border); }
+header .name { font-weight: 700; font-size: 1.1em; color: var(--text); text-decoration: none; }
+header nav.inline { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 auto 0 10px; }
+header nav a { text-decoration: none; color: var(--muted); } header nav a:hover { color: var(--text); }
+header nav a[aria-current=page] { color: var(--text); font-weight: 600; }
+header form { display: flex; align-items: center; }
+header select { height: 32px; } header button { height: 32px; padding: 0 14px; }
+button.theme { width: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+/* The button shows what it turns the pages into: the moon while they are light, the sun while they are dark */
+:root[data-theme=dark] .theme .icon-moon, :root:not([data-theme=dark]) .theme .icon-sun { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme .icon-moon { display: none; }
+  :root:not([data-theme]) .theme .icon-sun { display: inline; }
+}
+
+/* ---------------------------------------------------------------- fields and buttons */
+label { display: flex; flex-direction: column; gap: 5px; font-size: .9rem; font-weight: 600; position: relative; }
+label small, form small { font-size: .85rem; font-weight: normal; color: var(--muted); }
+input, select { font: inherit; font-size: 1rem; font-weight: normal; color: var(--text); background: var(--surface);
+                border: 1px solid var(--border); border-radius: 8px; }
+input:not([type=checkbox]):not([type=radio]), select { width: 100%; height: 40px; padding: 0 11px; }
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input[type=checkbox], input[type=radio] { width: 16px; height: 16px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+button, a.button { font: inherit; font-weight: 600; height: 40px; padding: 0 20px; border: 1px solid var(--accent); border-radius: 8px;
+                   background: var(--accent); color: var(--on-accent); cursor: pointer; white-space: nowrap; text-decoration: none;
+                   display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+button:hover:not(:disabled), a.button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+button.quiet, a.button.quiet { background: var(--surface); color: var(--accent); font-weight: normal; }
+button.quiet:hover:not(:disabled), a.button.quiet:hover { background: var(--hover); border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+details { margin: 12px 0; } summary { cursor: pointer; }
+label.inline { flex-direction: row; align-items: center; gap: 8px; font-size: 1rem; font-weight: normal; }
+label.inline select { width: auto; }
+/* The box, its words beside it however long, and what it means under the words */
+label.tick { display: grid; grid-template-columns: 16px 1fr; align-items: start; gap: 4px 8px; font-size: 1rem; font-weight: normal; }
+label.tick small { grid-column: 2; }
+.ticks { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+fieldset { border: 1px solid var(--border); border-radius: 10px; margin: 0; padding: 10px 16px 14px; min-width: 0; }
+legend { font-weight: 600; padding: 0 6px; }
+pre.log { white-space: pre-wrap; font: .85em/1.4 Consolas, monospace; color: var(--muted); }
+a.open { font-weight: 700; font-size: 1.1em; }
+
+/* ---------------------------------------------------------------- the form of a trip */
+form.search { display: flex; flex-direction: column; gap: 16px; }
+form.search > * { margin: 0; }
+form.search > h1 { font-size: 1.35em; }
+/* One way or there and back: two radios as one control. One way hides the days to come back (fields.read drops them) */
+.kind { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--hover); }
+.segmented label { flex-direction: row; font-size: .95rem; font-weight: 600; padding: 5px 14px; border-radius: 999px;
+                   color: var(--muted); cursor: pointer; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented label:has(input:checked) { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.segmented label:has(input:focus-visible) { outline: 2px solid var(--accent); }
+.kind .trip-kind { margin: 0; font-size: .9rem; }
+/* Where from ⇄ where to, the days, and the button, in one bar on a wide screen */
+.bar { display: grid; gap: 12px; align-items: start;
+       grid-template-columns: minmax(0, 1.3fr) 40px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto; }
+form:has(.segmented input[value=one]:checked) .bar { grid-template-columns: minmax(0, 1.3fr) 40px minmax(0, 1.3fr) minmax(0, 1.2fr) auto; }
+form:has(.segmented input[value=one]:checked) .bar .return { display: none; }
+.bar.three { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr) auto; }   /* Discover's: no ⇄, no way to choose */
+fieldset.chips { border: 0; padding: 0; }
+fieldset.chips legend { font-size: .9rem; padding: 0 0 6px; }
+.bar .swap { margin-top: calc(.9rem * 1.5 + 5px); }
+.bar .go { display: flex; flex-direction: column; gap: 5px; }
+.bar .go::before { content: "\00a0"; font-size: .9rem; line-height: 1.5; }   /* as high as a label: the button sits on the fields' line */
+button.swap { width: 40px; padding: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+label.chip { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--border);
+             border-radius: 999px; font-size: .92rem; font-weight: normal; cursor: pointer; background: var(--surface); }
+label.chip input { margin: 0; }
+label.chip:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.actions > p { margin: 0; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; align-items: start; }
+/* More options: the settings by tab, one tab shown at a time where the browser can choose it without a script */
+details.advanced { border-top: 1px solid var(--border); padding-top: 14px; }
+details.advanced > summary { color: var(--muted); font-weight: 600; }
+details.advanced[open] > summary { margin-bottom: 8px; }
+details.advanced .language { max-width: 20em; margin: 8px 0 14px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; }
+.tabs label { flex-direction: row; font-weight: 600; font-size: .9rem; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border);
+              cursor: pointer; color: var(--muted); }
+.tabs input { position: absolute; opacity: 0; pointer-events: none; }
+.tabs label:has(input:checked) { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.tabs label:has(input:focus-visible) { outline: 2px solid var(--accent); }
+details.advanced fieldset { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 20px;
+                            align-items: start; margin: 14px 0; }
+@supports selector(:has(a)) {
+  details.advanced fieldset { display: none; }
+  details.advanced fieldset > legend { display: none; }
+  details.advanced:has(#tab-1:checked) fieldset[data-tab="1"], details.advanced:has(#tab-2:checked) fieldset[data-tab="2"],
+  details.advanced:has(#tab-3:checked) fieldset[data-tab="3"], details.advanced:has(#tab-4:checked) fieldset[data-tab="4"],
+  details.advanced:has(#tab-5:checked) fieldset[data-tab="5"], details.advanced:has(#tab-6:checked) fieldset[data-tab="6"],
+  details.advanced:has(#tab-7:checked) fieldset[data-tab="7"], details.advanced:has(#tab-8:checked) fieldset[data-tab="8"],
+  details.advanced:has(#tab-9:checked) fieldset[data-tab="9"] { display: grid; }
+}
+@supports not selector(:has(a)) { .tabs { display: none; } }
+
+/* ---------------------------------------------------------------- the calendar (page.js) */
+.calendar { position: absolute; top: 100%; left: 0; z-index: 3; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+            padding: 10px; margin-top: 4px; width: max-content; box-shadow: 0 6px 20px rgba(0, 0, 0, .16); font-size: 1rem; font-weight: normal; }
+.calendar .month { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 4px; }
+.calendar table { font-size: .9em; border-collapse: collapse; } .calendar th, .calendar td { border: 0; padding: 1px; text-align: center; }
+.calendar th { background: none; color: var(--muted); font-weight: normal; }
+.calendar button { height: auto; padding: 4px 0; width: 2.3em; border: 0; background: var(--surface); color: var(--text);
+                   font-weight: normal; border-radius: 6px; display: inline-block; }
+.calendar button:hover:not(:disabled) { background: var(--hover); }
+.calendar button.chosen, .calendar button.chosen:hover { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.calendar button:disabled { color: var(--border); opacity: 1; }
+.calendar .month button { width: auto; padding: 2px 10px; border: 1px solid var(--border); }
+.calendar small { display: block; max-width: 18em; margin-top: 4px; }
+.calendar button.quiet { width: auto; padding: 4px 12px; margin-top: 6px; border: 1px solid var(--accent); color: var(--accent); }
+
+/* ---------------------------------------------------------------- the reports, as cards (reports.py) */
+.trips { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 0 0 8px; padding: 0; list-style: none; }
+.trips li { margin: 0; }
+a.trip { display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 14px 16px; border: 1px solid var(--border);
+         border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; box-shadow: var(--shadow); }
+a.trip:hover { border-color: var(--accent); }
+a.trip .route { font-weight: 700; font-size: 1.05em; }
+a.trip .price { margin-top: auto; padding-top: 6px; display: flex; align-items: baseline; gap: 8px; }
+a.trip .price b { font-size: 1.15em; }
+a.trip small { color: var(--muted); }
+.notice { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px; border-radius: 10px;
+          border: 1px solid var(--border); background: var(--surface-2); margin: 0 0 20px; }
+.notice p { margin: 0; }
+
+/* ---------------------------------------------------------------- the program (site.py) */
+.tools { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+.tools > p { margin: 0; line-height: 40px; }
+form.tool { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 22em; }
+td form.tool { flex-direction: row; align-items: center; max-width: none; gap: 8px; }
+td button { height: 30px; padding: 0 12px; }
+.card td { vertical-align: middle; }
+
+/* ---------------------------------------------------------------- questions and searches (search.py) */
+form.ask label.tick { margin: 6px 0; }
+form.ask fieldset { margin: 12px 0; }
+form.ask > button { margin-top: 8px; }
+/* A line to write in and its button beside it: a question about the trip, a language to add */
+form.question { display: grid; grid-template-columns: minmax(0, 30em) auto; justify-content: start; align-items: end; gap: 6px 12px; }
+form.question > small { grid-column: 1 / -1; width: 0; min-width: 100%; }   /* the note under both does not widen them */
+form.question > button { margin: 0; }
+form.keep { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0; }
+#conversation { margin-top: 20px; }
+#conversation .answer { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+                        border-radius: 10px; padding: 2px 20px; margin: 10px 0; }
+
+/* ---------------------------------------------------------------- a report as Markdown (report_page.to_html) */
+.light-A { color: var(--light-A); } .light-B { color: var(--light-B); } .light-C { color: var(--light-C); }
+.table { overflow-x: auto; margin: .6em 0; }
+table { border-collapse: collapse; font-size: .9em; }
+th, td { border-bottom: 1px solid var(--border); padding: 4px 10px; text-align: left; vertical-align: top; }
+th { background: var(--surface-2); }
+nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .9em; }
+nav ul a { text-decoration: none; } nav ul a:hover { text-decoration: underline; }
+.timeline { position: relative; height: 64px; margin: 8px 12px; }
+.timeline .part { position: absolute; top: 27px; height: 7px; border-radius: 4px; }
+.timeline .wait { top: 29px; height: 3px; background: var(--border); }
+.timeline .point { position: absolute; top: 0; height: 64px; transform: translateX(-50%); text-align: center;
+                   font-size: .8em; white-space: nowrap; }
+.timeline .point.first { transform: none; text-align: left; } .timeline .point.last { transform: translateX(-100%); text-align: right; }
+.timeline .point b { display: block; height: 22px; }
+.timeline .point i { display: block; width: 12px; height: 12px; margin: 2px auto; border: 2px solid var(--text);
+                     border-radius: 50%; background: var(--surface); }
+.timeline .first i { margin-left: -6px; } .timeline .last i { margin-right: -6px; }
+.timeline .point span { color: var(--muted); }
+
+/* ---------------------------------------------------------------- the results of a trip (results.py) */
+.summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.summary h1 { margin: 0; font-size: 1.6em; }
+.summary p { margin: 2px 0 0; }
+.summary .links { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.summary form.keep small { display: none; }
+.warnings { margin: 0 0 20px; }
+.warnings summary { font-weight: 600; }
+.warnings ul { margin: 8px 0 0; padding-left: 20px; }
+/* Sorted as: recommended, cheapest, fastest. Each tab says the price and the time of the option it puts first */
+nav.sort { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 0 14px; border: 1px solid var(--border);
+           border-radius: 12px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+nav.sort a { display: flex; flex-direction: column; gap: 1px; padding: 10px 16px; color: var(--text); text-decoration: none;
+             border-right: 1px solid var(--border); border-bottom: 3px solid transparent; }
+nav.sort a:last-child { border-right: 0; }
+nav.sort a:hover { background: var(--hover); }
+nav.sort a[aria-current=true] { border-bottom-color: var(--accent); background: var(--accent-soft); }
+nav.sort span { font-weight: 600; font-size: .92rem; }
+nav.sort b { font-size: 1.2em; } nav.sort small { color: var(--muted); }
+ol.options { list-style: none; margin: 0 0 24px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+details.option { margin: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+details.option[open] { border-color: var(--accent); }
+details.option > summary { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 20px; padding: 14px 18px; }
+details.option > summary::-webkit-details-marker { display: none; }
+details.option > summary:hover { background: var(--hover); border-radius: 12px; }
+details.option[open] > summary:hover { border-radius: 12px 12px 0 0; }
+.option .times { font-size: 1.25em; font-weight: 700; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.option .times sup { font-size: .6em; color: var(--muted); font-weight: 600; }
+.option .places { color: var(--muted); font-size: .92rem; }
+.option .how { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; font-size: .92rem; margin-top: 4px; }
+.option .modes { display: inline-flex; align-items: center; gap: 2px; color: var(--muted); }
+.option .modes .icon { width: 1.25em; height: 1.25em; }
+.option .modes .icon-plane { color: var(--text); }
+.option .modes i { width: 10px; height: 1px; background: var(--border); }
+.option .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.badge { font-size: .78rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--hover); color: var(--muted); }
+.badge.best { background: var(--accent); color: var(--on-accent); }
+.badge.cheap, .badge.quick { background: var(--accent-soft); color: var(--accent); }
+.badge.near { background: var(--hover); color: var(--error); }
+.option .price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.option .price b { font-size: 1.45em; line-height: 1.1; }
+.option .price small { color: var(--muted); font-size: .82rem; }
+.option .versus { color: var(--muted); font-size: .85rem; }
+.option .body { padding: 4px 18px 18px; border-top: 1px solid var(--border); }
+/* The option step by step, from top to bottom: a dot at each place, the vehicles between them */
+ol.steps { list-style: none; margin: 12px 0; padding: 0; }
+ol.steps > li { display: grid; grid-template-columns: 56px 22px minmax(0, 1fr); column-gap: 10px; }
+ol.steps .at { font-weight: 700; text-align: right; padding-top: 1px; }
+ol.steps .rail { position: relative; display: flex; justify-content: center; }
+ol.steps .rail::before { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--border); }
+ol.steps > li:first-child .rail::before { top: 9px; } ol.steps > li:last-child .rail::before { bottom: calc(100% - 9px); }
+ol.steps .rail b { position: relative; width: 12px; height: 12px; margin-top: 5px; border-radius: 50%; border: 2px solid var(--text); background: var(--surface); }
+ol.steps .rail .icon { position: relative; margin-top: 2px; background: var(--surface); color: var(--muted); }
+ol.steps li.ride .rail::before { width: 4px; background: var(--ride, var(--border)); border-radius: 2px; }
+ol.steps .what { padding: 0 0 14px; }
+ol.steps .what > p { margin: 0; } ol.steps .what > p.muted { font-size: .85rem; margin-top: 4px; }
+ol.steps .vehicles { list-style: none; margin: 4px 0 0; padding: 0; font-size: .9rem; color: var(--muted); }
+ol.steps .vehicles li { display: flex; gap: 6px; align-items: baseline; }
+ol.steps .vehicles .icon { color: var(--muted); }
+.facts { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: .85rem; color: var(--muted); margin-top: 4px; }
+.option .money, .option .book, .option .notes { margin: 12px 0 0; }
+.option .book ul, .option .notes ul { margin: 4px 0 0; padding-left: 20px; }
+.option .body h3 { font-size: .95em; margin: 16px 0 4px; }
+section.days ol { list-style: none; margin: 0; padding: 0; }
+section.days li { display: grid; grid-template-columns: 9em minmax(0, 1fr) auto; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+section.days li:last-child { border-bottom: 0; }
+section.days li b { text-align: right; }
+section.model { border-left: 3px solid var(--muted); }
+p.full { margin-top: 24px; }
+/* On a phone, the recommended option stays at hand at the bottom of the screen */
+a.sticky { display: none; }
+
+/* ---------------------------------------------------------------- narrower screens */
+@media (max-width: 860px) {
+  .bar, form:has(.segmented input[value=one]:checked) .bar { grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); }
+  .bar .dates { grid-column: 1; } .bar .return { grid-column: 3; }
+  form:has(.segmented input[value=one]:checked) .bar .dates { grid-column: 1 / -1; }
+  .bar .go { grid-column: 1 / -1; } .bar .go::before { display: none; }
+  .bar.three { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .bar.three > label:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  main { padding: 0 14px 80px; }
+  article, form.search, form.ask, .card { padding: 16px; }
+  .bar, form:has(.segmented input[value=one]:checked) .bar { grid-template-columns: minmax(0, 1fr); }
+  .bar > * { grid-column: 1 !important; }
+  .bar .swap { margin: -4px 0; justify-self: center; transform: rotate(90deg); }
+  .bar .go button { width: 100%; }
+  form.question { grid-template-columns: 1fr; } form.question > button { justify-self: start; }
+  nav.sort a { padding: 8px 10px; }
+  nav.sort b { font-size: 1.05em; }
+  details.option > summary { padding: 12px 14px; grid-template-columns: minmax(0, 1fr); }
+  .option .price { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; text-align: left; gap: 2px 10px; }
+  header nav.inline { margin-left: 0; width: 100%; order: 3; }
+  .option .body { padding: 4px 14px 14px; }
+  .option .body > .timeline { display: none; }   /* its times would overlap: the steps below say them */
+  section.days li { grid-template-columns: 1fr auto; } section.days li span.muted { grid-column: 1 / -1; }
+  a.sticky { display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 5; justify-content: space-between;
+             align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; background: var(--accent); color: var(--on-accent);
+             text-decoration: none; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); font-weight: 600; }
+}

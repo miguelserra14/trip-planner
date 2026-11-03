@@ -179,9 +179,10 @@ def failed(error: Exception, events: Events) -> None:
     events.send("failed", tr("ui_failed", error=f"{type(error).__name__}: {error}"))
 
 def main(answers: Iterator[str], events: Events) -> int:
-    from settings import SETTINGS
     from trip_planner import current, utils
     from trip_planner.texts import tr
+    from trip_planner.trip.trip_settings import settings_file
+    SETTINGS = settings_file().SETTINGS   # what the form does not hold; its dates, moved if passed, are the form's anyway
     current.SETTINGS = SETTINGS   # the reason a setting is refused is in the language of settings.py
     utils.LISTENERS["say"] = lambda text: events.send("say", text)
     utils.LISTENERS["show"] = lambda markdown: events.send("show", markdown)

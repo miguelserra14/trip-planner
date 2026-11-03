@@ -305,7 +305,7 @@ function explainGround(g, scroll) {
   panel.replaceChildren();
   panel.hidden = false;
   const close = add(panel, "button", t("close"), "close");
-  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); };
+  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); map.invalidateSize(); };
   add(panel, "h2", data.origin.name + " → " + g.name);
   describeLines(panel, null, g.ground);
   add(panel, "p", t("no_flight_here", {modes: g.modes.map(modeName).join(t("and")), origin: data.origin.name, hours: hours(g.minutes)}) + " "
@@ -317,7 +317,8 @@ function explainGround(g, scroll) {
   anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
   if (line) line.remove();
   line = L.polyline([[data.origin.lat, data.origin.lon], [g.lat, g.lon]], {color: GROUND_COLOUR, weight: 2, dashArray: "4 6"}).addTo(map);
-  document.querySelectorAll("#rows tr, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === picked));
+  document.querySelectorAll("#rows li, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === picked));
+  map.invalidateSize();
   if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
@@ -327,7 +328,7 @@ function explain(p, scroll) {
   panel.replaceChildren();
   panel.hidden = false;
   const close = add(panel, "button", t("close"), "close");
-  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); };
+  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); map.invalidateSize(); };
   add(panel, "h2", data.origin.name + " → " + p.name + " (" + p.to + ", " + p.country + ")");
   describeLines(panel, p, p.ground);
   add(panel, "p", t("total_line", {total: eur(p.total_eur), stay: p.stay ? ", " + t("in_the_city", {stay: stayText(p.stay)}) : "",
@@ -368,7 +369,8 @@ function explain(p, scroll) {
   describePlan(panel, p);
   if (line) line.remove();
   line = L.polyline([[data.origin.lat, data.origin.lon], [p.lat, p.lon]], {color: "#1f6fd0", weight: 2, dashArray: "4 6"}).addTo(map);
-  document.querySelectorAll("#rows tr, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === p.to));
+  document.querySelectorAll("#rows li, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === p.to));
+  map.invalidateSize();   // the trip opened beside the map, which shrank to make room
   if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
@@ -386,12 +388,14 @@ function describePlan(panel, p) {
   }
 }
 
-const head = document.getElementById("head");
-for (const [title, number] of [[t("col_destination")], [t("col_out")], [t("col_back")], [t("col_airline")], [t(data.round_trip ? "col_flights" : "col_flight"), 1],
-                               [t("col_airports"), 1], [t("col_total"), 1], ...(data.round_trip ? [[t("col_in_city")]] : []), [t("col_timetables")]])
-  add(head, "th", title, number ? "n" : "");
-const leg = (flight, from) => from + " " + flight.date + " " + flight.time + (flight.stops ? " +" + flight.stops : "");
-const rows = document.getElementById("rows");
+// One way of a flight on its card: the airport it leaves from, the day and the hour, and its stopovers
+const leg = (flight, from) => from + " · " + day(flight.date) + " " + flight.time + (flight.stops ? " +" + flight.stops : "");
+const rows = document.getElementById("rows");   // the destinations by air, one card each
+// In the app, the way back to Discover's form; a page opened as a file has none
+if (data.planner_link) {
+  const back = document.getElementById("back");
+  back.textContent = t("back"); back.href = "/discover"; back.hidden = false;
+}
 
 // Whether the program is still searching or has seen everything. The flights of every destination were all
 // searched before the page opened: what can still change while running is the ways to and from the airports, and
@@ -444,12 +448,14 @@ function groundCount() {
 // left out by a filter is only hidden. price and hours are null for no limit. flights hides the flights; train and
 // bus the trains and buses of every city, a flight going there or not: London by bus stays with its flight
 // hidden. A train or bus with no price yet is not hidden by the price.
-const filter = {flights: true, train: true, bus: true, price: null, hours: null, country: "", looked: false};
+const filter = {flights: true, train: true, bus: true, price: null, hours: null, country: "", looked: false, direct: false};
+const SHOW_ALL = {...filter};   // what "show all" brings the filters back to
 const regions = (() => { try { return new Intl.DisplayNames([data.locale, "en"], {type: "region"}); } catch (error) { return null; } })();
 const countryName = code => { try { return (regions && regions.of(code)) || code; } catch (error) { return code; } };
 const shownFlight = p => filter.flights && (filter.price === null || p.total_eur <= filter.price)
   && (filter.hours === null || !p.minutes || p.minutes <= filter.hours * 60)
-  && (!filter.country || p.country === filter.country) && (!filter.looked || p.confirmed);
+  && (!filter.country || p.country === filter.country) && (!filter.looked || p.confirmed)
+  && (!filter.direct || (!p.stops && (!p.back || !p.back.stops)));   // direct both ways
 // The trains and buses of a city, with a flight or not, let through by the boxes of their modes, the hours on board,
 // the country, and the price when they have one
 const shownByGround = (options, country) => {
@@ -481,6 +487,7 @@ function describeFilters() {
     say();
   };
   check("flights", t("filter_flights"));
+  check("direct", t("filter_direct"));
   // The trains and buses of every city: the ones no flight goes to, and the ones a flight goes to as well
   const modes = new Set([...byGround, ...state.points].flatMap(city => (city.ground || []).map(option => option.mode)));
   if (modes.has("train")) check("train", t("filter_train"));
@@ -501,7 +508,7 @@ function describeFilters() {
   select.onchange = () => { filter.country = select.value; draw(); };
   check("looked", t("filter_looked"));
   const reset = add(box, "button", t("show_all"));
-  reset.onclick = () => { Object.assign(filter, {flights: true, train: true, bus: true, price: null, hours: null, country: "", looked: false}); describeFilters(); draw(); };
+  reset.onclick = () => { Object.assign(filter, SHOW_ALL); describeFilters(); draw(); };
   add(box, "span", "", "count").id = "count";
 }
 
@@ -530,16 +537,27 @@ function draw() {
       L.circleMarker([p.lat, p.lon], {radius: 10, color: GROUND_COLOUR, weight: 2, fill: false, interactive: false}).addTo(markers);
     L.circleMarker([p.lat, p.lon], {radius: 7, fillColor: colour, color: p.confirmed ? "#1d1d1f" : colour, fillOpacity: 0.85, weight: p.confirmed ? 2 : 1})
       .addTo(markers).bindTooltip(tip(p.name + " · " + eur(p.total_eur) + (p.stay ? " · " + stayText(p.stay) : "") + (both ? groundText(p) : "") + (p.confirmed ? " · " + t("looked_up") : ""))).on("click", () => explain(p));
-    const row = rows.insertRow();
-    row.dataset.to = p.to;
-    row.classList.toggle("picked", picked === p.to);
-    row.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
-    for (const [value, number] of [[p.name + " (" + p.to + ")" + groundText(p)], [leg(p, p.from)], [p.back ? leg(p.back, p.back.from) + (p.back.to !== p.from ? " → " + p.back.to : "") : "-"],
-                                   [p.airline + (p.back && p.back.airline !== p.airline ? " / " + p.back.airline : "")],
-                                   [eur(p.price_eur), 1], [eur(p.ground_eur) + " (" + worst(p.access || []) + ")", 1], [eur(p.total_eur), 1], ...(data.round_trip ? [[stayText(p.stay)]] : []),
-                                   [p.confirmed ? t("looked_up") : (p.access || []).some(leg => leg.looked_up || leg.checked) ? t("partly") : t("estimated")]]) {
-      const cell = row.insertCell(); cell.textContent = value; if (number) cell.className = "n";
-    }
+    // Its card: the city and the total in the colour of its dot, the way there and back, what the total is made of
+    // and how far the ways to and from the airports were looked up
+    const card = add(rows, "li", undefined, "city");
+    card.dataset.to = p.to;
+    card.tabIndex = 0;
+    card.classList.toggle("picked", picked === p.to);
+    card.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
+    card.onkeydown = event => { if (event.key === "Enter") card.onclick(); };
+    const top = add(card, "div", undefined, "top");
+    add(top, "span", undefined, "dot").style.background = colour;
+    add(top, "strong", p.name + " (" + p.to + ")" + groundText(p));
+    add(top, "b", eur(p.total_eur), "total");
+    add(card, "p", t("col_out") + ": " + leg(p, p.from) + " · " + p.airline, "way");
+    if (p.back)
+      add(card, "p", t("col_back") + ": " + leg(p.back, p.back.from) + (p.back.to !== p.from ? " → " + p.back.to : "")
+          + (p.back.airline !== p.airline ? " · " + p.back.airline : ""), "way");
+    const foot = add(card, "p", undefined, "foot");
+    add(foot, "span", t(data.round_trip ? "col_flights" : "col_flight") + " " + eur(p.price_eur) + " · " + t("col_airports") + " "
+        + eur(p.ground_eur) + " (" + worst(p.access || []) + ")" + (data.round_trip && p.stay ? " · " + t("col_in_city") + " " + stayText(p.stay) : ""));
+    const how = p.confirmed ? "looked_up" : (p.access || []).some(way => way.looked_up || way.checked) ? "partly" : "estimated";
+    add(foot, "span", t(how), "badge " + how);
   }
   const byGround = state.by_ground || [];
   const ground = byGround.filter(shownGround);

@@ -1,4 +1,4 @@
-"""Discover in the app: where to fly cheaply from a city, on a map. The form is the one of Discover's window, the map is
+"""Discover in the app: where to fly cheaply from a city, on a map. The form asks for a city and the days, the map is
 made in a process of its own (map_job.py) and its page is Discover's (discover/page.py), served here.
 
 A map takes minutes, the cheapest destinations being looked up in the timetables after it opens, so it has a process
@@ -14,7 +14,7 @@ from discover import confirm
 from discover.page import SCRIPT, STYLE
 from trip_planner.texts import tr
 
-SOURCES = ("light", "full", "fast")   # the ways to search the flights, as in Discover's window (discover_win_source_...)
+SOURCES = ("light", "full", "fast")   # the ways to search the flights, as python -m discover has them (discover_win_source_...)
 DEFAULT_DAYS_AHEAD = 21     # the form starts with a few days in a row to leave on, this far ahead
 DEFAULT_DAYS_SPAN = 3
 # Each map has an address of its own, its number in this run of the app, with what its page asks for under it: its
@@ -63,8 +63,10 @@ def refusal_of(asked: dict[str, Any]) -> str:
     return ""
 
 def form(token: str, values: dict[str, Any], refusal: str = "") -> str:
+    """Discover's form, as the planner's: one bar with the city, the days and the button, and the choices under it
+    as chips: how the flights are searched, and whether the cheapest destinations are looked up in the timetables."""
     escape = lambda text: html.escape(str(text))
-    sources = "".join(f'<label class="tick"><input type="radio" name="source" value="{source}"'
+    sources = "".join(f'<label class="chip"><input type="radio" name="source" value="{source}"'
                       f'{" checked" if values.get("source") == source else ""}> {escape(tr("discover_win_source_" + source))}</label>'
                       for source in SOURCES)
     error = f'<p class="refusal" role="alert">{escape(refusal)}</p>' if refusal else ""
@@ -72,14 +74,15 @@ def form(token: str, values: dict[str, Any], refusal: str = "") -> str:
     return (f'<form method="post" action="/discover" class="search"{calendar_data()}><h1>{escape(tr("discover_win_title"))}</h1>'
             f'<p class="muted">{escape(tr("discover_win_intro"))}</p>{error}'
             f'<input type="hidden" name="token" value="{escape(token)}">'
-            f'<div class="row"><label>{escape(tr("discover_win_from"))}<input name="city" value="{escape(values.get("city", ""))}" required></label>'
+            f'<div class="bar three"><label>{escape(tr("discover_win_from"))}<input name="city" value="{escape(values.get("city", ""))}" required></label>'
             f'<label>{escape(tr("discover_win_leave_on"))}<input name="dates" value="{escape(values.get("dates", ""))}" data-calendar="dates" required></label>'
             f'<label>{escape(tr("discover_win_back_on"))}<input name="return_dates" value="{escape(values.get("return_dates", ""))}" '
-            f'data-calendar="return_dates"><small>{escape(tr("app_return_dates_hint"))}</small></label></div>'
-            f'<fieldset class="ticks"><legend>{escape(tr("discover_win_flights"))}</legend>{sources}</fieldset>'
-            f'<label class="tick"><input type="checkbox" name="look_up"{look_up}> {escape(tr("discover_win_look_up", cities=confirm.MAX_LOOKUPS))}</label>'
-            f'<div class="actions"><button type="submit">{escape(tr("discover_win_open"))}</button>'
-            f'<p class="muted">{escape(tr("discover_win_shared"))}</p></div></form>')
+            f'data-calendar="return_dates"><small>{escape(tr("app_return_dates_hint"))}</small></label>'
+            f'<div class="go"><button type="submit">{escape(tr("discover_win_open"))}</button></div></div>'
+            f'<fieldset class="chips"><legend>{escape(tr("discover_win_flights"))}</legend>{sources}</fieldset>'
+            f'<div class="chips"><label class="chip"><input type="checkbox" name="look_up"{look_up}> '
+            f'{escape(tr("discover_win_look_up", cities=confirm.MAX_LOOKUPS))}</label></div>'
+            f'<p class="muted">{escape(tr("discover_win_shared"))}</p></form>')
 
 def part_of(path: str) -> tuple[str, str]:
     """A path under the maps, /discover/map/<number>/<what>, as (the map's address, what): ("", "") for any other."""

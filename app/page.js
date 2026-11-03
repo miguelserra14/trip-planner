@@ -1,6 +1,6 @@
 // The app's only script. Every page works without it; it only adds what a form cannot do by itself:
 // - the calendar to click the days in, which writes them in the field as dd/mm/yyyy (the field can still be typed in);
-// - the language chosen at the top is used at once;
+// - the language chosen at the top is used at once, and the button that turns the pages dark or light says what they show;
 // - the ↔ that swaps where from and where to, how many advanced settings differ from settings.py while they are
 //   changed, and whether the trip is one way or there and back as its days are written (the page says both too);
 // - the part of the page of a running search is asked for again every few seconds and put in place, so that the page
@@ -149,9 +149,27 @@ function changes() {
 }
 
 function tripKind() {
+  // There and back once the days to come back are written, and only while "round trip" is chosen: one way hides them.
+  // Choosing "round trip" opens their calendar
   for (const kind of document.querySelectorAll(".trip-kind")) {
-    const back = kind.closest("form").elements.return_dates;
-    back.addEventListener("input", () => { kind.textContent = back.value.trim() ? kind.dataset.round : kind.dataset.one; });
+    const form = kind.closest("form"), back = form.elements.return_dates;
+    const choices = [...form.querySelectorAll("input[name=trip_kind]")];
+    const round = () => !choices.length || choices.some((choice) => choice.checked && choice.value === "round");
+    const say = () => { kind.textContent = round() && back.value.trim() ? kind.dataset.round : kind.dataset.one; };
+    back.addEventListener("input", say);
+    for (const choice of choices) {
+      choice.addEventListener("change", () => { say(); if (round()) back.focus(); });
+    }
+  }
+}
+
+function theme() {
+  // The button of the header turns the pages dark or light: the app is told what they show now, and where to come back
+  for (const form of document.querySelectorAll("form[data-theme-form]")) {
+    form.addEventListener("submit", () => {
+      form.elements.shown.value = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      form.elements.back.value = location.pathname + location.search;
+    });
   }
 }
 
@@ -195,5 +213,6 @@ calendars();
 swap();
 changes();
 tripKind();
+theme();
 language();
 poll();

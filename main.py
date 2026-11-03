@@ -15,19 +15,26 @@ import asyncio
 import sys
 
 def in_terminal(check: bool) -> int:
-    from settings import EXTRA_TRIPS, SETTINGS
+    from trip_planner.trip.trip_settings import settings_file, SettingError
+    try:
+        # The trip of settings.py is planned as written: a day that has passed is refused. The check plans nothing
+        found = settings_file(move_past_dates=check)
+    except SettingError as error:
+        print(f"settings.py: {error}")
+        return 1
+    SETTINGS, EXTRA_TRIPS = found.SETTINGS, found.EXTRA_TRIPS
     from trip_planner import current
     from trip_planner.tools.check import check_setup
-    from trip_planner.planner import ask_to_keep, follow_up, plan_all, responses, show_timings
+    from trip_planner.planner import ask_to_keep, follow_up, plan_all, show_timings
     from trip_planner.sources import flight_search
 
     async def plan() -> int:
         # The trip in SETTINGS first, then the ones in EXTRA_TRIPS
         trips = [SETTINGS, *EXTRA_TRIPS]
         await flight_search.connect()
-        await plan_all(trips)
-        show_timings()
-        if len(responses) < len(trips):
+        planned = await plan_all(trips)
+        show_timings(planned)
+        if len(planned) < len(trips):
             return 1   # a trip failed, its error is printed above
         if sys.stdin.isatty():
             ask_to_keep()
@@ -51,14 +58,18 @@ def languages(arguments: list[str]) -> int:
 
 def in_browser() -> int:
     try:
-        from settings import SETTINGS
+        from trip_planner.trip.trip_settings import settings_file
+        SETTINGS = settings_file().SETTINGS   # its dates moved forward once they have passed: the program still opens
         from trip_planner import current
+        from trip_planner.texts import text_in
         from app import server
         from app.site import Site
     except Exception as error:
         # Usually a mistake in settings.py: said in the terminal window, which TripPlanner.bat then keeps open
         print(f"The trip planner could not start.\n\n{type(error).__name__}: {error}")
         return 1
+    if SETTINGS.moved_weeks:
+        print(text_in(SETTINGS.language, "settings_dates_moved", weeks=SETTINGS.moved_weeks, dates=", ".join(SETTINGS.dates)))
     current.SETTINGS = SETTINGS   # the pages are in the language of settings.py
     server.serve(Site(SETTINGS))
     return 0
@@ -71,16 +82,16 @@ if __name__ == "__main__":
     if {"--languages", "--add-language", "--remove-language"} & set(arguments):
         sys.exit(languages(arguments))
     if "--verify" in arguments:
-        from settings import SETTINGS
         from trip_planner import current
         from trip_planner.tools import verify
-        current.SETTINGS = SETTINGS   # some operators read the limits of a trip
+        from trip_planner.trip.trip_settings import settings_file
+        current.SETTINGS = settings_file().SETTINGS   # some operators read the limits of a trip; its dates are not used
         sys.exit(verify.main())
     if "--prices" in arguments:
-        from settings import SETTINGS
         from trip_planner import current
         from trip_planner.tools import prices
-        current.SETTINGS = SETTINGS   # the operators read the limits of a trip, and the texts its language
+        from trip_planner.trip.trip_settings import settings_file
+        current.SETTINGS = settings_file().SETTINGS   # the operators read the limits of a trip, and the texts its language
         sys.exit(prices.main())
     if "--terminals" in arguments:
         from trip_planner.sources import timetables

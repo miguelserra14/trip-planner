@@ -1,32 +1,76 @@
-:root { --bg: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #e5e5ea; --panel: #f5f5f7; --link: #0a66c2; --pick: #fff6d6; }
-@media (prefers-color-scheme: dark) { :root { --bg: #1c1c1e; --fg: #f2f2f7; --muted: #a1a1a6; --line: #3a3a3c; --panel: #2c2c2e; --link: #6cb4ff; --pick: #3d3519; } }
-body { margin: 0; font: 14px/1.4 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+/* The map page's look: the app's colours and shapes (app/page.css), here again because a map saved as a file opens
+   with nothing else. Light, or dark when the computer asks for it. */
+:root { color-scheme: light; --bg: #f5f6f8; --surface: #ffffff; --fg: #1f2328; --muted: #6b7280; --line: #d5d9e0; --panel: #f8f9fb;
+        --link: #2563eb; --pick: #e8efff; --warn: #b42318; --running: #fff4d6; --done: #e6f4ea; --lost: #fde7e9; }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; --bg: #0f1115; --surface: #171a21; --fg: #e6e8eb; --muted: #9aa3af; --line: #2c323d; --panel: #1c2029;
+          --link: #6b9bff; --pick: #1c2741; --warn: #f97066; --running: #3d3519; --done: #1e3325; --lost: #3d1f1f; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
 a { color: var(--link); }
-header { padding: 12px 16px; } h1 { font-size: 18px; margin: 0 0 4px; } header p { margin: 0; color: var(--muted); }
-h2 { font-size: 16px; margin: 28px 16px 4px; } h3 { font-size: 14px; margin: 20px 16px 4px; } p.note { margin: 4px 16px 8px; color: var(--muted); max-width: 70em; }
-#map { height: 58vh; } .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; }
+header { padding: 14px 20px 6px; } h1 { font-size: 20px; margin: 0 0 4px; } header p { margin: 0; color: var(--muted); }
+header #back { display: inline-block; margin-bottom: 6px; text-decoration: none; }
+h2 { font-size: 16px; margin: 28px 20px 4px; } h3 { font-size: 14px; margin: 20px 20px 4px; } p.note { margin: 4px 20px 8px; color: var(--muted); max-width: 70em; }
+.legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; }
 /* Whether the program is still searching, or has seen everything: the first thing to read on the page */
-#status { margin: 8px 0 4px; padding: 8px 12px; border-radius: 8px; border-left: 4px solid; color: var(--fg); max-width: 70em; }
-#status.running { background: #fff4d6; border-color: #e0a100; } #status.done { background: #e6f4ea; border-color: #1e8e3e; }
-#status.lost { background: #fde7e9; border-color: #b3261e; }
-@media (prefers-color-scheme: dark) { #status.running { background: #3d3519; } #status.done { background: #1e3325; } #status.lost { background: #3d1f1f; } }
-#status p.kiwi { margin: 0 0 4px; font-weight: 600; color: #b3261e; } @media (prefers-color-scheme: dark) { #status p.kiwi { color: #ff8a80; } }
+#status { margin: 8px 0 4px; padding: 8px 12px; border-radius: 10px; border-left: 4px solid; color: var(--fg); max-width: 70em; }
+#status.running { background: var(--running); border-color: #e0a100; } #status.done { background: var(--done); border-color: #1e8e3e; }
+#status.lost { background: var(--lost); border-color: #b3261e; }
+#status p.kiwi { margin: 0 0 4px; font-weight: 600; color: var(--warn); }
 #status p.ground-status { margin: 4px 0 0; } #status strong { margin-right: 6px; } #status .pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e0a100;
   margin-right: 8px; animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { #status .pulse { animation: none; } }
-#detail { background: var(--panel); padding: 12px 16px 16px; border-bottom: 1px solid var(--line); }
+
+/* The filters, as one bar above the map and the cards */
+#filters { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 10px 20px;
+           background: var(--bg); border-bottom: 1px solid var(--line); }
+#filters label { white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border: 1px solid var(--line);
+                 border-radius: 999px; background: var(--surface); }
+#filters label:has(input[type=checkbox]:checked) { border-color: var(--link); background: var(--pick); }
+#filters input[type=checkbox] { margin: 0; accent-color: var(--link); }
+#filters input[type=range] { width: 120px; vertical-align: middle; accent-color: var(--link); }
+#filters select { font: inherit; border: 0; background: transparent; color: var(--fg); }
+#filters button { font: inherit; padding: 4px 14px; border-radius: 999px; border: 1px solid var(--link); background: var(--surface); color: var(--link); cursor: pointer; }
+#filters .count { color: var(--muted); margin-left: auto; }
+
+/* The cards beside the map, which stays in view while they scroll; on a phone the map comes first */
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; padding: 14px 20px; align-items: start; }
+.split > * { min-width: 0; }   /* the line of an option scrolls inside the trip, it does not widen the page */
+.side { position: sticky; top: 12px; height: calc(100vh - 24px); display: flex; flex-direction: column; gap: 10px; }
+#map { flex: 1 1 auto; min-height: 280px; border-radius: 12px; border: 1px solid var(--line); }
+#detail { flex: 0 1 auto; max-height: 58%; overflow: auto; background: var(--surface); padding: 12px 16px 16px; border: 1px solid var(--line); border-radius: 12px; }
+ol.cards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+ol.cards li { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; cursor: pointer; }
+ol.cards li:hover, ol.cards li:focus-visible { border-color: var(--link); outline: none; }
+ol.cards li.picked { border-color: var(--link); background: var(--pick); }
+ol.cards .top { display: flex; align-items: center; gap: 8px; }
+ol.cards .top strong { flex: 1; min-width: 0; }
+ol.cards .top .total { font-size: 17px; }
+ol.cards .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+ol.cards p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+ol.cards p.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; margin-top: 6px; }
+.badge { font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--panel); color: var(--muted); }
+.badge.looked_up { background: var(--done); color: #1e8e3e; } .badge.partly { background: var(--running); color: #a06d00; }
+@media (max-width: 900px) {
+  .split { display: flex; flex-direction: column-reverse; }
+  .side { position: static; height: auto; } #map { height: 50vh; flex: none; } #detail { max-height: none; }
+}
+
+/* The trip of a destination */
 #detail h2 { margin: 0 0 2px; } #detail h4 { margin: 14px 0 4px; font-size: 14px; } #detail p { margin: 2px 0; }
 #detail .muted { color: var(--muted); } #detail ol { margin: 4px 0; padding-left: 20px; } #detail li { margin: 2px 0; }
-#detail ul.links { margin: 6px 0 0; padding-left: 20px; } #detail .close { float: right; }
-#detail .warn { color: #b3261e; } @media (prefers-color-scheme: dark) { #detail .warn { color: #ff8a80; } }
-table { border-collapse: collapse; width: 100%; } td, th { text-align: left; padding: 6px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
-th { color: var(--muted); font-weight: 600; } td.n { text-align: right; font-variant-numeric: tabular-nums; }
-#rows tr { cursor: pointer; } #rows tr:hover, #rows tr.picked { background: var(--pick); }
-.wrap { overflow-x: auto; } #tiles { margin: 4px 16px; color: var(--muted); }
+#detail ul.links { margin: 6px 0 0; padding-left: 20px; } #detail .close { float: right; font: inherit; padding: 2px 12px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+#detail .warn { color: var(--warn); }
 #detail pre { white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 6px 8px; border: 1px solid var(--line); }
-#filters { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; padding: 6px 16px 10px; border-top: 1px solid var(--line); }
-#filters label { white-space: nowrap; } #filters input[type=range] { width: 140px; vertical-align: middle; }
-#filters .count { color: var(--muted); }
+
+/* The tables under the map: the cities by train or bus, and what was searched */
+table { border-collapse: collapse; width: 100%; background: var(--surface); }
+td, th { text-align: left; padding: 6px 20px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; background: var(--panel); } td.n { text-align: right; font-variant-numeric: tabular-nums; }
+#ground-rows tr { cursor: pointer; } #ground-rows tr:hover, #ground-rows tr.picked { background: var(--pick); }
+.wrap { overflow-x: auto; margin: 0 20px; border: 1px solid var(--line); border-radius: 12px; } #tiles { margin: 0; color: var(--muted); }
 /* The line of each option, as the planner draws it */
 .lines { margin: 8px 0 4px; } .lines .line { overflow-x: auto; } .lines svg { width: 100%; min-width: 560px; height: auto; display: block; font-size: 12px; }
 .lines p.line-title { margin: 10px 0 0; font-weight: 600; }

@@ -1,9 +1,11 @@
 """The rules of the arrival leg on small made-up inputs: no service, no checkpoint."""
 import asyncio
 import math
-from datetime import date, timedelta
+import sys
+from datetime import date, datetime, timedelta
 
 import httpx
+import pytest
 
 from trip_planner.trip import places
 from trip_planner.trip.trip_settings import TripSettings
@@ -204,3 +206,36 @@ def test_a_cache_is_written_whole_or_left_as_it_was(tmp_path, monkeypatch):
     assert cache.read_text(encoding="utf-8") == '{"old": 1}'   # the half-written file is beside it, never in its place
     utils.write_whole(cache, '{"new": 2}')
     assert cache.read_text(encoding="utf-8") == '{"new": 2}' and [path.name for path in cache.parent.iterdir()] == ["kept.json"]
+
+# ---------------------------------------------------------------- settings.py once its dates have passed
+def today_is(monkeypatch, day: date) -> None:
+    from trip_planner.trip import trip_settings
+    monkeypatch.setattr(trip_settings, "date", type("Later", (date,), {"today": classmethod(lambda cls: day)}))
+
+def test_dates_that_have_passed_are_moved_by_whole_weeks_only_while_settings_py_is_read(monkeypatch):
+    from trip_planner.trip.trip_settings import past_dates_moved, SettingError
+    today_is(monkeypatch, date(2027, 1, 5))
+    trip = dict(origin="Coimbra", destination="Antwerp", dates=["17/12/2026", "18/12/2026"], return_dates=["22/12/2026"])
+    with pytest.raises(SettingError):
+        TripSettings(**trip)
+    with past_dates_moved():
+        moved = TripSettings(**trip)
+    # Three weeks: the first day is the first Thursday from today on, and the five days to come back are kept
+    assert moved.moved_weeks == 3 and moved.dates == ["07/01/2027", "08/01/2027"] and moved.return_dates == ["12/01/2027"]
+    assert TripSettings(**{**trip, "dates": moved.dates, "return_dates": moved.return_dates}).moved_weeks == 0
+
+def test_the_program_still_opens_once_the_dates_of_settings_py_have_passed(monkeypatch):
+    from trip_planner.trip.trip_settings import settings_file, SettingError
+    first = datetime.strptime(settings_file().SETTINGS.dates[0], "%d/%m/%Y").date()
+    later = first + timedelta(days=30)
+    today_is(monkeypatch, later)
+    monkeypatch.delitem(sys.modules, "settings")
+    opened = settings_file().SETTINGS
+    assert all(datetime.strptime(day, "%d/%m/%Y").date() >= later for day in opened.dates)
+    monkeypatch.delitem(sys.modules, "settings")
+    try:
+        as_written = settings_file(move_past_dates=False).SETTINGS   # main.py --terminal: that very trip
+    except SettingError:
+        assert opened.moved_weeks > 0
+    else:
+        assert opened.moved_weeks == 0 and as_written.dates == opened.dates   # its dates are relative ("sexta"): nothing passed

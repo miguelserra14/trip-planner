@@ -423,6 +423,7 @@ class Site:
 
     def close(self) -> None:
         """The program closing: the search stops, the map is asked to, and given a while to save what it found."""
+        search.close_spare()   # first: a job that ends would start another one
         self.map_next = None
         if self.map_job is not None and self.map_job.running:
             self.ask_map_to_stop()

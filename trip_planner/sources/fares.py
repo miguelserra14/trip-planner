@@ -72,15 +72,25 @@ def runs(steps: list[dict[str, Any]]) -> list[tuple]:
 
 CACHE: dict[tuple, float | None] = {}
 NOT_RUNNING: set = set()   # (operator, Trip) whose operator answered, for that day, that the departure does not run
+ASKING: dict[tuple, threading.Event] = {}   # the tickets being asked for now, set once their answer is in CACHE
 LOCK = threading.Lock()
 
 def fare(source: FareSource, trip: Trip) -> float | None:
     """The price of one ticket, asked once. None when the operator does not answer or does not sell that departure.
-    When its answer says the departure does not run that day (NotRunning), the ticket is noted in NOT_RUNNING."""
+    When its answer says the departure does not run that day (NotRunning), the ticket is noted in NOT_RUNNING.
+    The itineraries are priced in several threads, and often share a ticket: one asks, the others wait for its answer."""
     key = (source.name, trip)
     with LOCK:
         if key in CACHE:
             return CACHE[key]
+        asking = ASKING.get(key)
+        if asking is None:
+            ASKING[key] = threading.Event()
+    if asking is not None:
+        asking.wait()
+        with LOCK:
+            return CACHE.get(key)
+    price = None
     try:
         if source.tariff:
             price = source.fare(trip)   # a published tariff is worked out here: nothing is asked of anyone
@@ -96,8 +106,10 @@ def fare(source: FareSource, trip: Trip) -> float | None:
                                    else f"ok: {price:.2f} EUR")
     except Exception:
         price = None   # an operator that fails only leaves the estimate in place
-    with LOCK:
-        CACHE[key] = price
+    finally:
+        with LOCK:
+            CACHE[key] = price
+            ASKING.pop(key).set()
     return price
 
 def forget_prices() -> None:

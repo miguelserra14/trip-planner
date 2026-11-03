@@ -179,6 +179,9 @@ def failed(error: Exception, events: Events) -> None:
     events.send("failed", tr("ui_failed", error=f"{type(error).__name__}: {error}"))
 
 def main(answers: Iterator[str], events: Events) -> int:
+    # The first line is waited for before settings.py is read: a spare process (search.py) may have waited a while
+    # for its job, and settings.py may have changed meanwhile
+    first = next(answers, "")
     from trip_planner import current, utils
     from trip_planner.texts import tr
     from trip_planner.trip.trip_settings import settings_file
@@ -187,7 +190,7 @@ def main(answers: Iterator[str], events: Events) -> int:
     utils.LISTENERS["say"] = lambda text: events.send("say", text)
     utils.LISTENERS["show"] = lambda markdown: events.send("show", markdown)
     try:
-        asked = json.loads(next(answers, ""))
+        asked = json.loads(first)
     except json.JSONDecodeError:
         events.send("failed", tr("app_not_a_trip"))
         return 1
@@ -218,4 +221,7 @@ if __name__ == "__main__":
     sys.stdin.reconfigure(encoding="utf-8")
     events = Events(out)
     sys.stdout = Printed(events)
+    # The planner is loaded before the first line comes, about 12 seconds: a spare process (search.py) is then ready
+    # when its search starts
+    import trip_planner.planner  # noqa: F401,E402
     sys.exit(main(iter(sys.stdin.readline, ""), events))

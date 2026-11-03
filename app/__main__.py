@@ -8,7 +8,7 @@ from trip_planner.trip.trip_settings import settings_file
 
 SETTINGS = settings_file().SETTINGS   # before the app's modules: settings.py read with its passed dates moved
 
-from app import server
+from app import search, server
 from app.site import Site
 from trip_planner import current
 
@@ -17,4 +17,5 @@ if __name__ == "__main__":
         if stream is not None:
             stream.reconfigure(encoding="utf-8", errors="replace")   # the Windows console is not UTF-8 by default
     current.SETTINGS = SETTINGS   # the pages are in the language of settings.py
+    search.keep_spares()          # the first search starts in a process already loaded
     server.serve(Site(SETTINGS), browser="--no-browser" not in sys.argv[1:])

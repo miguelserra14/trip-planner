@@ -20,12 +20,16 @@ def coach_ride(leave: str, arrive: str) -> dict:
     return {"grade": "C", "source": "Obilet", "service_day": DAY, "leave": to_minutes(leave) - 50, "arrive": to_minutes(arrive),
             "price_eur": 14.0, "confirmed_eur": 11.0, "estimated_km": 14, "notes": ["estimated"], "steps": [estimated, coach], "urls": []}
 
-def join(published: list, monkeypatch) -> list:
-    """The rides from the airport after joining, the planner answering with these (leave, arrive) from the airport."""
+def join(published: list, monkeypatch, landings: tuple = ("12:30",), asked: list | None = None) -> list:
+    """The rides from the airport after joining, the planner answering with these (leave, arrive) from the airport.
+    landings are the times the flights land at, asked gets each time the planner is asked from."""
     async def station_point(self, name, near):
         return STATION
 
     async def plan(self, start, end, day, minutes, **options):
+        await asyncio.sleep(0)
+        if asked is not None:
+            asked.append(minutes)
         return [{"leave": to_minutes(leave), "arrive": to_minutes(arrive),
                  "steps": [{"time": leave, "arrive": arrive, "line": "Ulcinj to Podgorica", "agency": "", "from": "Airport", "to": "Main Bus Station",
                             "rail": False, "coach": False, "km": 12}]} for leave, arrive in published if to_minutes(leave) >= minutes]
@@ -35,11 +39,12 @@ def join(published: list, monkeypatch) -> list:
     monkeypatch.setattr(joined, "reference_day", lambda day: day)
     rides = [coach_ride("15:45", "17:55"), coach_ride("07:05", "09:10")]
     ground = {"operators": {}, "operators_from": {"TGD": {DAY: rides}}}
-    flight = {"id": "F", "date": DAY, "departure_airport": "LIS", "arrival_airport": "TGD", "arrival_time": "12:30", "departure_time": "09:00"}
+    flights = [{"id": f"F{number}", "date": DAY, "departure_airport": "LIS", "arrival_airport": "TGD", "arrival_time": landing,
+                "departure_time": "09:00"} for number, landing in enumerate(landings)]
 
     async def work() -> None:
         client = timetables.Timetables()
-        await timetables.join_published_ends(client, ground, [flight], {"TGD": AIRPORT}, {"TGD": "Europe/Podgorica"}, {"TGD": True},
+        await timetables.join_published_ends(client, ground, flights, {"TGD": AIRPORT}, {"TGD": "Europe/Podgorica"}, {"TGD": True},
                                              {"TGD": {"country": "ME"}})
         await client.close()
     asyncio.run(work())
@@ -53,6 +58,12 @@ def test_a_published_bus_to_the_station_and_the_coach_are_one_ride(monkeypatch):
     assert ride["grade"] == "A" and ride["leave"] == to_minutes("13:34")   # the bus that leaves last and still makes it
     assert [step["line"] for step in ride["steps"]] == ["Ulcinj to Podgorica", "Royal Travel"]
     assert ride["price_eur"] > 11.0 and not ride["notes"]
+
+def test_flights_landing_together_share_the_way_to_the_station(monkeypatch):
+    asked = []
+    rides = join([("13:34", "14:05")], monkeypatch, landings=("12:30", "12:30"), asked=asked)
+    assert len(asked) == 1
+    assert len([ride for ride in rides if not ride.get("estimated_km")]) == 2   # each flight still has its joined ride
 
 def test_with_nothing_published_the_estimate_is_measured_by_road_to_the_station(monkeypatch):
     rides = join([], monkeypatch)

@@ -32,6 +32,13 @@ async def join_published_ends(timetables: Timetables, ground: dict[str, Any], fl
     def station_of(ride: dict[str, Any], to_airport: bool) -> str:
         return coach_of(ride, to_airport)["to" if to_airport else "from"]
 
+    async def connections(start: tuple, end: tuple, service: str, minutes: int, to_airport: bool, code: str) -> list[dict[str, Any]]:
+        """The connections leaving start from a time on, between an airport and a coach station. Several flights of
+        an airport and day, in this round or in the ones before, ask the same: they share the answer."""
+        return await timetables.shared(timetables.joins, (start, end, service, minutes), lambda: timetables.plan(
+            start, end, service, minutes, arrive_by=False, zones=(zones[code], zones[code]), to_airport=to_airport,
+            terminal_known=known[code], city_walk=STATION_WALK_SECONDS))
+
     async def join(flight: dict[str, Any], to_airport: bool) -> None:
         code = flight["departure_airport"] if to_airport else flight["arrival_airport"]
         day = flight["date"] if to_airport else landing_day(flight)
@@ -40,43 +47,43 @@ async def join_published_ends(timetables: Timetables, ground: dict[str, Any], fl
         if not estimated or not zones.get(code):
             return
         service, country = reference_day(day), airports[code]["country"]
-        added = []
-        for station in dict.fromkeys(station_of(ride, to_airport) for ride in estimated):
+
+        async def through(station: str) -> list[dict[str, Any]]:
+            """The rides of one coach station joined to a published connection."""
             point = await timetables.station_point(station, spots[code])
             if point is None:
-                continue
+                return []
             mine = [ride for ride in estimated if station_of(ride, to_airport) == station]
             # The estimate, by road to this very station
             road = await asyncio.to_thread(by_road, spots[code], [{"lat": point[0], "lon": point[1], "km": distance_km(*spots[code], *point)}])
             if road:
                 for ride in mine:
                     remeasure(ride, road[0], to_airport, estimated_price(road[0]["road_km"] / ROAD_FACTOR, country))
-            zone_pair = (zones[code], zones[code])
             if to_airport:
                 # The first connection after each of the last coaches that arrive in time: asked from each one's arrival
                 at_terminal = to_minutes(flight["departure_time"]) - current.SETTINGS.min_airport_minutes
                 arriving = sorted((ride for ride in mine if to_minutes(coach_of(ride, True)["arrive"]) + TRANSFER_MINUTES < at_terminal),
                                   key=lambda ride: to_minutes(coach_of(ride, True)["arrive"]))[-JOINED_COACHES:]
-                pairs = []
-                for ride in arriving:
+
+                async def first_after(ride: dict[str, Any]) -> tuple | None:
                     after = to_minutes(coach_of(ride, True)["arrive"]) + TRANSFER_MINUTES
                     try:
-                        found = await timetables.plan(point, spots[code], service, after, arrive_by=False, zones=zone_pair, to_airport=True,
-                                                      terminal_known=known[code], city_walk=STATION_WALK_SECONDS)
+                        found = await connections(point, spots[code], service, after, True, code)
                     except httpx.HTTPError:
-                        continue
+                        return None
                     fit = [c for c in found if c["leave"] >= after and c["arrive"] <= at_terminal]
-                    pairs.append((ride, min(fit, key=lambda c: c["arrive"], default=None)))
+                    return ride, min(fit, key=lambda c: c["arrive"], default=None)
+                pairs = [pair for pair in await asyncio.gather(*(first_after(ride) for ride in arriving)) if pair]
             else:
                 ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes
                 try:
-                    connections = await timetables.plan(spots[code], point, service, ready, arrive_by=False, zones=zone_pair, to_airport=False,
-                                                        terminal_known=known[code], city_walk=STATION_WALK_SECONDS)
+                    leaving = await connections(spots[code], point, service, ready, False, code)
                 except httpx.HTTPError:
-                    continue
+                    return []
                 # Before each coach, the published connection that leaves the airport last and still reaches it
-                pairs = [(ride, max((c for c in connections if c["arrive"] + TRANSFER_MINUTES <= to_minutes(coach_of(ride, False)["time"])),
+                pairs = [(ride, max((c for c in leaving if c["arrive"] + TRANSFER_MINUTES <= to_minutes(coach_of(ride, False)["time"])),
                                     key=lambda c: c["leave"], default=None)) for ride in mine]
+            added = []
             for ride, chosen in pairs:
                 coach = coach_of(ride, to_airport)
                 if chosen is None:
@@ -87,7 +94,11 @@ async def join_published_ends(timetables: Timetables, ground: dict[str, Any], fl
                               leave=ride["leave"] if to_airport else chosen["leave"], arrive=chosen["arrive"] if to_airport else ride["arrive"],
                               grade="A" if service == day else "B", service_day=service, price_eur=round(ride["confirmed_eur"] + local, 2), notes=[])
                 added.append(joined)
-        rides.extend(added)
+            return added
+
+        # The stations of the airport, all at once: each answer is added in the stations' order
+        stations = dict.fromkeys(station_of(ride, to_airport) for ride in estimated)
+        rides.extend(joined for found in await asyncio.gather(*(through(station) for station in stations)) for joined in found)
 
     for failure in await asyncio.gather(*(join(flight, to_airport) for flight in flights for to_airport in (True, False)), return_exceptions=True):
         if isinstance(failure, Exception):

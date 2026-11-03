@@ -2,9 +2,10 @@
 .venv/
 __pycache__/
 .ipynb_checkpoints/
-# The recent reports come and go. Only the ones kept on purpose, in reports/saved/, belong in the repository
-/reports/*
-!/reports/saved/
+# Reports are the traveller's own trips, the kept ones in reports/saved/ too: none belongs in a public repository
+/reports/
+# The state of the Claude Code sessions that worked on the project
+.claude/
 # The answers of the timetables, kept a day for the next searches (sources/timetables/client.py)
 /cache/
 # Crash dumps of command-line tools

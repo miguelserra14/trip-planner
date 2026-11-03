@@ -186,6 +186,16 @@ td button { height: 30px; padding: 0 12px; }
 
 /* ---------------------------------------------------------------- questions and searches (search.py) */
 form.ask label.tick { margin: 6px 0; }
+/* The airports to leave out: one row each, the box, the code, the name over the city, the distance on the right */
+label.airport { display: grid; grid-template-columns: 16px 3.2em minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 8px 10px;
+                border-radius: 8px; font-size: 1rem; font-weight: normal; cursor: pointer; }
+label.airport:hover { background: var(--hover); }
+label.airport + label.airport { border-top: 1px solid var(--border); border-radius: 0; }
+label.airport input { margin: 0; }
+label.airport span small { display: block; color: var(--muted); font-size: .85rem; }
+label.airport:has(input:not(:checked)) > :not(input) { opacity: .45; text-decoration: line-through; }
+form.ask .groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; margin: 12px 0; }
+form.ask .groups fieldset { margin: 0; padding: 6px 8px 8px; }
 form.ask fieldset { margin: 12px 0; }
 form.ask > button { margin-top: 8px; }
 /* A line to write in and its button beside it: a question about the trip, a language to add */
@@ -309,6 +319,7 @@ a.sticky { display: none; }
   nav.sort b { font-size: 1.05em; }
   details.option > summary { padding: 12px 14px; grid-template-columns: minmax(0, 1fr); }
   .option .price { flex-direction: row; flex-wrap: wrap; align-items: baseline; justify-content: flex-start; text-align: left; gap: 2px 10px; }
+  header .name { flex-basis: 100%; }   /* the name, then the language, light or dark and Quit, then the parts of the app */
   header nav.inline { margin-left: 0; width: 100%; order: 3; }
   .option .body { padding: 4px 14px 14px; }
   .option .body > .timeline { display: none; }   /* its times would overlap: the steps below say them */

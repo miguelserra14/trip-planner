@@ -184,189 +184,7 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 
 2. Copy `env/.env.example` to `env/.env` and fill in the keys: `GOOGLE_API_KEY` is required, the others are optional.
 
-## Architecture
-
-### The rules it is built on
-
-- **Code decides, models assist.** Finding flights, reading timetables and prices, checking that a connection can
-  be made, and ranking are all done by code. Models do only what code cannot: search the web for the transport and
-  the prices no timetable or booking system gives, and write the recommendation in words. Without any model the
-  result is still computed and shown.
-- **Every figure carries its source and a grade** (A, B, C). Nothing a model wrote is shown as confirmed. A link
-  written by a model is kept only if its site appeared in a search result, and its text is stripped of markup.
-- **A real timetable overrules a model.** When a published timetable shows a connection is impossible, the
-  itinerary is discarded, whatever a model claimed.
-- **One module per outside service.** An operator's booking system is one file in `sources/operators/` and one
-  entry in `sources/fares.py`; adding a country's coaches touches nothing else.
-- **Settings are checked once, at the start** (`TripSettings`): every number has an allowed range, and a bad value
-  is explained in the traveller's language before anything is searched.
-
-### How a trip is planned
-
-```
- browser (app/) or terminal ── TripSettings, checked
-            │
-            ▼
- 1. places (trip/places.py)       the two cities on OpenStreetMap; the airports around each, by distance and
-            │                     by hours on the road (an airport across a sea is left out)
-            ▼
- 2. flights (sources/flight_search.py)   every departure airport × every arrival airport × every date,
-            │                            on Kiwi, on Google Flights when Kiwi does not answer
-            ▼
- 3. ground transport, at the same time:
-      ├─ real timetables (sources/timetables/, Transitous) and operators' prices (sources/fares.py)   → A or B
-      ├─ airport transfer agent      ┐ models with web search, for what no timetable covers           → C
-      ├─ destination transport agent ┘ (agents/subagents.py)
-      └─ the whole trip by train or coach, no plane (sources/timetables/all_the_way.py), priced by the operators
-    in rounds, cheapest flights first, until no flight left can beat the best option (itineraries/selection.py)
-            │
-            ▼
- 4. checks and ranking (itineraries/)    impossible connections out, hard limits, total cost + the value of the
-            │                            extra hours, the closest options when nothing fits; the trips without a
-            │                            plane compared with the recommended one by the same rule (itineraries/ground_only.py)
-            ▼
- 5. report (report/)                     shown at once, saved to reports/ with its sources, log and vehicles
-            │
-            ▼
- 6. coordinator (agents/coordinator.py)  one model call: the recommendation in words, its links, colours, durations
-                                         and times checked against the options (agents/claims.py)
-```
-
-A round trip is two one-way trips, the way back on the same airports, then a summary that pairs them.
-
-### How a Discover map is made
-
-```
- browser (app/maps.py) or terminal ── session.py
-            │
-            ▼
- 1. the airports around the city with the most routes (finder.py, flown.py)
- 2. every destination from them: Ryanair's fare finder, Kiwi by country (sources.py), within a daily limit
- 3. the way to and from the airports on both sides (access.py, rides.py, transfers.py)
- 4. the cities reached straight by train or bus (ground.py, Transitous)
-            │
-            ▼
- the page (page.py), served by the app ── or saved as a file, from the terminal
-            │  then, while the page redraws itself:
-            ▼
- 5. the trains and buses priced for the days (ground_fares.py, the planner's operators)
- 6. the cheapest destinations looked up in the real timetables (confirm.py, the planner's code, no model)
-            │
-            ▼
- a click on a trip ── the planner's form in the app, filled in with it: nothing searched until asked
-```
-
-Discover may import the planner; the planner never imports Discover. The app imports both, and neither imports the
-app. A search and a map are each made in a process of their own because the planner's code reads the trip being
-planned from module globals (`trip_planner/current.py`).
-
-### How the app works
-
-```
- browser ── 127.0.0.1 only ── server.py, site.py   every page; a POST must carry the token of the app's own forms
-                                   │
-                ┌──────────────────┴──────────────────┐
-                ▼                                     ▼
- a search: job.py, a process of its own     a map: job.py → map_job.py, a process of its own
-   which place? which airports? questions     its page, its destinations as they change, its trips
-                │                                     │
-                └──────── JSON lines, both ways ──────┘
-                                   │
-                                   ▼
- the reports (reports.py, report_page.py)   the saved Markdown as pages: tables, colours, each option to scale
-```
-
-### How the code is organised
-
-```
-trip_planner/
-├── planner.py         plans one trip from start to finish, follow-up questions
-├── current.py         the trip being planned, read by every other module
-├── utils.py           times, text, progress lines, timings
-├── shapes.py          what the dicts passed between modules hold: a vehicle, a connection, a side of a flight
-├── trip/              what defines a trip
-│   ├── trip_settings.py   TripSettings: every setting of a trip, its default and its check
-│   ├── dates.py           travel dates as travellers write them
-│   ├── ground_choice.py   by train, by bus or either, and how many changes, on each side of the flight
-│   ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
-│   └── form.py            how a form shows the settings: the main card, the tabs, the labels and hints
-├── texts/             every text the traveller reads
-│   ├── __init__.py        tr(): reads the languages and gives each text in the right one
-│   ├── translate.py       adds, removes and checks languages
-│   └── languages/         one file per language: en.py (the reference), pt-PT.py, it.py...
-├── sources/           where the data comes from, one module per outside service
-│   ├── flight_search.py   the flight search: every route, on Kiwi first, then on Google Flights
-│   ├── kiwi.py            flights from Kiwi
-│   ├── google_flights.py  flights from Google Flights, when Kiwi does not answer
-│   ├── timetables/        published timetables (Transitous), one module per part
-│   │   ├── lookup.py          ground_transport_for: the ground transport of every flight, where a search starts
-│   │   ├── client.py          Timetables: the requests, and the mixed legs where no timetable reaches one end
-│   │   ├── joined.py          an operator's coach joined to a published connection to its station
-│   │   ├── all_the_way.py     the whole trip by train or coach: the timetables across the day, and FlixBus city to city
-│   │   ├── airport_stops.py   airport terminals (OpenStreetMap) and the stops travellers use there
-│   │   ├── days.py            which day is read for a travel date, and the local time of each place
-│   │   └── modes.py           the kinds of vehicle asked for
-│   ├── fares.py           which operator prices which vehicle, and the operators that list rides (FARE_SOURCES, RIDE_SOURCES)
-│   ├── operators/         one module per operator's booking system (FlixBus, ALSA, Movelia, Obilet...) and the city tariffs
-│   ├── airlines.py        airlines' sites and confirmed fares (Ryanair)
-│   └── web.py             web search for the subagents (Tavily), cleaning of what models write
-├── agents/            the models
-│   ├── subagents.py       airport transfer agent, destination transport agent, their prompts and limits
-│   ├── steps.py           the three steps of a trip, run in order by code
-│   ├── coordinator.py     the model that writes the recommendation, its prompt and its fallback between models
-│   ├── claims.py          what a model wrote, checked by code: the colours it gives each part, its durations and times
-│   ├── models.py          which model each agent runs on, plan B (Mistral) and the time limit of a call
-│   ├── schemas.py         the structured answers of the subagents
-│   └── state.py           what each agent keeps between steps
-├── itineraries/       code that decides the result
-│   ├── legs.py            ground legs: real connection or checked estimate
-│   ├── estimates.py       time and price estimated from the distance, where nothing better is known
-│   ├── ranking.py         hard constraints, cost, ranking
-│   ├── ground_only.py     the trips without a plane: the traveller's limits, the operators' prices, compared with flying
-│   └── selection.py       which flights get their ground transport looked up: the ones that can still win
-├── report/            the Markdown reports
-│   ├── summary.py         the result shown to the traveller
-│   ├── full.py            the full report saved to reports/
-│   └── formatting.py      tables, grades and sources
-└── tools/             the maintenance commands of main.py
-    ├── check.py           --check: whether every outside service answers
-    ├── verify.py          --verify: whether the connections of the kept reports really ran
-    └── prices.py          --prices and Refresh prices: the ground prices over a day old, asked again before booking
-
-app/
-├── __main__.py        python -m app: the app served, the browser opened
-├── server.py          the pages served on 127.0.0.1 only, and what each may do (its security headers)
-├── site.py            what is answered at each address, and the token every POST must carry
-├── fields.py          the form of a trip: every setting of TripSettings, read back as the browser sends it
-├── search.py          a search or a job in a process of its own, and the part of the page that follows it
-├── job.py             that process: the search, its questions, the program's own jobs (check, prices, languages, a map)
-├── maps.py            Discover's form, and its maps served by their address
-├── map_job.py         a Discover map made in that process, told to the app as it changes
-├── reports.py         the saved reports, listed, kept or put back
-├── report_page.py     a report as a page
-├── page.js            the only script of the app's pages, which work without it: the calendar, the parts that change
-└── tests/             its tests; pytest --browser also runs them in Edge or Chrome
-
-discover/
-├── __main__.py        a map from the terminal, saved as a file
-├── session.py         one map, from the city typed to the page saved and improved
-├── finder.py          the departure airports, every source asked, the cheapest way to each destination; Kiwi's daily limit
-├── sources.py         Ryanair's fare finder and Kiwi asked by country
-├── regions.py         a few more requests for the regions of Europe with fewest cities found
-├── flown.py           the routes flown today from each airport (Wikipedia, through Wikidata): what the map may be missing
-├── routes.py          the routes known from OpenFlights, to choose which countries to ask first
-├── access.py          the way between each airport and its city, on both sides of the trip
-├── rides.py           the coaches sold for the day between the traveller's city and its airports (FlixBus, Rede Expressos)
-├── transfers.py       what it costs to get from an airport into its city, read from the operators' and guides' pages
-├── ground.py          the trains and buses that go straight from the city, with no flight (Transitous)
-├── ground_fares.py    their prices for the days of the trip, with the planner's operators
-├── confirm.py         the cheapest destinations checked in the real timetables, with the planner's code
-├── breakdown.py       what was searched and what may have been missed, under the map
-├── page.py            the map page (Leaflet and OpenStreetMap), and the trips of a map the planner can be opened on
-└── tests/             its own tests, run by plain pytest too
-```
-
-### Security and privacy
+## Security and privacy
 
 - The keys are read from `env/.env`, which is in `.gitignore`, and are sent only to their own service. No key is
   written to a report or a log.
@@ -379,74 +197,8 @@ discover/
   that map's own trips, and fills it in only: nothing is searched until you ask. The map's script (Leaflet) is
   checked against its known hash.
 - Wikidata gets a contact address only if you put one in `env/.env` as `WIKIMEDIA_CONTACT`.
-- Reports and maps stay on your computer. The ones in `reports/saved/` are in the repository: keep it private if
-  your trips are.
-
-## What is in this folder
-
-| Path | What it is |
-| :-- | :-- |
-| `TripPlanner.bat` | Double-click to open the program in the browser. Sets up the environment the first time |
-| `settings.py` | The trip the form starts with, and every setting the form does not show |
-| `main.py` | Runs the program: in the browser, in the terminal (`--terminal`), or checks the setup (`--check`) |
-| `trip_planner/` | The program, see above |
-| `app/` | The program in the browser: the form, each search in a process of its own that asks which place and which airports and takes questions about the trip, the reports, the program's own jobs, and Discover's maps, a trip of a map opening the form filled in |
-| `discover/` | Discover, see above. Its maps go to `discover/maps/` and what it remembers to `discover/cache/`, both left out of the repository |
-| `env/requirements.txt` | Direct dependencies, pinned |
-| `env/requirements.lock` | Every package of the tested environment, pinned |
-| `env/.env.example` | The keys the program needs, without values |
-| `env/.python-version` | The Python version the project was tested with |
-| `env/.env`, `env/.venv/` | Your keys and your environment. Created by you, not in the repository |
-| `resources/airports.csv` | The airports with scheduled flights of the OurAirports database (snapshot of 8 October 2026). Delete it to download the current one |
-| `resources/airfields.json` | Airports left out of the automatic choice because no airline flies from them (Viseu, Cascais...). Worked out once from OurAirports runways and OpenFlights routes. Delete it to work it out again |
-| `resources/terminals.json` | Where the passenger terminal of every airport is, from OpenStreetMap, worked out once so that a search does not depend on it. `python main.py --terminals all` works it out again |
-| `resources/airport_stops.json` | The stops travellers use at each airport, filled as trips are planned |
-| `resources/operators/` | What the coach and train operators' booking systems need and do not give with each answer, one file per operator (see the README there) |
-| `resources/timezones.json` | Cache of time zones, filled as trips are planned |
-| `reports/` | One folder for each of the last 5 trips, older ones deleted. In it the Markdown report (result, sources, reasoning and timings), its log (`.log`) and the vehicles and prices of its options for `--verify` and `--prices` (`.json`). A round trip is one folder with both ways. Not in the repository |
-| `reports/saved/` | The trips you chose to keep, with **Keep this report**, a folder each as above. Never deleted |
-
-## Tests
-
-```
-pip install -r env/requirements-dev.txt
-pytest                          replays the saved checkpoints: no network, under a minute
-pytest --live                   asks the real services again and saves new checkpoints: about fifteen minutes
-pytest --live tests/departure   the same for one direction
-pytest --live -k BRU            the same for one airport
-pytest discover                 Discover's tests only
-pytest app --browser            the app's tests, the pages also in Edge or Chrome
-```
-
-The tests follow the ground transport between an airport and a place, in both directions: `tests/arrival/` from
-the arrival airport to the destination, `tests/departure/` from the origin to the departure airport. The places
-are in `tests/cases.py`: a city of every country of the European Union, and a small town of every country, far
-from the airport, where what the country's regional trains and buses publish decides the result.
-
-Each test is one stage: locating the place, the terminal, the airport's stops, the connections, and the leg the
-itinerary gets. What the services answered at each stage is saved in the `checkpoints/` folder of each direction,
-one file per place, so a failure says at which stage a country breaks and the stages can be run again on today's
-code without asking anyone. A route that cannot work is marked with `known_gap` and its reason, such as Malta,
-whose buses are in no published timetable.
-
-## What can and cannot be reproduced
-
-The **environment** is reproducible: the Python version and every package are pinned, and the airport database is a
-saved snapshot.
-
-The **results** are not, and cannot be. Each run reads live data, so two runs a day apart can recommend different
-trips:
-
-- Flight prices (Kiwi, Ryanair) and coach prices (FlixBus, Rede Expressos, Movelia, Obilet) change by the hour.
-  A report keeps when its prices were read: once they are over 24 hours old, **Refresh prices** on the first page (or
-  `--prices`) asks the operators' booking systems again for the ground prices of its options, and adds what changed
-  at the end of the report. The flights are not asked again.
-- The models (Gemini) do not answer the same way twice. They only write the recommendation and the unverified
-  estimates (grade C): flights, timetables, checks and ranking are computed by code.
-- Timetables come from the week of the run, for the same weekday as the travel date.
-
-The record of a run is its report in `reports/`. It keeps the figures, their sources and their grades as they were
-at that moment.
+- Reports and maps stay on your computer, and none of them goes in the repository, not even the ones kept in
+  `reports/saved/`.
 
 ## External services
 
@@ -475,3 +227,23 @@ The program depends on these services. None of them is under the project's contr
 
 The free tier of Gemini allows about 20 requests a day on the better coordinator model. After that the coordinator
 falls back to a lighter model by itself.
+
+## Disclaimer
+
+Trip Planner is a personal project, made to learn and for its author's own trips. It is not affiliated with,
+endorsed by or connected to any of the airlines, operators or sites above; their names and trademarks belong to
+their owners. Several of them are read through the requests their own sites make, not through an official service:
+use the program for your own trips, at a gentle pace, and read the terms of each site before relying on it. A
+source can change or refuse the program at any time, and then the result may be missing options.
+
+Prices and timetables are read at one moment and change. Always check a trip on the operator's own site before
+booking: the program books nothing and gives no guarantee about any figure it shows.
+
+## How it is built
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the rules the program is built on, how a trip and a map are
+made, how the code is organised, what is in each folder, and how to run the tests.
+
+## License
+
+[MIT](LICENSE).

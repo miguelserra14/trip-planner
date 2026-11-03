@@ -21,14 +21,49 @@ ROOT = Path(__file__).parents[1]   # the planner is run from the repository's fo
 COMMAND = [sys.executable, "-m", "app.job"]
 LINES_SHOWN = 40      # the last progress lines on the page; the whole log is saved next to the report
 
+# A process started before it is needed, with the planner already loaded (about 12 seconds, see job.py), for the
+# next search or job to take. The next one is started once the job that took it has searched (it said "ready" or
+# "done", or ended), not before: a process reads the caches of resources/ as it loads, and would miss what that job
+# writes to them. Only the app keeps one (keep_spares): the jobs of a test do not.
+SPARE: dict[str, Any] = {"keep": False, "process": None}
+SPARE_LOCK = threading.Lock()
+
+def started(command: list[str]) -> subprocess.Popen:
+    return subprocess.Popen(command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
+
+def keep_spares() -> None:
+    """Keep a spare process from now on, the first one at once."""
+    SPARE["keep"] = True
+    start_spare()
+
+def start_spare() -> None:
+    with SPARE_LOCK:
+        if SPARE["keep"] and SPARE["process"] is None:
+            SPARE["process"] = started(COMMAND)
+
+def take_spare() -> subprocess.Popen | None:
+    """The spare process, if there is one still running: it is no longer the spare."""
+    with SPARE_LOCK:
+        process, SPARE["process"] = SPARE["process"], None
+    return process if process is not None and process.poll() is None else None
+
+def close_spare() -> None:
+    """The program closing: no more spare process, and the one waiting ends."""
+    with SPARE_LOCK:
+        SPARE["keep"] = False
+        process, SPARE["process"] = SPARE["process"], None
+    if process is not None and process.poll() is None:
+        process.kill()
+
 class Job:
     """The process of one search, what it said so far, and what it waits for. Its lines are read in a thread."""
 
     def __init__(self, first: dict[str, Any], command: list[str] = COMMAND):
         """first is what the process is told first: {"settings": ...} for a search, {"task": ...} for a job."""
         self.nothing_said(first)
-        self.process = subprocess.Popen(command, cwd=ROOT, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
+        self.spare_after = command == COMMAND   # a job of the planner: the spare it took is replaced once it has searched
+        self.process = (take_spare() if self.spare_after else None) or started(command)
         self.tell(first)
         self.reader = threading.Thread(target=self.read, daemon=True)
         self.reader.start()
@@ -73,7 +108,11 @@ class Job:
             except (ValueError, KeyError, TypeError):
                 kind, text = "say", line.rstrip("\n")   # a warning of a library, on stderr: a line like any other
             self.read_event(kind, text)
+            if kind in ("ready", "done") and self.spare_after:
+                start_spare()
         code = self.process.wait()
+        if self.spare_after:
+            start_spare()
         with self.lock:   # nothing more is told to it, nor read: an app open for days does not keep them
             for pipe in (self.process.stdin, self.process.stdout):
                 try:
@@ -165,15 +204,16 @@ def airports_form(asked: dict[str, Any], token: str, refusal: str) -> str:
     """Every airport found, ticked, by group: the ones unticked are left out."""
     groups = []
     for group in asked["groups"]:
-        boxes = "".join(f'<label class="tick"><input type="checkbox" name="keep" value="{html.escape(airport["code"])}" checked> '
-                        f'<b>{html.escape(airport["code"])}</b> {html.escape(airport["name"])} ({html.escape(airport["city"])}, '
-                        f'{html.escape(airport["country"])}) <span class="muted">{airport["km"]} km</span></label>'
+        boxes = "".join(f'<label class="airport"><input type="checkbox" name="keep" value="{html.escape(airport["code"])}" checked>'
+                        f'<b>{html.escape(airport["code"])}</b><span>{html.escape(airport["name"])}'
+                        f'<small>{html.escape(airport["city"])}, {html.escape(airport["country"])}</small></span>'
+                        f'<span class="muted">{airport["km"]} km</span></label>'
                         for airport in group["airports"])
         groups.append(f'<fieldset><legend>{html.escape(group["title"])}</legend>{boxes or html.escape(tr("none"))}</fieldset>')
     notes = "".join(f'<p class="muted">{html.escape(note)}</p>' for note in asked.get("notes") or [])
     error = f'<p class="refusal" role="alert">{html.escape(refusal)}</p>' if refusal else ""
     return (f'<form method="post" action="/airports" class="ask"><p>{html.escape(tr("ui_airports_instruction"))}</p>{error}'
-            f'{hidden(token)}{"".join(groups)}{notes}<button type="submit">{html.escape(tr("ui_search"))}</button></form>')
+            f'{hidden(token)}<div class="groups">{"".join(groups)}</div>{notes}<button type="submit">{html.escape(tr("ui_search"))}</button></form>')
 
 def question_form(token: str) -> str:
     return (f'<form method="post" action="/ask" class="ask question">{hidden(token)}'

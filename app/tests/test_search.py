@@ -245,6 +245,22 @@ def test_a_stopped_search_is_not_a_failure():
     found.stop()
     assert found.stopped and not found.running and found.failure == ""
 
+def test_a_search_starts_in_the_spare_process_and_another_waits_once_it_has_searched(monkeypatch):
+    said = "import json, sys; line = sys.stdin.readline(); print(json.dumps({'kind': 'done', 'text': line.strip()}), flush=True)"
+    monkeypatch.setattr(search, "COMMAND", [sys.executable, "-c", said])
+    monkeypatch.setattr(search, "SPARE", {"keep": False, "process": None})
+    other = search.Job({}, [sys.executable, "-c", "pass"])
+    assert search.SPARE["process"] is None   # nothing kept without the app asking for it
+    search.keep_spares()
+    spare = search.SPARE["process"]
+    found = search.Job({"task": "check"}, search.COMMAND)
+    assert found.process is spare and other.process is not spare
+    assert wait_until(lambda: not found.running) and found.done == '{"task": "check"}'
+    following = search.SPARE["process"]
+    assert following is not None and following is not spare
+    search.close_spare()
+    assert following.wait(timeout=10) is not None and search.SPARE == {"keep": False, "process": None}
+
 def test_the_process_refuses_a_trip_that_is_not_valid_before_it_searches():
     asked = json.dumps({"settings": {"origin": "Coimbra", "destination": "Antwerp", "dates": "01/01/2020"}}) + "\n"
     done = subprocess.run(search.COMMAND, cwd=search.ROOT, input=asked, capture_output=True, encoding="utf-8", timeout=60)

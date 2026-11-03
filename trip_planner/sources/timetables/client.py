@@ -42,6 +42,8 @@ PAGE_SIZE = 8                    # connections asked for per request
 LAST_RIDES_MINUTES = 120         # how long before the latest time the traveller leaves at the last connections are asked from
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
 TIMEZONES: dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}
+STATIONS_FILE = ROOT / "resources" / "stations.json"   # where an operator's coach station is: found once per name and airport, then reused
+STATIONS: dict[str, list] = json.loads(STATIONS_FILE.read_text(encoding="utf-8")) if STATIONS_FILE.exists() else {}
 # The answers of a search are kept for the next ones (Timetables(keep=True)): the same trip searched again asks
 # nothing it asked in the last KEPT_HOURS. One file per request, named by what was asked.
 KEPT_DIR = ROOT / "cache" / "timetables"
@@ -113,8 +115,11 @@ def asked(path: str, params: dict[str, Any]) -> str:
     """A request to the timetables in a few words, for the log of the run."""
     if path != "plan":
         return f"{path} " + " ".join(str(value) for value in params.values())
+    # A request asked again with a longer walk (see plan) would otherwise read as the same one twice
+    walk = max(params.get("maxPreTransitTime", 0), params.get("maxPostTransitTime", 0)) // 60
     return (f"plan {params['fromPlace']} -> {params['toPlace']}, {'arriving by' if params['arriveBy'] == 'true' else 'leaving from'} "
-            f"{params['time']}" + ("" if params["transitModes"] == GROUND_MODES else f", only {params['transitModes']}"))
+            f"{params['time']}" + ("" if params["transitModes"] == GROUND_MODES else f", only {params['transitModes']}")
+            + (f", walking up to {walk} min" if walk >= current.SETTINGS.wide_city_walk_minutes else ""))
 
 # Mixed legs. Where no published timetable joins an airport and its city (the buses of Campogalliano, of Debrecen
 # airport, of Nafplio are not published), the published part goes as far as it can: to the station nearest to the
@@ -206,7 +211,8 @@ class Timetables:
         self.locks: dict[tuple, Any] = {}
         self.requests = 0
         self.hub_cache: dict[tuple, Any] = {}   # stations near each place no timetable reaches
-        self.station_cache: dict[tuple, Any] = {}   # where an operator's coach station is, by its name
+        self.station_cache: dict[tuple, Any] = {}   # the stations being looked for (STATIONS has the ones found)
+        self.joins: dict[tuple, Any] = {}           # connections between an airport and a coach station (joined.py)
         self.next_slot = 0.0
 
     def forget_old_answers(self) -> None:
@@ -301,18 +307,23 @@ class Timetables:
     async def station_point(self, name: str, near: tuple) -> tuple | None:
         """Where a coach station an operator names is ("Zagreb Central Bus Station"), found by name in the
         timetables' places: the first one within max_estimate_km of near. None when there is none: the service
-        answers a name with places of that name anywhere (a "Bus Station" in the Philippines for Podgorica's)."""
-        key = (name, near)
-        if key not in self.station_cache:
-            self.station_cache[key] = None
+        answers a name with places of that name anywhere (a "Bus Station" in the Philippines for Podgorica's).
+        Every place it answers is kept in STATIONS_FILE, in its order: max_estimate_km is a setting, applied here."""
+        key = f"{name}|{near[0]:.4f},{near[1]:.4f}"
+        if key not in STATIONS:
             try:
-                for place in await self.get("geocode", {"text": name, "place": f"{near[0]},{near[1]}"}):
-                    if distance_km(near[0], near[1], place["lat"], place["lon"]) <= current.SETTINGS.max_estimate_km:
-                        self.station_cache[key] = (place["lat"], place["lon"])
-                        break
+                # Several flights ask for the same station at once: they share the answer
+                await self.shared(self.station_cache, (key,), lambda: self.find_station(name, near, key))
             except httpx.HTTPError:
-                pass
-        return self.station_cache[key]
+                return None   # asked again by the next search
+        return next((tuple(place) for place in STATIONS[key]
+                     if distance_km(near[0], near[1], *place) <= current.SETTINGS.max_estimate_km), None)
+
+    async def find_station(self, name: str, near: tuple, key: str) -> None:
+        """The places the timetables answer for a station's name, kept under key."""
+        found = await self.get("geocode", {"text": name, "place": f"{near[0]},{near[1]}"})
+        STATIONS[key] = [[place["lat"], place["lon"]] for place in found]
+        write_whole(STATIONS_FILE, json.dumps(STATIONS, ensure_ascii=False))
 
     async def zone(self, latitude: float, longitude: float, country: str = "") -> str:
         """The time zone of a place, such as 'Europe/Lisbon'. country is its two-letter code, when it is known:

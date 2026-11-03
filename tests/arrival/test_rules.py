@@ -312,6 +312,47 @@ def test_connections_of_the_next_hours_and_old_answers_are_not_kept(kept_dir, mo
     monkeypatch.setattr(timetables.client.time, "time", lambda: later)
     assert asyncio.run(asked_for(plan_at(30))) == 1
 
+def test_a_coach_station_is_found_once_for_every_search_and_flight(tmp_path, monkeypatch):
+    monkeypatch.setattr(timetables.client, "STATIONS_FILE", tmp_path / "stations.json")
+    monkeypatch.setattr(timetables.client, "STATIONS", {})
+    asked = []
+
+    async def look_up(at_once: int, near: tuple) -> list:
+        transit = timetables.Timetables()
+
+        async def get(path, params):
+            asked.append(path)
+            await asyncio.sleep(0)
+            return [{"lat": 1.0, "lon": 1.0}, {"lat": 42.43, "lon": 19.26}]   # a namesake far away, then the station
+        transit.get = get
+        found = await asyncio.gather(*(transit.station_point("Podgorica Bus Station", near) for _ in range(at_once)))
+        await transit.close()
+        return found
+    assert asyncio.run(look_up(3, (42.36, 19.25))) == [(42.43, 19.26)] * 3 and asked == ["geocode"]
+    assert asyncio.run(look_up(1, (42.36, 19.25))) == [(42.43, 19.26)] and asked == ["geocode"]   # the next search
+    assert '"Podgorica Bus Station|42.3600,19.2500"' in (tmp_path / "stations.json").read_text(encoding="utf-8")
+
+def test_a_ticket_several_itineraries_share_is_asked_for_once(monkeypatch):
+    import threading
+    import time
+    from trip_planner.sources import fares
+    asked = []
+
+    def slow_fare(trip):
+        asked.append(trip)
+        time.sleep(0.2)
+        return 12.5
+    source = fares.FareSource("Made up", "EU", lambda step: True, slow_fare)
+    trip = fares.Trip("A", "B", "a", "b", (), (), "2026-12-17", "10:00", "11:00")
+    monkeypatch.setattr(fares, "CACHE", {})
+    found = []
+    threads = [threading.Thread(target=lambda: found.append(fares.fare(source, trip))) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert found == [12.5] * 4 and len(asked) == 1 and not fares.ASKING
+
 # ---------------------------------------------------------------- the flight search split when Kiwi's answer is full
 def test_a_full_answer_is_split_by_date_then_by_airport_only_for_a_date_still_full(monkeypatch):
     from trip_planner.sources import flight_search, kiwi

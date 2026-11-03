@@ -9,7 +9,9 @@ The package, part by part:
 - fields.py: the form of a trip, every setting of TripSettings, laid out by trip_planner/trip/form.py.
 - search.py and job.py: a search in a process of its own, and the conversation with it.
 - maps.py and map_job.py: a Discover map, in a process of its own, and its page served here.
-- reports.py and report_page.py: the saved reports as pages.
+- reports.py and report_page.py: the saved reports as pages: as cards (results.py) when they have their options as
+  data (trip_planner/report/options.py), as their Markdown otherwise.
+- page.css and icons.py: the look of every page, light or dark, and its icons, drawn here.
 - page.js: the only script of the app's own pages, which work without it.
 
 A search and a map each have a process of their own (job.py), because the planner keeps the trip in globals

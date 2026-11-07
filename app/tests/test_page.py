@@ -289,3 +289,40 @@ def test_a_map_asked_for_opens_by_itself_once_its_page_is_ready_and_only_then(ta
     tab.open(app.address + "discover")   # back to the form later: the map is not opened again
     time.sleep(1)
     assert tab.js("location.pathname") == "/discover" and tab.js("!!document.querySelector('a[data-open-map]')")
+
+def test_a_city_reached_by_train_or_bus_has_a_card_beside_the_flights_by_its_price(tab, app, monkeypatch):
+    """Leaflet comes from unpkg, as in the test above."""
+    from discover import finder, page
+    from discover.sources import Days
+    from trip_planner.trip.places import Place
+    airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7}}
+    monkeypatch.setattr(page, "load_airports", lambda: airports)
+    leaving = date.today() + timedelta(days=30)
+    leg = {"from": "OPO", "to": "BHX", "date": leaving.isoformat(), "time": "07:00", "arrival_date": leaving.isoformat(),
+           "arrival_time": "09:45", "minutes": 165, "airline": "Ryanair", "stops": 0}
+    flight = {**leg, "segments": [dict(leg)], "price_eur": 10, "carrier": "FR", "source": "Ryanair", "back": None,
+              "ground_eur": 5.0, "total_eur": 15.0}
+    option = {"stop": "Salamanca", "stop_id": "s", "lat": 40.96, "lon": -5.66, "minutes": 269, "from_stop": "Coimbra", "from_stop_id": "c",
+              "operator": "FlixBus", "site": "https://www.flixbus.pt", "sold": "flixbus", "modes": "COACH", "mode": "bus",
+              "times": ["08:00", "12:00"], "weekdays": ["Mon", "Fri"], "grade": "B", "km": 0}
+    salamanca = {"key": "ES|Salamanca|40.96", "name": "Salamanca", "country": "ES", "lat": 40.96, "lon": -5.66, "minutes": 269,
+                 "modes": ["bus"], "ground": [option], "fare_eur": 9.0}
+    found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
+                         Days(leaving.isoformat(), leaving.isoformat()), [], [flight], [], [], by_ground=[salamanca])
+    app.post("/discover", f"token={app.token}&city=Coimbra&dates={written(leaving)}&source=light".encode())
+    made = app.started[-1]
+    made.read_event("map", page.map_page(found, "Ryanair", [], planner_link=made.map_link + "plan/"))
+    made.read_event("state", page.map_state(found, []))
+    tab.call("Network.enable")
+    tab.call("Network.setBlockedURLs", urls=["*tile.openstreetmap.org*"])
+    tab.call("Page.addScriptToEvaluateOnNewDocument", source="window.errors = []; addEventListener('error', event => errors.push(event.message));")
+    tab.open(app.address + "discover/map/1/")
+    try:
+        tab.wait("typeof L === 'object'", seconds=15)
+    except AssertionError:
+        pytest.skip("Leaflet could not be fetched from unpkg")
+    tab.wait("document.querySelectorAll('#rows li').length === 2")
+    assert tab.js("[...document.querySelectorAll('#rows li strong')].map(name => name.textContent)")[0] == "Salamanca"   # 9 EUR before 15
+    tab.js("document.querySelector('#rows li').click()")
+    assert tab.js("errors") == []
+    tab.wait("document.querySelector('#rows li').classList.contains('picked') && !document.getElementById('detail').hidden")

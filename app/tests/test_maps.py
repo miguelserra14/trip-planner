@@ -213,3 +213,20 @@ def test_days_the_map_cannot_use_are_refused_by_its_process_too(monkeypatch):
     job.main(iter([json.dumps({"task": "map", "language": "en", "city": "Coimbra", "dates": "01/01/2020"})]), events)
     said = [json.loads(line) for line in out.getvalue().splitlines()]
     assert [event["kind"] for event in said] == ["failed"]
+
+def test_a_map_being_made_shows_its_steps_on_a_map_and_one_button_that_stops_it():
+    site, started = site_and_jobs()
+    site.post("/discover", form(site))
+    made = started[0]
+    made.read_event("progress", {"trip": {"discover": True, "source": "light", "ground_only": False, "departure": [], "arrival": [],
+                                          "origin": {"name": "Coimbra", "lat": 40.21, "lon": -8.43}}})
+    made.read_event("progress", {"step": "discover_airports"})
+    made.read_event("progress", {"found": "discover_airports", "count": 2, "departure": [{"code": "OPO", "lat": 41.24, "lon": -8.68},
+                                                                                          {"code": "LIS", "lat": 38.77, "lon": -9.13}]})
+    made.read_event("progress", {"step": "discover_flights"})
+    shown = site.get("/discover").html
+    assert 'class="card waiting"' in shown and "Finding destinations from Coimbra" in shown and "2 airports" in shown
+    assert shown.count('class="airport"') == 2 and shown.count(f'>{tr("app_stop")}</button>') == 1
+    assert 'action="/discover/stop"' in shown and 'action="/stop"' not in shown   # the map's own, not the planner's
+    made.read_event("progress", {"step": "done"})
+    assert 'class="card waiting"' not in site.get("/discover").html   # its page is ready: the map opens

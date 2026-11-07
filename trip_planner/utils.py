@@ -1,6 +1,8 @@
 """Small helpers used everywhere: times, text, progress lines, timings, and files written whole."""
+import json
 import os
 import re
+import threading
 import time
 import unicodedata
 from contextlib import contextmanager
@@ -41,6 +43,32 @@ def write_whole(path: Path, text: str, newline: str | None = None) -> None:
             time.sleep(0.1 * (attempt + 1))
     path.write_text(text, encoding="utf-8", newline=newline)
     beside.unlink(missing_ok=True)
+
+# One cache file is written by one thread at a time: the threads of a process share the file beside it (write_whole)
+CACHE_LOCK = threading.Lock()
+
+def read_cache(path: Path) -> dict:
+    """A cache file of entries by key, or none when it is missing or cannot be read. A damaged file (cut short by
+    hand, a full disk) must not stop the program at its import: its entries are only found again."""
+    try:
+        found = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return found if isinstance(found, dict) else {}
+
+def save_cache(path: Path, cache: dict, one_per_line: bool = False) -> None:
+    """Write a cache of entries by key, with the entries another process put in the file since it was read: a
+    search and a map running together each add theirs, and neither loses the other's. An entry both have keeps
+    this process's. one_per_line writes one key per line, in order, for the files kept in the repository: a
+    change then shows as the line of its key."""
+    with CACHE_LOCK:
+        for key, entry in read_cache(path).items():
+            cache.setdefault(key, entry)
+        if one_per_line:
+            text = "{\n" + ",\n".join(f"{json.dumps(key)}: {json.dumps(cache[key], ensure_ascii=False)}" for key in sorted(cache)) + "\n}\n"
+        else:
+            text = json.dumps(cache, ensure_ascii=False)
+        write_whole(path, text, newline="\n")
 
 # Progress lines and results are printed in the terminal, unless something else asked for them: a search of the app (app/job.py)
 # puts its own functions here, under "say", "show" and "progress".

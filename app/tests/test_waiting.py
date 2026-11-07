@@ -59,10 +59,11 @@ def test_the_recommendation_is_done_once_the_way_is():
 def test_the_time_expected_is_the_median_of_the_last_searches_of_the_same_kind():
     history = [{"seconds": 100, "ground_only": False}, {"seconds": 400, "ground_only": False}, {"seconds": 300, "ground_only": False},
                {"seconds": 5, "ground_only": True}]
-    assert expected_seconds(False, history) == (300, 3) and expected_seconds(True, history) == (5, 1)
+    assert expected_seconds("plane", history) == (300, 3) and expected_seconds("ground", history) == (5, 1)
+    assert expected_seconds("discover_light", history + [{"seconds": 90, "kind": "discover_light"}]) == (90, 1)
 
 def test_with_no_search_to_compare_the_first_guess_is_said_to_be_one():
-    assert expected_seconds(False, []) == (FIRST_GUESS[False], 0)
+    assert expected_seconds("plane", []) == (FIRST_GUESS["plane"], 0)
     said = time_left([way()], False, 60, [])
     assert "About 3 min left" in said and "first guess of 4 min" in said
 
@@ -73,7 +74,7 @@ def test_a_round_trip_takes_both_ways_and_a_long_search_says_it_is_nearly_done()
 
 def test_the_durations_are_kept_beside_the_reports_the_newest_only():
     for seconds in range(full.DURATIONS_KEPT + 5):
-        full.remember_duration(seconds, False)
+        full.remember_duration(seconds, "plane")
     kept = full.past_durations()
     assert len(kept) == full.DURATIONS_KEPT and kept[-1]["seconds"] == full.DURATIONS_KEPT + 4
     full.durations_file().write_text("not json", encoding="utf-8")
@@ -96,3 +97,10 @@ def test_the_search_keeps_where_each_way_is_and_shows_it_while_it_works():
 
 def test_the_second_way_of_a_round_trip_is_said_to_be_the_second():
     assert "Way 2 of 2" in waiting_part([way(), way({**TRIP, "origin": COIMBRA, "destination": ANTWERP})], True, 10, [])
+
+def test_a_discover_map_has_its_own_steps_and_no_destination_yet():
+    trip = {"discover": True, "source": "ground", "ground_only": True, "departure": [], "arrival": [], "origin": COIMBRA}
+    listed = steps_list(way(trip, "discover_ground"))
+    assert "Trains and coaches from the city" in listed and "Flights" not in listed and listed.count("<li") == 1
+    drawn = trip_map({**trip, "source": "light", "ground_only": False, "departure": TRIP["arrival"]})
+    assert drawn.count('class="city"') == 1 and drawn.count('class="airport"') == 1 and ">Coimbra</text>" in drawn

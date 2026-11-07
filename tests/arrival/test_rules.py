@@ -207,6 +207,28 @@ def test_a_cache_is_written_whole_or_left_as_it_was(tmp_path, monkeypatch):
     utils.write_whole(cache, '{"new": 2}')
     assert cache.read_text(encoding="utf-8") == '{"new": 2}' and [path.name for path in cache.parent.iterdir()] == ["kept.json"]
 
+def test_a_cache_keeps_what_another_process_wrote_since_it_was_read(tmp_path):
+    from trip_planner import utils
+    cache = tmp_path / "timezones.json"
+    utils.write_whole(cache, '{"40.21,-8.43": "Europe/Lisbon"}')
+    search = utils.read_cache(cache)
+    utils.save_cache(cache, utils.read_cache(cache) | {"51.22,4.40": "Europe/Brussels"})   # a map running at the same time
+    search["40.21,-8.43"], search["48.86,2.35"] = "Europe/Madrid", "Europe/Paris"
+    utils.save_cache(cache, search)
+    assert utils.read_cache(cache) == {"40.21,-8.43": "Europe/Madrid", "48.86,2.35": "Europe/Paris", "51.22,4.40": "Europe/Brussels"}
+    utils.save_cache(cache, {"FAO": [37.01, -7.97]}, one_per_line=True)
+    assert cache.read_text(encoding="utf-8").splitlines()[:3] == ["{", '"40.21,-8.43": "Europe/Madrid",', '"48.86,2.35": "Europe/Paris",']
+
+def test_a_damaged_cache_is_read_as_empty_instead_of_stopping_the_program(tmp_path):
+    from trip_planner import utils
+    cache = tmp_path / "airport_stops.json"
+    cache.write_text('{"OPO": {"read": "2026-', encoding="utf-8")   # cut short
+    assert utils.read_cache(cache) == {} and utils.read_cache(tmp_path / "missing.json") == {}
+    cache.write_text("[1, 2]", encoding="utf-8")   # not entries by key
+    assert utils.read_cache(cache) == {}
+    utils.save_cache(cache, {"OPO": {"stops": []}})
+    assert utils.read_cache(cache) == {"OPO": {"stops": []}}
+
 # ---------------------------------------------------------------- how often the timetables are asked
 def test_flights_asking_about_the_same_place_at_once_share_its_stations(monkeypatch):
     from trip_planner.sources.timetables import client

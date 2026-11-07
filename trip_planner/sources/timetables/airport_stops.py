@@ -1,6 +1,5 @@
 """The airport's end of a connection: where its passenger terminal is (OpenStreetMap), and which stops of the
 timetables travellers use there."""
-import json
 import time
 from datetime import date, timedelta
 from typing import Any
@@ -11,7 +10,7 @@ from trip_planner.trip.trip_settings import ROOT, USER_AGENT
 from trip_planner.trip.ground_choice import is_rail
 from trip_planner.trip.places import distance_km
 from trip_planner.sources.timetables.modes import LIFT_MODES
-from trip_planner.utils import logged, plain, say, write_whole
+from trip_planner.utils import logged, plain, read_cache, save_cache, say
 
 # Where the passenger terminal of each airport is, or null where OpenStreetMap has none. Worked out once for every
 # airport (python main.py --terminals) and kept in the repository: a search only asks for an airport that is not here.
@@ -19,7 +18,7 @@ TERMINALS_FILE = ROOT / "resources" / "terminals.json"
 TERMINALS_BATCH = 25             # airports asked about in one request when the whole file is worked out
 OVERPASS_SERVERS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
                     "https://overpass.private.coffee/api/interpreter")
-TERMINALS: dict[str, list[float] | None] = json.loads(TERMINALS_FILE.read_text(encoding="utf-8")) if TERMINALS_FILE.exists() else {}
+TERMINALS: dict[str, list[float] | None] = read_cache(TERMINALS_FILE)
 NOT_A_PASSENGER_TERMINAL = ("general aviation", "executive", "gat", "cargo", "private", "vip", "pier", "connector", "freight")
 
 OVERPASS_ROUNDS = 3              # times the servers are gone through: a busy one answers a moment later
@@ -91,8 +90,7 @@ def ask_terminals(missing: list[dict[str, Any]], seconds: int = 25) -> bool:
 
 def save_terminals() -> None:
     """One airport per line, in order: a change shows as the line of its airport."""
-    lines = [f"{json.dumps(code)}: {json.dumps(TERMINALS[code])}" for code in sorted(TERMINALS)]
-    write_whole(TERMINALS_FILE, "{\n" + ",\n".join(lines) + "\n}\n", newline="\n")
+    save_cache(TERMINALS_FILE, TERMINALS, one_per_line=True)
 
 def fill_terminals(again: bool = False) -> int:
     """Work out the terminal of every airport airlines fly from, a few airports per request, and save them.
@@ -171,7 +169,7 @@ def choose_airport_stops(stops: list[dict[str, Any]], airport: dict[str, Any], t
 # a stop the planner no longer knows is skipped anyway (see to_airport and from_airport).
 AIRPORT_STOPS_FILE = ROOT / "resources" / "airport_stops.json"
 AIRPORT_STOPS_DAYS = 30
-AIRPORT_STOPS: dict[str, dict[str, Any]] = json.loads(AIRPORT_STOPS_FILE.read_text(encoding="utf-8")) if AIRPORT_STOPS_FILE.exists() else {}
+AIRPORT_STOPS: dict[str, dict[str, Any]] = read_cache(AIRPORT_STOPS_FILE)
 
 def known_airport_stops(code: str, terminal: list[float] | None) -> list[tuple] | None:
     """The stops kept for an airport, or None when they have to be asked for: never read, read too long ago, or
@@ -184,5 +182,4 @@ def known_airport_stops(code: str, terminal: list[float] | None) -> list[tuple] 
 def keep_airport_stops(code: str, terminal: list[float] | None, stops: list[tuple]) -> None:
     """One airport per line, in order, as in the file of the terminals."""
     AIRPORT_STOPS[code] = {"read": date.today().isoformat(), "terminal": terminal, "stops": [list(stop) for stop in stops]}
-    lines = [f"{json.dumps(code)}: {json.dumps(AIRPORT_STOPS[code], ensure_ascii=False)}" for code in sorted(AIRPORT_STOPS)]
-    write_whole(AIRPORT_STOPS_FILE, "{\n" + ",\n".join(lines) + "\n}\n", newline="\n")
+    save_cache(AIRPORT_STOPS_FILE, AIRPORT_STOPS, one_per_line=True)

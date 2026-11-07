@@ -512,6 +512,32 @@ function describeFilters() {
   add(box, "span", "", "count").id = "count";
 }
 
+// The card of a city reached by train or bus, beside the flights' cards: its fare, as its dot has it (or why it has none), how
+// and with whom, the quickest trip and its first departures. Its dot is ringed in purple, as on the map
+function groundCard(city, options, key, fare, colour, open) {
+  const best = cheapestGround(options), first = byPrice(options)[0];
+  const card = add(rows, "li", undefined, "city");
+  card.dataset.to = key;
+  card.dataset.price = fare === null ? "" : fare;
+  card.tabIndex = 0;
+  card.classList.toggle("picked", picked === key);
+  card.onclick = () => { map.setView([city.lat, city.lon], Math.max(map.getZoom(), 5)); open(); };
+  card.onkeydown = event => { if (event.key === "Enter") card.onclick(); };
+  const modes = [...new Set(options.map(option => option.mode))].map(modeName).join(", ");
+  const top = add(card, "div", undefined, "top");
+  const dot = add(top, "span", undefined, "dot");
+  dot.style.background = colour;
+  dot.style.boxShadow = "0 0 0 2px " + GROUND_COLOUR;
+  add(top, "strong", city.name);
+  add(top, "b", fare !== null ? eur(fare) : options.some(option => option.price) ? t("not_sold_those_days") : "-", "total");
+  add(card, "p", t("no_flight_modes", {modes}) + " · " + hours(Math.min(...options.map(option => option.minutes))), "way");
+  add(card, "p", [...new Set(options.map(option => option.operator))].join(", "), "way");
+  const foot = add(card, "p", undefined, "foot");
+  add(foot, "span", t("col_leaves") + ": " + first.times.slice(0, 3).join(", ") + (first.times.length > 3 ? " …" : "")
+      + (data.round_trip && best && best.price.stay ? " · " + t("col_in_city") + " " + stayText(best.price.stay) : ""));
+  add(foot, "span", modes, "badge");
+}
+
 // The dots and the rows that the filters let through. The colours are by the price among every destination, so a
 // filter does not change the colour of a dot. A city is coloured by its cheapest way there, by air or by train or
 // bus; one reached by train or bus too has a purple ring around its dot.
@@ -541,6 +567,7 @@ function draw() {
     // and how far the ways to and from the airports were looked up
     const card = add(rows, "li", undefined, "city");
     card.dataset.to = p.to;
+    card.dataset.price = p.total_eur;
     card.tabIndex = 0;
     card.classList.toggle("picked", picked === p.to);
     card.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
@@ -570,7 +597,16 @@ function draw() {
       .addTo(markers).bindTooltip(tip(g.name + " · " + t("no_flight_modes", {modes: g.modes.map(modeName).join(t("or"))}) + (fare === null ? "" : " · " + eur(fare))
                                   + (best && best.price.stay ? " · " + stayText(best.price.stay) : "") + ", " + hours(g.minutes) + " · " + by))
       .on("click", () => explainGround(g));
+    groundCard(g, g.ground, "~" + g.key, fare, fare === null ? GROUND_COLOUR : colours[band(fare)], () => explainGround(g));
   }
+  // A city with a flight that the filters show by its trains and buses only has a card of that kind too
+  for (const p of state.points.filter(p => byLand.has(p) && !byAir.has(p))) {
+    const best = cheapestGround(p.ground), fare = best ? totalOf(best) : null;
+    groundCard(p, p.ground, p.to, fare, fare === null ? GROUND_COLOUR : colours[band(fare)], () => explain(p));
+  }
+  // Every card by its price, the cheapest first, as the dots are coloured; the cities with no price last
+  const price = card => (card.dataset.price === "" ? Infinity : Number(card.dataset.price));
+  rows.append(...[...rows.children].sort((a, b) => price(a) - price(b)));
   // Every city reached by train or bus, with no flight or with one: the priced ones first, cheapest first, as the
   // flights; then the others, quickest first
   const listed = [...ground.map(g => ({city: g, options: g.ground, flight: null, key: "~" + g.key, open: () => explainGround(g)})),

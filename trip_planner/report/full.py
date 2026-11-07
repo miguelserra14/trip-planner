@@ -191,11 +191,12 @@ DURATIONS_KEPT = 20   # searches whose length is kept (durations.json), for the 
 def durations_file() -> Path:
     return REPORTS / "durations.json"
 
-def remember_duration(seconds: float, ground_only: bool) -> None:
-    """How long one way of a trip took to search, kept beside the reports and not with them: the newest DURATIONS_KEPT,
-    whatever happens to the reports. A trip without a plane is kept apart: it takes seconds, not minutes."""
+def remember_duration(seconds: float, kind: str) -> None:
+    """How long a search took, kept beside the reports and not with them: the newest DURATIONS_KEPT, whatever happens to
+    the reports. Each kind apart (app/waiting.kind_of): "plane" and "ground" for one way of a trip, "discover_light"...
+    for a Discover map until it opens. A trip without a plane takes seconds, not minutes."""
     kept = past_durations()
-    kept.append({"at": datetime.now().isoformat(timespec="seconds"), "seconds": round(seconds), "ground_only": ground_only})
+    kept.append({"at": datetime.now().isoformat(timespec="seconds"), "seconds": round(seconds), "kind": kind})
     durations_file().parent.mkdir(parents=True, exist_ok=True)
     durations_file().write_text(json.dumps(kept[-DURATIONS_KEPT:], indent=1), encoding="utf-8")
 

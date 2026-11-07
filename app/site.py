@@ -298,14 +298,13 @@ class Site:
         if self.map_next is not None:
             body += f'<p role="status">{html.escape(tr("discover_win_stopping"))}</p>'
         if self.map_job is not None:
-            body += self.map_live() + (f'<form method="post" action="/discover/stop" class="tool">{search.hidden(self.token)}'
-                                       f'<button type="submit" class="quiet">{html.escape(tr("app_stop"))}</button></form>'
-                                       if self.map_job.working else "")
+            body += self.map_live()   # with its button to stop the map, while it works
         return self.page(tr("discover_win_title"), body, working=self.map_next is not None or
                          (self.map_job is not None and self.map_job.working), here="/discover")
 
     def map_live(self) -> str:
-        return search.live_part(self.map_job, self.token, reports.link_to, lambda markdown: to_html(markdown)[0], part="/discover/part")
+        return search.live_part(self.map_job, self.token, reports.link_to, lambda markdown: to_html(markdown)[0], part="/discover/part",
+                                stop="/discover/stop")
 
     def get_discover(self, path: str) -> Reply:
         """The form and how the map goes; the map's page and its destinations as they change; a trip of the map

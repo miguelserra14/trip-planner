@@ -11,6 +11,7 @@ Each step blocks, and runs in this process: the planner's own code reads the tri
 import asyncio
 import json
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -20,10 +21,11 @@ from discover.finder import discover, Found
 from discover.page import map_page, map_state
 from discover.sources import Days
 from trip_planner import current, utils
+from trip_planner.report.full import remember_duration
 from trip_planner.texts import tr
 from trip_planner.trip.places import geocode
 from trip_planner.trip.trip_settings import settings_file
-from trip_planner.utils import plain
+from trip_planner.utils import plain, progress
 
 SETTINGS = settings_file().SETTINGS   # its language and its rules: the map has no dates of the planner's to refuse
 
@@ -45,6 +47,8 @@ class Session:
     def __init__(self, city: str, days: Days, fast: bool = False, light: bool = False, max_stops: int = finder.MAX_STOPS,
                  ground_only: bool = False):
         self.city, self.days, self.fast, self.max_stops, self.ground_only = city, days, fast, max_stops, ground_only
+        # How its flights are searched, as the app's form says it (app/maps.py SOURCES): how long the map takes to open
+        self.source = "ground" if ground_only else "fast" if fast else "light" if light else "full"
         self.kiwi_requests = finder.KIWI_LIGHT_REQUESTS if light else finder.KIWI_REQUESTS
         self.found: Found | None = None
         self.path: Path | None = None
@@ -58,7 +62,11 @@ class Session:
     def make(self) -> Path:
         """Find the flights and the ways to and from the airports, and save the map. Returns its file."""
         current.SETTINGS = SETTINGS   # the planner's code reads its language and its rules from here: settings.py's
+        started = time.time()
         place = geocode(self.city)
+        # For the page that waits until the map opens (app/waiting.py): the city, then each step of finder.discover
+        progress(trip={"discover": True, "source": self.source, "ground_only": self.ground_only, "departure": [], "arrival": [],
+                       "origin": {"name": place.written.split(",")[0].strip(), "lat": place.latitude, "lon": place.longitude}})
         self.found = asyncio.run(discover(place, self.days, fast=self.fast, max_stops=self.max_stops, kiwi_requests=self.kiwi_requests,
                                           ground_only=self.ground_only))
         self.sources = (tr("discover_sources_ground") if self.ground_only else
@@ -71,6 +79,8 @@ class Session:
         MAPS.mkdir(exist_ok=True)
         self.path = MAPS / f"{name}.html"
         self.save()
+        remember_duration(time.time() - started, f"discover_{self.source}")
+        progress(step="done")
         return self.path
 
     def save(self) -> None:

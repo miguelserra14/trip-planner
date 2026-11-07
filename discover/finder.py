@@ -17,7 +17,7 @@ from trip_planner.trip.places import airports_near, distance_km, load_airports, 
 from trip_planner.sources import kiwi
 from trip_planner.texts import tr
 from trip_planner.tools.prices import PRICE_VALID_HOURS
-from trip_planner.utils import say, write_whole
+from trip_planner.utils import progress, say, write_whole
 
 RADIUS_KM = 200          # departure airports this close to the city...
 # ... the ones with the most routes: the closest ones left Charleroi, Ryanair's base in Belgium, out of a map of
@@ -236,9 +236,15 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     # first time it takes about two minutes of timetables (ground.py)
     reading = asyncio.create_task(asyncio.to_thread(ground.stations_reached, place, today, say))
     if ground_only:
+        progress(step="discover_ground")
         by_ground = ground.look_up(place, await reading, [], {}, load_airports(), say)
+        progress(found="discover_ground", count=len(by_ground))
         return Found(place, days, [], [], [], [], kiwi=False, by_ground=by_ground)
+    progress(step="discover_airports")
     departures = await asyncio.to_thread(departure_airports, place, today, say)
+    progress(found="discover_airports", count=len(departures),
+             departure=[{"code": airport["code"], "lat": airport["latitude"], "lon": airport["longitude"]} for airport in departures
+                        if "latitude" in airport])
     routes_flown = flown.within(await asyncio.to_thread(flown.routes, [airport["code"] for airport in departures], today, say),
                                 place, COUNTRIES_KM, load_airports())
     if not departures:
@@ -248,6 +254,7 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
         airport["home_eur"] = access.leg(airport["code"], False, place, today)["price_eur"]
     say(tr("discover_say_airports", place=place.label, airports=", ".join(f"{airport['code']} ({airport['km']} km)" for airport in departures), days=days))
     searches: list[dict[str, Any]] = []
+    progress(step="discover_flights")
     # Days not all in a row are asked a run at a time (Days.runs), and the requests to Kiwi shared between the runs
     runs = days.runs()
     on = lambda run: f" ({run})" if len(runs) > 1 else ""
@@ -373,6 +380,8 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
         say(tr("discover_say_refused", error=refusal[0]))
     unanswered = sum(1 for search in searches if not search["answered"])
     say(tr("discover_say_flights", count=len(flights)) + (" " + tr("discover_say_unanswered", count=unanswered, all=len(searches)) if unanswered else ""))
+    progress(found="discover_flights", count=len(flights))
+    progress(step="discover_access")
     getting_there = {airport["code"]: airport["ground_eur"] for airport in departures}
     getting_home = {airport["code"]: airport["home_eur"] for airport in departures}
     stops = tr("discover_kiwi_direct") if not max_stops else tr("discover_kiwi_stops", count=max_stops)
@@ -395,8 +404,11 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     await asyncio.to_thread(transfers.look_up, codes, airports, centres, access.voyages(codes), today, say)
     found_rides = await asyncio.to_thread(operator_rides.look_up, place, departures, operator_rides.wanted_for(cheapest, departures), say)
     destinations = one_per_city([with_access(flight, place, centres, today, found_rides) for flight in cheapest], airports, centres)
+    progress(found="discover_access", count=len(destinations))
     # The trains and buses that go to the same cities, and to cities no flight goes to: their timetables only, to compare
+    progress(step="discover_ground")
     by_ground = ground.look_up(place, await reading, destinations, centres, airports, say)
+    progress(found="discover_ground", count=len(by_ground))
     return Found(place, days, departures, destinations, flights, searches, left_out, kiwi=bool(countries), by_ground=by_ground,
                  regions=sorted(region_rows, key=lambda row: (row["after"] / row["large"], row["region"])),
                  kiwi_options=options if countries else "", kiwi_allowed=allowed, kiwi_refused=refusal[0] if refusal else "", kiwi_why=kiwi_why,

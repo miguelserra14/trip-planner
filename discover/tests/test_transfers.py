@@ -28,8 +28,9 @@ SOURCES = [{"name": "aeroportparisbeauvais.com", "url": "https://www.aeroportpar
 def files(monkeypatch, tmp_path):
     for module, name in ((access, "CENTRES"), (access, "ACCESS"), (transfers, "TRANSFERS"), (transfers, "PAGES")):
         monkeypatch.setattr(module, name, tmp_path / f"{name.lower()}.json")
-    current.SETTINGS = TripSettings(origin="Coimbra", destination="Paris", dates=[f"{TODAY + timedelta(days=30):%d/%m/%Y}"],
-                                    earliest_leave="", latest_leave="")
+    settings = TripSettings(origin="Coimbra", destination="Paris", dates=[f"{TODAY + timedelta(days=30):%d/%m/%Y}"],
+                            earliest_leave="", latest_leave="")
+    monkeypatch.setattr(current, "SETTINGS", settings)
 
 def option(**changes) -> dict:
     return {"source": 0, "mode": "shuttle", "operator": "Navette", "to": "Porte Maillot",

@@ -170,6 +170,8 @@ class Job:
             self.ways[-1]["step"] = what["step"]
         elif self.ways and "found" in what:
             self.ways[-1]["counts"][what["found"]] = what.get("count", 0)
+            if "departure" in what:   # a Discover map's airports, found as one of its steps
+                self.ways[-1]["trip"]["departure"] = what["departure"]
 
     @property
     def running(self) -> bool:
@@ -256,9 +258,10 @@ def conversation_part(job: Job, token: str, to_html: Callable[[str], str]) -> st
             if items or form else "")
 
 def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html: Callable[[str], str],
-              part: str = "/search/part") -> str:
+              part: str = "/search/part", stop: str = "/stop") -> str:
     """The part of the page that changes while the search runs: what it waits for, the result as soon as it is
-    shown, and the progress lines. Marked as working while the page should ask for it again."""
+    shown, and the progress lines, with the one button that stops it (a map's own on Discover's page). Marked as
+    working while the page should ask for it again."""
     parts = []
     if job.failure:
         parts.append(f'<p class="refusal" role="alert">{html.escape(job.failure)}</p>')
@@ -272,12 +275,12 @@ def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html:
         parts.append(f'<p role="status">{html.escape(tr("ui_asking"))}</p>')
     elif job.working and job.ways and job.ways[-1]["step"] != "done":   # a way of the trip being searched: its map and steps
         parts.append(waiting_part(job.ways, bool(job.values.get("return_dates")), time.time() - (job.started or time.time()), past_durations()))
-        parts.append(f'<form method="post" action="/stop">{hidden(token)}<button type="submit" class="quiet">'
+        parts.append(f'<form method="post" action="{stop}">{hidden(token)}<button type="submit" class="quiet">'
                      f'{html.escape(tr("app_stop"))}</button></form>')
     elif job.working:
         last = job.lines[-1] if job.lines else tr("ui_finding")
         parts.append(f'<p role="status"><b>{html.escape(tr("app_search_running" if job.values else "app_working"))}</b> {html.escape(last)}</p>'
-                     f'<form method="post" action="/stop">{hidden(token)}<button type="submit" class="quiet">'
+                     f'<form method="post" action="{stop}">{hidden(token)}<button type="submit" class="quiet">'
                      f'{html.escape(tr("app_stop"))}</button></form>')
     elif job.done:
         parts.append(f'<p role="status">{html.escape(job.done)}</p>')

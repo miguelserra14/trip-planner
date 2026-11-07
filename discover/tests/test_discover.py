@@ -313,8 +313,12 @@ def test_a_map_without_a_plane_asks_for_no_flight_and_has_only_the_cities_by_gro
     monkeypatch.setattr(ground, "look_up", lambda place, stops, destinations, centres, airports, say: [salamanca] if not destinations else [])
     for name in ("departure_airports", "ryanair_destinations", "kiwi_destinations"):
         monkeypatch.setattr(finder, name, lambda *args, **kwargs: pytest.fail("a flight was searched"))
+    from trip_planner import utils
+    said = []
+    monkeypatch.setitem(utils.LISTENERS, "progress", said.append)
     found = asyncio.run(finder.discover(PLACE, ONE_WAY, ground_only=True))
     assert (found.departures, found.destinations, found.flights, found.by_ground) == ([], [], [], [salamanca])
+    assert said == [{"step": "discover_ground"}, {"found": "discover_ground", "count": 1}]   # for the page that waits
     data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', page.map_page(found, "", [])).group(1))
     assert data["state"]["by_ground"] == [salamanca]
 

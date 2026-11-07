@@ -195,7 +195,8 @@ def ground_lines(options: list[dict[str, Any]], recommended: int) -> list[str]:
 
 def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any], warnings: list[str], ground: list[dict[str, Any]] = ()) -> str:
     """The Markdown report shown to the traveller, in the traveller's language. ground is the trips without a
-    plane (itineraries/ground_only.py), shown after the comparison of the flights."""
+    plane (itineraries/ground_only.py), shown after every option with a flight: a trip searched with a plane reads
+    its flights first (the user's choice of 2026-11-07)."""
     lines = []
     if warnings:
         lines += [f"## {tr('warnings')}", ""] + [f"- {warning}" for warning in warnings] + [""]
@@ -230,10 +231,9 @@ def render_report(itineraries: list[dict[str, Any]], recommended: dict[str, Any]
         lines += ["", tr("not_cheapest", extra=f"{recommended['total_cost'] - cheapest['total_cost']:.0f}",
                          saved=as_duration(cheapest["total_minutes"] - recommended["total_minutes"]),
                          worth=f"{cheapest['time_cost'] - recommended['time_cost']:.0f}")]
-    lines += ground_lines(list(ground), next(number for number, itinerary in enumerate(itineraries, start=1) if itinerary is recommended))
-
     for number, itinerary in enumerate(itineraries, start=1):
         lines += option_lines(number, itinerary)
+    lines += ground_lines(list(ground), next(number for number, itinerary in enumerate(itineraries, start=1) if itinerary is recommended))
     return "\n".join(lines + booking_checks(itineraries))
 
 def span(minutes: int) -> str:
@@ -243,7 +243,7 @@ def span(minutes: int) -> str:
 def render_closest(itineraries: list[dict[str, Any]], warnings: list[str], ground: list[dict[str, Any]] = ()) -> str:
     """Shown when no itinerary respects every requirement: the closest ones, closest first, each with what it
     breaks, what speaks for and against it, and the settings that would make it valid. ground is the trips without
-    a plane, compared with the closest option."""
+    a plane, compared with the closest option, after every option with a flight."""
     lines = []
     if warnings:
         lines += [f"## {tr('warnings')}", ""] + [f"- {warning}" for warning in warnings] + [""]
@@ -270,7 +270,6 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str], groun
               f"{itinerary['confirmed_eur']:.0f} / {itinerary['total_cost']:.0f} EUR"]
              for number, itinerary in enumerate(itineraries, start=1)],
         ),
-        *ground_lines(list(ground), 1),
     ]
     cheapest = min(itinerary["total_cost"] for itinerary in itineraries)
     fastest = min(itinerary["total_minutes"] for itinerary in itineraries)
@@ -300,7 +299,7 @@ def render_closest(itineraries: list[dict[str, Any]], warnings: list[str], groun
         lines += ["", f"**{tr('near_pros')}**", "", *(f"- {pro}" for pro in pros),
                   "", f"**{tr('near_cons')}**", "", *(f"- {con}" for con in cons),
                   "", tr("near_fix", changes=changes)]
-    return "\n".join(lines + booking_checks(itineraries))
+    return "\n".join(lines + ground_lines(list(ground), 1) + booking_checks(itineraries))
 
 ROUND_TRIP_PAIRS = 3   # pairs of a way there and a way back shown in the summary of a round trip
 

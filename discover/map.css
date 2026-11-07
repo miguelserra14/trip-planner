@@ -2,8 +2,6 @@
    with nothing else. Dark, as the app's pages start (the user's choice of 2026-11-07). */
 :root { color-scheme: dark; --bg: #0f1115; --surface: #171a21; --fg: #e6e8eb; --muted: #9aa3af; --line: #2c323d; --panel: #1c2029;
         --link: #6b9bff; --pick: #1c2741; --warn: #f97066; --running: #3d3519; --done: #1e3325; --lost: #3d1f1f; }
-/* OpenStreetMap's tiles are drawn light: turned dark here, their colours kept (blue sea, green parks) */
-.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); }
 * { box-sizing: border-box; }
 body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
 a { color: var(--link); }

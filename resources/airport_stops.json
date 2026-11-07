@@ -36,6 +36,7 @@
 "FEZ": {"read": "2026-11-03", "terminal": [33.93051, -4.98211], "stops": []},
 "FLR": {"read": "2026-10-15", "terminal": [43.8023136, 11.20124], "stops": [["it-Toscana-GEST_FM9060_103", 5], ["eu-flixbus_627f614c-a142-4bba-9b88-f098e53cec76", 11]]},
 "FNC": {"read": "2026-10-22", "terminal": [32.69364, -16.77538], "stops": []},
+"GRO": {"read": "2026-11-07", "terminal": [41.89811, 2.76585], "stops": [["es-Sarfa-autobuses_7447", 5], ["eu-flixbus_dcc3b197-9603-11e6-9066-549f350fcb0c", 5]]},
 "HEL": {"read": "2026-10-31", "terminal": [60.3163892, 24.9646702], "stops": [["fi-digitraffic_LEN_1", 5], ["fi-hsl_4530259", 5]]},
 "IAS": {"read": "2026-10-23", "terminal": [47.17666, 27.61774], "stops": [["ro-Iași_884", 5]]},
 "INN": {"read": "2026-10-20", "terminal": [47.2576249, 11.3509861], "stops": [["at-PTA-Tyrol-2026_at:47:61521:0:1", 5]]},

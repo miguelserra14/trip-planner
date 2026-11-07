@@ -213,3 +213,13 @@ def test_its_report_lists_the_trips_by_the_rules_with_none_recommended(tickets, 
 def test_with_nothing_found_its_report_says_so(settings):
     found = steps.rank_by_ground_only({"all_the_way": {}})
     assert found["ground_only"] == [] and "No trip by train or coach" in found["report"]
+
+def test_a_trip_searched_with_a_plane_shows_every_flight_option_before_the_trips_without_one(tickets, settings):
+    from tests.report.test_options import itinerary
+    from trip_planner.report.summary import render_closest, render_report
+    flying = [itinerary(120, 600), itinerary(150, 420)]
+    ground = shown({"connections": [trip(23 * 60 + 55, 31 * 60 + 10, COACH, source="FlixBus", grade="A", price_eur=29.0)]},
+                   flight_option(150.0, 7 * 60))
+    for text in (render_report(flying, flying[1], [], ground), render_closest([{**option, "breaches": []} for option in flying], [], ground)):
+        last_flight = max(text.index(f"### {word}") for word in ("Option 1", "Option 2") if f"### {word}" in text)
+        assert text.index("Without a plane") > last_flight

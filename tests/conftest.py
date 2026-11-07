@@ -25,8 +25,11 @@ def live(request) -> bool:
     return request.config.getoption("--live")
 
 @pytest.fixture(autouse=True)
-def settings() -> TripSettings:
-    current.SETTINGS = trip_settings()
+def settings(monkeypatch) -> TripSettings:
+    """The trip's settings for one test. The settings and the places are put back afterwards, even when a test
+    sets them by hand, so nothing a test chose is seen by the next one."""
+    monkeypatch.setattr(current, "SETTINGS", trip_settings())
+    monkeypatch.setattr(current, "TRIP", current.TRIP)
     return current.SETTINGS
 
 @pytest.fixture(scope="session")

@@ -203,7 +203,7 @@ async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callab
     response["recommendation"] = recommendation   # kept apart in the options as data (report/options.py): a model wrote it
     TIMINGS["4 coordinator model (writing the recommendation)"] = time.time() - writing
     total = TIMINGS["total"] = time.time() - started
-    remember_duration(total, settings.ground_only)
+    remember_duration(total, "ground" if settings.ground_only else "plane")
     progress(step="done")
     if recommendation:
         show(recommendation)

@@ -27,7 +27,7 @@ from trip_planner.sources.timetables.days import (day_bounds, landing_day, local
                                                 zone_of_country)
 from trip_planner.sources.timetables.modes import GROUND_MODES, NO_COACH_MODES, ROAD_MODES
 from trip_planner.texts import tr
-from trip_planner.utils import logged, to_minutes, to_time, write_whole
+from trip_planner.utils import logged, read_cache, save_cache, to_minutes, to_time, write_whole
 
 TRANSITOUS_API = "https://api.transitous.org/api/v1"
 # Transitous is a free community service. It answers about one request every 1.4 seconds per user, however fast
@@ -41,9 +41,9 @@ PAGE_SIZE = 8                    # connections asked for per request
 # The walks allowed at each end are settings: city_walk_minutes, wide_city_walk_minutes, airport_walk_minutes (trip/trip_settings.py)
 LAST_RIDES_MINUTES = 120         # how long before the latest time the traveller leaves at the last connections are asked from
 TIMEZONES_FILE = ROOT / "resources" / "timezones.json"   # found once per place, then reused
-TIMEZONES: dict[str, str] = json.loads(TIMEZONES_FILE.read_text(encoding="utf-8")) if TIMEZONES_FILE.exists() else {}
+TIMEZONES: dict[str, str] = read_cache(TIMEZONES_FILE)
 STATIONS_FILE = ROOT / "resources" / "stations.json"   # where an operator's coach station is: found once per name and airport, then reused
-STATIONS: dict[str, list] = json.loads(STATIONS_FILE.read_text(encoding="utf-8")) if STATIONS_FILE.exists() else {}
+STATIONS: dict[str, list] = read_cache(STATIONS_FILE)
 # The answers of a search are kept for the next ones (Timetables(keep=True)): the same trip searched again asks
 # nothing it asked in the last KEPT_HOURS. One file per request, named by what was asked.
 KEPT_DIR = ROOT / "cache" / "timetables"
@@ -323,7 +323,7 @@ class Timetables:
         """The places the timetables answer for a station's name, kept under key."""
         found = await self.get("geocode", {"text": name, "place": f"{near[0]},{near[1]}"})
         STATIONS[key] = [[place["lat"], place["lon"]] for place in found]
-        write_whole(STATIONS_FILE, json.dumps(STATIONS, ensure_ascii=False))
+        save_cache(STATIONS_FILE, STATIONS)
 
     async def zone(self, latitude: float, longitude: float, country: str = "") -> str:
         """The time zone of a place, such as 'Europe/Lisbon'. country is its two-letter code, when it is known:
@@ -335,7 +335,7 @@ class Timetables:
             if not zone:
                 return ""
             TIMEZONES[key] = zone
-            write_whole(TIMEZONES_FILE, json.dumps(TIMEZONES))
+            save_cache(TIMEZONES_FILE, TIMEZONES)
         return TIMEZONES[key]
 
     async def stops_around(self, airport: dict[str, Any], terminal: list[float] | None) -> list[dict[str, Any]]:

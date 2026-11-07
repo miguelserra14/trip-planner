@@ -35,8 +35,9 @@ def files(monkeypatch, tmp_path):
     monkeypatch.setattr(access.transfers, "TRANSFERS", tmp_path / "airport_transfers.json")
     monkeypatch.setattr(access.transfers, "PAGES", tmp_path / "wikivoyage_by_plane.json")
     monkeypatch.setattr(access, "ask_wikidata", lambda codes: [])   # Wikidata knows nothing: Nominatim's turn
-    current.SETTINGS = TripSettings(origin="Coimbra", destination="Madrid", dates=[f"{TODAY + timedelta(days=30):%d/%m/%Y}"],
-                                    earliest_leave="", latest_leave="")
+    settings = TripSettings(origin="Coimbra", destination="Madrid", dates=[f"{TODAY + timedelta(days=30):%d/%m/%Y}"],
+                            earliest_leave="", latest_leave="")
+    monkeypatch.setattr(current, "SETTINGS", settings)
 
 def kiwi_leg(start: str, end: str, leaves: str, lands: str, minutes: int) -> dict:
     return {"from": start, "to": end, "date": DAY, "time": leaves, "arrival_date": DAY, "arrival_time": lands, "minutes": minutes,

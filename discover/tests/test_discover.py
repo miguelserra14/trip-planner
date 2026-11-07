@@ -306,6 +306,21 @@ def test_the_page_draws_the_lines_in_the_planners_colours_and_has_the_cities_wit
     assert data["grade_colours"] == LIGHT_COLOURS and data["landing_minutes"] == 45 and data["origin"]["short"] == "Coimbra"
     assert data["state"]["by_ground"] == [salamanca]
 
+def test_a_map_without_a_plane_asks_for_no_flight_and_has_only_the_cities_by_ground(monkeypatch):
+    salamanca = {"key": "ES|Salamanca|40.96", "name": "Salamanca", "country": "ES", "lat": 40.96, "lon": -5.66, "minutes": 269,
+                 "modes": ["bus"], "ground": []}
+    monkeypatch.setattr(ground, "stations_reached", lambda place, today, say: [{"stop": "made up"}])
+    monkeypatch.setattr(ground, "look_up", lambda place, stops, destinations, centres, airports, say: [salamanca] if not destinations else [])
+    for name in ("departure_airports", "ryanair_destinations", "kiwi_destinations"):
+        monkeypatch.setattr(finder, name, lambda *args, **kwargs: pytest.fail("a flight was searched"))
+    found = asyncio.run(finder.discover(PLACE, ONE_WAY, ground_only=True))
+    assert (found.departures, found.destinations, found.flights, found.by_ground) == ([], [], [], [salamanca])
+    data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', page.map_page(found, "", [])).group(1))
+    assert data["state"]["by_ground"] == [salamanca]
+
+def test_the_command_asks_for_a_map_without_a_plane():
+    assert command.read_arguments(["Coimbra", "12/11/2026", "--ground"]).ground
+
 def test_a_map_asked_to_stop_ends_its_lookups_at_the_next_city_and_keeps_what_it_found(monkeypatch):
     made = object.__new__(session_module.Session)
     made.found, made.days, made.sections = SimpleNamespace(phase=""), None, []

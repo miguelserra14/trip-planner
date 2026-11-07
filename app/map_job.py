@@ -37,7 +37,7 @@ def make_map(asked: dict[str, Any], events, answers: Iterator[str] | None = None
         return
     source = asked.get("source")
     session = Session(str(asked.get("city") or "").strip(), days, fast=source == "fast", light=source == "light",
-                      max_stops=finder.MAX_STOPS)
+                      max_stops=finder.MAX_STOPS, ground_only=source == "ground")
 
     def listen() -> None:
         for line in answers:   # the app's lines, on stdin

@@ -9,7 +9,7 @@ import pytest
 
 from trip_planner import planner
 from trip_planner.report import full
-from trip_planner.report.summary import render_round_trip, round_trip_pairs
+from trip_planner.report.summary import ground_round_trip_pairs, render_ground_round_trip, render_round_trip, round_trip_pairs
 from trip_planner.trip.places import Place, return_places, TripPlaces
 from trip_planner.trip.trip_settings import SettingError, TripSettings
 
@@ -255,3 +255,55 @@ def test_each_trip_is_a_folder_of_its_own_and_only_the_newest_stay(tmp_path, mon
     assert not reports[0].parent.exists() and all(report.exists() and full.vehicles_of(report).exists() for report in reports[1:])
     kept = full.keep_report(reports[1], True)
     assert [path.name for path in full.report_files("trip_*.json")] == [full.vehicles_of(reports[2]).name, full.vehicles_of(kept).name]
+
+# ---------------------------------------------------------------- a round trip without a plane
+def by_ground(days: int, leave: str, arrive: str, price: float | None = 20.0) -> dict:
+    """A trip by train or coach all the way, as ground_only.py keeps it: its times are minutes from its day's midnight."""
+    minutes = lambda time: int(time[:2]) * 60 + int(time[3:])
+    return {"day": iso(days), "leave": minutes(leave), "arrive": minutes(arrive), "minutes": minutes(arrive) - minutes(leave),
+            "grade": "B", "price_eur": price, "confirmed_eur": price or 0.0}
+
+def test_a_day_trip_without_a_plane_keeps_the_shortest_stay_at_the_destination():
+    there = [by_ground(30, "07:00", "09:00")]
+    back = [by_ground(30, "10:00", "12:00"), by_ground(30, "18:00", "20:00", 30.0)]
+    assert [other for _, other, _, _ in ground_round_trip_pairs(there, back, 6 * 60)] == [2]   # one hour in the city is not a day trip
+    assert [other for _, other, _, _ in ground_round_trip_pairs(there, back, 0)] == [1, 2]
+
+def test_the_pairs_without_a_plane_are_the_cheapest_first_and_those_without_a_price_last():
+    there = [by_ground(30, "07:00", "09:00"), by_ground(30, "06:00", "08:00", None)]
+    back = [by_ground(31, "18:00", "20:00", 30.0), by_ground(31, "19:00", "21:00", 10.0)]
+    assert [(number, other) for number, other, _, _ in ground_round_trip_pairs(there, back, 6 * 60)] == [(1, 2), (1, 1), (2, 1), (2, 2)]
+
+def test_the_summary_without_a_plane_says_the_time_at_the_destination(settings):
+    text = render_ground_round_trip([by_ground(30, "07:00", "09:00")], [by_ground(30, "18:00", "20:00")], "Antwerp", "Brussels", 6)
+    assert "40 EUR" in text and "9h00" in text
+    assert "6 h" in render_ground_round_trip([by_ground(30, "07:00", "09:00")], [by_ground(30, "10:00", "12:00")], "Antwerp", "Brussels", 6)
+
+def test_the_way_back_of_a_day_trip_without_a_plane_is_searched_from_the_first_arrival_and_the_stay():
+    back = round_trip(dates=[day(30)], return_dates=[day(30)], ground_only=True).return_trip()
+    later = planner.after_the_stay(back, [by_ground(30, "07:00", "10:30"), by_ground(30, "08:00", "09:15")])
+    assert later.earliest_leave == "15:15"   # the first arrival, 09:15, and six hours
+    assert planner.after_the_stay(back, []) is back
+
+def test_a_way_back_on_another_day_is_searched_all_day():
+    back = round_trip(dates=[day(30)], return_dates=[day(31)], ground_only=True).return_trip()
+    assert planner.after_the_stay(back, [by_ground(30, "07:00", "09:00")]).earliest_leave == "00:00"
+
+def test_a_stay_past_the_last_hour_to_leave_leaves_the_way_back_as_it_was():
+    back = round_trip(dates=[day(30)], return_dates=[day(30)], ground_only=True, latest_leave="12:00").return_trip()
+    assert planner.after_the_stay(back, [by_ground(30, "07:00", "09:00")]).earliest_leave == "00:00"
+
+def test_a_round_trip_without_a_plane_pairs_the_trips_by_ground_after_the_stay(no_search, monkeypatch):
+    async def plan_one_way(settings, places, after=None, beside=None):
+        found = {"shown": [], "ground_only": [by_ground(30, "07:00", "09:00")] if settings.origin == "Antwerp"
+                 else [by_ground(30, settings.earliest_leave, "20:00")]}
+        no_search["planned"].append(settings.earliest_leave)
+        planner.PLANNED.append({"settings": settings, "places": places, "messages": [], "state": found, "report": "r.md"})
+        if after:
+            no_search["shown"].append(after(found))
+        return found
+    monkeypatch.setattr(planner, "plan_one_way", plan_one_way)
+    asyncio.run(planner.plan_trip(round_trip(origin="Antwerp", destination="Brussels", dates=[day(30)], return_dates=[day(30)],
+                                             ground_only=True), places()))
+    assert no_search["planned"] == ["00:00", "15:00"]
+    assert "40 EUR" in no_search["shown"][-1] and "6h00" in no_search["shown"][-1]

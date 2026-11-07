@@ -9,12 +9,12 @@ from typing import Any
 
 from trip_planner.texts import REFERENCE, TEXTS, tr
 
-MAIN_SETTINGS = ("origin", "destination", "departure_scale", "arrival_scale", "max_stopovers")
+MAIN_SETTINGS = ("origin", "destination", "departure_scale", "arrival_scale", "max_stopovers", "ground_only")
 CHANGES = ("max_changes_to_airport", "max_changes_from_airport")   # shown with how to travel on each side
 NOT_IN_TABS = ("dates", "return_dates", "language")   # the two calendars and the list of languages hold these
 TABS = (
     ("ui_tab_times", ("earliest_leave", "latest_leave", "earliest_arrival", "latest_arrival", "next_day_arrivals",
-                      "max_stopovers", "min_airport_minutes", "ideal_airport_minutes", "min_landing_minutes")),
+                      "min_stay_hours", "max_stopovers", "min_airport_minutes", "ideal_airport_minutes", "min_landing_minutes")),
     ("ui_tab_airports", ("departure_scale", "arrival_scale", "confirm_airports", "primary_radius_km", "fallback_radius_km",
                          "arrival_radius_km", "max_departure_airports", "max_arrival_airports", "max_road_hours")),
     ("ui_tab_airport_lists", ("include_airports", "exclude_airports", "primary_airports", "fallback_airports", "arrival_airports")),
@@ -36,7 +36,8 @@ HINTS = {**dict.fromkeys(("earliest_leave", "latest_leave", "earliest_arrival", 
          **dict.fromkeys(("include_airports", "exclude_airports", "primary_airports", "fallback_airports", "arrival_airports"), "hint_airport_list"),
          **dict.fromkeys(("to_airport_by", "from_airport_by", *CHANGES), "hint_ground_choice"),
          **{name: f"hint_{name}" for name in ("min_reliability", "tiebreak_eur_per_hour", "fallback_saving_eur_per_hour",
-                                              "extra_hour_growth", "unverified_price_factor", "max_estimate_km", "extra_wishes")}}
+                                              "extra_hour_growth", "unverified_price_factor", "max_estimate_km", "extra_wishes",
+                                              "min_stay_hours")}}
 
 def label(name: str) -> str:
     """A setting as the form names it, in the traveller's language. Its own name when it has no label."""

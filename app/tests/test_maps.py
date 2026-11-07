@@ -141,7 +141,7 @@ def test_the_maps_process_tells_the_app_the_page_the_trips_and_each_change(monke
     import trip_planner.trip.places as places
 
     class Session:
-        def __init__(self, city, days, fast, light, max_stops):
+        def __init__(self, city, days, fast, light, max_stops, ground_only):
             assert city == "Coimbra" and days.first == DAY.isoformat() and light and not fast
             self.found = type("Found", (), {"kiwi_why": ""})()
             self.live, self.lock, self.sources, self.sections, self.path = {"state": {}}, threading.Lock(), "Ryanair", [], "discover/maps/x.html"
@@ -179,7 +179,7 @@ def test_a_map_told_to_stop_ends_its_lookups_at_the_next_step(monkeypatch):
     import trip_planner.trip.places as places
 
     class Session:
-        def __init__(self, city, days, fast, light, max_stops):
+        def __init__(self, city, days, fast, light, max_stops, ground_only):
             self.found = type("Found", (), {"kiwi_why": ""})()
             self.live, self.lock, self.sources, self.sections, self.path = {"state": {}}, threading.Lock(), "Ryanair", [], "x.html"
             self.stopping = threading.Event()

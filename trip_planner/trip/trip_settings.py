@@ -34,7 +34,7 @@ RANGES = {
     "city_walk_minutes": (5, 120), "wide_city_walk_minutes": (5, 180), "airport_walk_minutes": (5, 60),
     "airport_floor_minutes": (15, 360), "night_minutes": (0, 360),
     "min_trip_km": (0, 500), "city_airport_radius_km": (5, 150), "ambiguous_importance": (0, 1),
-    "recent_reports": (1, 100),
+    "recent_reports": (1, 100), "min_stay_hours": (0, 24),
 }
 MAX_DATES = 7                # travel dates in one search: each one multiplies the routes to search
 MAX_DAYS_AHEAD = 360         # airlines do not sell further ahead than about this
@@ -65,6 +65,10 @@ class TripSettings:
     return_dates: list[str] = field(default_factory=list)   # acceptable dates to come back, written as dates. Empty = one way.
                                           # The way back is planned as a trip of its own (return_trip), with the same limits
     language: str = "en"                  # language of the airport list and the final report: "en" or "pt-PT"
+    ground_only: bool = False             # by train or coach all the way: no airport is chosen and no flight is searched
+    min_stay_hours: float = 6.0           # a round trip without a plane stays at least this long at the destination: a day
+                                          # trip is not one hour in the city. Round trips with a flight pair any way back
+                                          # that leaves after the way there arrives
 
     # Airports are found automatically by distance from the two cities.
     primary_radius_km: int = 100          # departure airports this close to the origin are "primary"
@@ -304,7 +308,7 @@ class TripSettings:
         They are said before the search starts, not refused: the traveller may know better."""
         found, today = [], date.today()
         furthest = max((datetime.strptime(day, "%d/%m/%Y").date() - today).days for day in self.dates + self.return_dates)
-        if self.latest_arrival:
+        if self.latest_arrival and not self.ground_only:
             # Before any travel at all: leave, wait at the airport, walk out of the other airport
             fixed = self.min_airport_minutes + self.min_landing_minutes
             left = to_minutes(self.latest_arrival) - to_minutes(self.earliest_leave) - fixed

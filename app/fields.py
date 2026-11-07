@@ -57,6 +57,7 @@ def read(sent: dict[str, str], defaults: TripSettings) -> dict[str, Any]:
     for name in SCALES_TICKED:
         values[name] = "wide" if name in sent else "near"
     values["max_stopovers"] = stopovers(sent)
+    values["ground_only"] = "ground_only" in sent
     values["language"] = values["language"] or defaults.language
     if sent.get("trip_kind") == "one":   # the days to come back are hidden then, not emptied: they are not a trip's
         values["return_dates"] = ""
@@ -112,8 +113,8 @@ def calendar_data() -> str:
 def trip_form(token: str, values: dict[str, Any], defaults: TripSettings, refusal: str = "", busy: bool = False,
               note: str = "") -> str:
     """The whole form, in the way of a flight search site: one way or there and back, then one bar with where from,
-    the ⇄ that swaps the two places (page.js), where to, the days and the button; the three ticks of the trip
-    under it; and every other setting folded under "Advanced settings", by tab, with how many differ from
+    the ⇄ that swaps the two places (page.js), where to, the days and the button; the ticks of the trip under it
+    (airports near each city, direct flights, no plane at all); and every other setting folded under "Advanced settings", by tab, with how many differ from
     settings.py and the button that brings them all back. note is said at the top, as refusal is, when nothing
     went wrong."""
     escape = lambda text: html.escape(str(text))
@@ -157,7 +158,8 @@ def trip_form(token: str, values: dict[str, Any], defaults: TripSettings, refusa
             f'<div class="go">{button}</div></div>'
             f'<div class="chips">{chip("departure_scale", "app_nearby_origin", values.get("departure_scale") == "wide")}'
             f'{chip("arrival_scale", "app_nearby_destination", values.get("arrival_scale") == "wide")}'
-            f'{chip(DIRECT, "ui_direct", str(values.get("max_stopovers")) == "0")}</div>'
+            f'{chip(DIRECT, "ui_direct", str(values.get("max_stopovers")) == "0")}'
+            f'{chip("ground_only", "app_ground_only", values.get("ground_only") is True)}</div>'
             f'<details class="advanced">{summary}<p class="muted">{escape(tr("app_advanced_hint"))}</p>'
             f'<label class="language">{escape(tr("ui_language"))}{choice("language", values.get("language", REFERENCE), languages)}</label>'
             f'<div class="tabs">{tab_names}</div>{tabs}{restore}</details></form>')

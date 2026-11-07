@@ -22,6 +22,16 @@ def test_the_steps_run_in_order_and_leave_their_notes(monkeypatch):
     assert state["step"] == 2 and state["seen"] == ["a flight"] and state["origin"] == "A"
     assert state["notes"] == ["one flight", "its transport"] and "message" not in state
 
+def test_each_step_says_when_it_starts_and_what_it_found_for_a_page_that_waits(monkeypatch):
+    from trip_planner import utils
+    async def search_flights(state):
+        return {"step": 1, "flights": ["a", "b"], "message": "two flights"}
+    said = []
+    monkeypatch.setattr(steps, "STEPS", [search_flights])
+    monkeypatch.setitem(utils.LISTENERS, "progress", said.append)
+    asyncio.run(steps.run_steps({}))
+    assert said == [{"step": "search_flights"}, {"found": "search_flights", "count": 2}]
+
 def test_a_run_that_failed_continues_from_the_step_that_failed(monkeypatch):
     calls = []
     async def first(state):
@@ -33,7 +43,6 @@ def test_a_run_that_failed_continues_from_the_step_that_failed(monkeypatch):
             raise RuntimeError("a service is down")
         return {"step": 2, "message": "done too"}
     monkeypatch.setattr(steps, "STEPS", [first, second])
-    monkeypatch.setattr(planner, "STEPS", steps.STEPS)
     monkeypatch.setattr(planner, "RESUME_WAIT_SECONDS", 0)
     state = asyncio.run(planner.run_search({}))
     assert calls == ["first", "second", "second"] and state["step"] == 2   # the first step was not run again

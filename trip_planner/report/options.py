@@ -96,6 +96,7 @@ def trip_data(response: dict[str, Any]) -> dict[str, Any]:
         "dates": settings.iso_dates,
         "language": settings.language,
         "recommended": response.get("recommended") or 0,   # its number among the options, 0 when there is none
+        "ground_only_asked": settings.ground_only,   # no flight was searched: having no option with one is not news
         "closest": any(itinerary.get("breaches") for itinerary in shown),   # none respects every requirement: the closest ones
         "options": [option_data(number, itinerary) for number, itinerary in enumerate(shown, start=1)],
         "ground_only": [{**{key: option.get(key) for key in GROUND_KEYS}, "vehicles": vehicles(option)}

@@ -28,7 +28,7 @@ CHANGED = dict(
     small_estimate_eur=3.5, unverified_price_factor=2.5, city_walk_minutes=30, wide_city_walk_minutes=60, airport_walk_minutes=15,
     min_reliability="A", tiebreak_eur_per_hour=7.5, fallback_saving_eur_per_hour=12.0, extra_hour_growth=2.0, options_shown=7,
     extra_wishes="a window seat, and no night bus", airport_floor_minutes=40, night_minutes=200, min_trip_km=60,
-    city_airport_radius_km=40, ambiguous_importance=0.3, recent_reports=8,
+    city_airport_radius_km=40, ambiguous_importance=0.3, recent_reports=8, min_stay_hours=4.0,
     departure_scale="near", arrival_scale="near", max_stopovers=2,
 )
 
@@ -76,6 +76,11 @@ def test_every_setting_of_the_form_is_changed_by_it():
 def test_the_stopovers_are_read_whether_direct_flights_are_ticked_or_not(stopovers):
     wanted = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=[DAY], max_stopovers=stopovers)
     assert read_back(wanted).max_stopovers == stopovers
+
+@pytest.mark.parametrize("ground_only", [True, False])
+def test_the_tick_for_no_plane_is_read_ticked_or_not(ground_only):
+    wanted = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=[DAY], ground_only=ground_only)
+    assert read_back(wanted).ground_only is ground_only
 
 def test_unticking_direct_flights_allows_a_stopover():
     assert fields.stopovers({"max_stopovers": "0"}) == 1 and fields.stopovers({"max_stopovers": "0", fields.DIRECT: "on"}) == 0

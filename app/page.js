@@ -9,6 +9,10 @@
 "use strict";
 
 const POLL_MS = 2000;   // how often the part of a running search is asked for again
+// A map asked for from Discover's form opens by itself once its page is ready, once: the form leaves a note when it is
+// sent, and the first page or part that has the map's link takes it. In this tab: a new one, opened without a click,
+// would be blocked. The link stays on the page for later. Without storage, the link is there to click
+const MAP_NOTE = "open-map";
 
 function two(number) {
   return String(number).padStart(2, "0");
@@ -173,6 +177,20 @@ function theme() {
   }
 }
 
+function mapAsked() {
+  for (const form of document.querySelectorAll('form[action="/discover"]')) {
+    form.addEventListener("submit", () => { try { sessionStorage.setItem(MAP_NOTE, "1"); } catch (error) { /* no storage */ } });
+  }
+}
+
+function openMap() {
+  const link = document.querySelector("a[data-open-map]");
+  if (!link) return;
+  let asked = false;
+  try { asked = sessionStorage.getItem(MAP_NOTE) === "1"; sessionStorage.removeItem(MAP_NOTE); } catch (error) { /* no storage */ }
+  if (asked) location.assign(link.href);
+}
+
 function language() {
   for (const select of document.querySelectorAll("select[data-submit]")) {
     select.addEventListener("change", () => select.form.submit());
@@ -195,6 +213,7 @@ function poll() {
             const opened = now.querySelector("details"), opening = part.querySelector("details");
             if (opened && opening) opening.open = opened.open;   // as the traveller left it
             now.replaceWith(document.adoptNode(part));
+            openMap();
           }
         }
       }
@@ -214,5 +233,7 @@ swap();
 changes();
 tripKind();
 theme();
+mapAsked();
+openMap();
 language();
 poll();

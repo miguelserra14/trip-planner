@@ -227,13 +227,17 @@ def error_text(error: BaseException) -> str:
     return f"{type(error).__name__}: {error}".strip(": ")[:300]
 
 async def discover(place: Place, days: Days, fast: bool = False, max_stops: int = MAX_STOPS,
-                   kiwi_requests: int = KIWI_REQUESTS) -> Found:
+                   kiwi_requests: int = KIWI_REQUESTS, ground_only: bool = False) -> Found:
     """The cheapest destinations from a place. fast asks Ryanair only. max_stops is the most stops each way Kiwi
-    may give, kiwi_requests the most requests to Kiwi this map may make."""
+    may give, kiwi_requests the most requests to Kiwi this map may make. ground_only asks for no flight at all:
+    the cities the trains and buses reach, each one a city by ground only."""
     today = date.today()
     # The trains and buses leaving the city need only the city: read while the flights are searched, as the
     # first time it takes about two minutes of timetables (ground.py)
     reading = asyncio.create_task(asyncio.to_thread(ground.stations_reached, place, today, say))
+    if ground_only:
+        by_ground = ground.look_up(place, await reading, [], {}, load_airports(), say)
+        return Found(place, days, [], [], [], [], kiwi=False, by_ground=by_ground)
     departures = await asyncio.to_thread(departure_airports, place, today, say)
     routes_flown = flown.within(await asyncio.to_thread(flown.routes, [airport["code"] for airport in departures], today, say),
                                 place, COUNTRIES_KM, load_airports())

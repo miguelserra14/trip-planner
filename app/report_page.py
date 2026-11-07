@@ -7,7 +7,7 @@ import html
 import re
 from pathlib import Path
 
-from app.icons import sprite
+from app.icons import icon, sprite
 from trip_planner.report.formatting import read_timeline
 from trip_planner.trip.trip_settings import GRADES, LIGHT_COLOURS, LIGHTS
 
@@ -39,19 +39,34 @@ def lights(text: str) -> str:
         text = text.replace(LIGHTS[grade], f'<span class="light-{grade}" title="{LIGHTS[grade]}">●</span>')
     return text
 
-def timeline(points: list[tuple[str, str]], parts: list[tuple[str | None, int]]) -> str:
+ICON_SHARE = 4   # a part narrower than this share of the line (in %) has no room for its vehicle's icon
+
+def timeline(points: list[tuple | None], parts: list[tuple]) -> str:
     """The line of an option drawn to scale: each part as long as its share of the squares, in the colour of its
-    grade, a wait as a thin grey line, and at each point its time above and its place below."""
-    total = sum(count for _, count in parts) or 1
+    grade, a wait as a thin grey line, and at each point its time above and its place below.
+    A part may name its vehicle's icon as a third item, drawn on the line when there is room. A point may be a change
+    of vehicle, (time, place, "change"): a small dot whose time and place are said on hover, since the changes of a
+    ground leg are too close together for their labels. A point that is None is a boundary with nothing drawn."""
+    total = sum(part[1] for part in parts) or 1
     edges = [0.0]
-    for _, count in parts:
-        edges.append(edges[-1] + 100 * count / total)
+    for part in parts:
+        edges.append(edges[-1] + 100 * part[1] / total)
     drawn = []
-    for (grade, _), start, end in zip(parts, edges, edges[1:]):
+    for part, start, end in zip(parts, edges, edges[1:]):
+        grade, mark = part[0], part[2] if len(part) > 2 else None
         place = f"left: {start:.2f}%; width: {end - start:.2f}%"
         drawn.append(f'<div class="part" style="background: var(--light-{grade}); {place}"></div>' if grade
                      else f'<div class="part wait" style="{place}"></div>')
-    for number, ((time, place), x) in enumerate(zip(points, edges)):
+        if mark and end - start >= ICON_SHARE:
+            drawn.append(f'<div class="vehicle" style="left: {(start + end) / 2:.2f}%">{icon(mark)}</div>')
+    for number, (point, x) in enumerate(zip(points, edges)):
+        if point is None:
+            continue
+        if len(point) > 2:   # a change of vehicle
+            said = html.escape(f"{point[0]} {point[1]}".strip())
+            drawn.append(f'<div class="change" style="left: {x:.2f}%" title="{said}"><i></i><span class="visually-hidden">{said}</span></div>')
+            continue
+        time, place = point
         side = " first" if number == 0 else " last" if number == len(points) - 1 else ""
         drawn.append(f'<div class="point{side}" style="left: {x:.2f}%"><b>{inline(time)}</b><i></i><span>{inline(place)}</span></div>')
     return f'<div class="timeline">{"".join(drawn)}</div>'

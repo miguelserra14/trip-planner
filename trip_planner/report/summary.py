@@ -1,5 +1,5 @@
 """The result shown to the traveller: the comparison, each option step by step, and what to check before booking."""
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from trip_planner import current
@@ -316,6 +316,54 @@ def round_trip_pairs(going: list[dict[str, Any]], coming: list[dict[str, Any]]) 
     pairs = [(number, other, there, back) for number, there in enumerate(going, start=1) for other, back in enumerate(coming, start=1)
              if f"{back['leave_date']} {back['leave_time']}" > f"{there['arrival_date']} {there['arrival_time']}"]
     return sorted(pairs, key=lambda pair: (worth(pair[2]) + worth(pair[3]), pair[2]["total_cost"] + pair[3]["total_cost"]))
+
+def ground_stay(there: dict[str, Any], back: dict[str, Any]) -> int:
+    """The minutes at the destination between a trip without a plane there and one back. Each trip's times are
+    minutes from the midnight of its own day, past 24 hours when it arrives on a later day."""
+    moment = lambda option, minutes: datetime.fromisoformat(option["day"]) + timedelta(minutes=minutes)
+    return round((moment(back, back["leave"]) - moment(there, there["arrive"])).total_seconds() / 60)
+
+def ground_round_trip_pairs(going: list[dict[str, Any]], coming: list[dict[str, Any]], min_stay_minutes: float) -> list[tuple]:
+    """The trips without a plane of each way that can go together, best first: (number there, number back, there,
+    back). The way back must leave at least min_stay_minutes after the way there arrives, so that a day trip is a
+    day in the city and not an hour. Priced pairs first, the cheapest first, then those with a way not priced, the
+    shortest first."""
+    pairs = [(number, other, there, back) for number, there in enumerate(going, start=1) for other, back in enumerate(coming, start=1)
+             if ground_stay(there, back) >= min_stay_minutes]
+    unpriced = lambda pair: pair[2]["price_eur"] is None or pair[3]["price_eur"] is None
+    return sorted(pairs, key=lambda pair: (unpriced(pair), 0 if unpriced(pair) else pair[2]["price_eur"] + pair[3]["price_eur"],
+                                           pair[2]["minutes"] + pair[3]["minutes"]))
+
+def render_ground_round_trip(going: list[dict[str, Any]], coming: list[dict[str, Any]], origin: str, destination: str,
+                             min_stay_hours: float) -> str:
+    """The summary of a round trip without a plane: the best pairs of a trip there and a trip back that leave the
+    traveller at least min_stay_hours at the destination, with the time there and the total."""
+    lines = [f"# {tr('round_trip_title', origin=origin, destination=destination)}", ""]
+    if not going or not coming:
+        return "\n".join(lines + [tr("round_trip_one_side", side=tr("round_side_there") if not going else tr("round_side_back"))])
+    hours = f"{min_stay_hours:g}"
+    pairs = ground_round_trip_pairs(going, coming, min_stay_hours * 60)
+    if not pairs:
+        return "\n".join(lines + [tr("round_trip_ground_none", hours=hours)])
+    price = lambda option: f"{option['price_eur']:.0f} EUR" if option["price_eur"] is not None else tr("ground_no_price")
+    option = lambda number, trip: (f"{tr('ground_option')} {number}: {date.fromisoformat(trip['day']).strftime('%d/%m')}, "
+                                   f"{to_time(trip['leave'])} → {ground_arrival(trip)}, {price(trip)}")
+    total = lambda there, back: (f"{there['price_eur'] + back['price_eur']:.0f} EUR" if there["price_eur"] is not None and back["price_eur"] is not None
+                                 else tr("ground_no_price"))
+    best = pairs[0]
+    lines += [
+        tr("round_trip_ground_intro", hours=hours),
+        "",
+        *table([tr("col_round_pair"), tr("col_round_there"), tr("col_round_back"), tr("col_round_stay"), tr("col_total"), tr("col_schedules"),
+                tr("col_confirmed")],
+               [[f"**{rank}** ({tr('recommended_pair')})" if rank == 1 else str(rank), option(number, there), option(other, back),
+                 as_duration(ground_stay(there, back)), total(there, back), LIGHTS[max(there["grade"], back["grade"])],
+                 f"{there['confirmed_eur'] + back['confirmed_eur']:.0f} / {total(there, back)}"]
+                for rank, (number, other, there, back) in enumerate(pairs[:ROUND_TRIP_PAIRS], start=1)]),
+        "",
+        tr("round_trip_ground_best", there=best[0], back=best[1], total=total(best[2], best[3]), stay=as_duration(ground_stay(best[2], best[3]))),
+    ]
+    return "\n".join(lines)
 
 def render_round_trip(going: list[dict[str, Any]], coming: list[dict[str, Any]], origin: str, destination: str) -> str:
     """The summary of a round trip, after the reports of the two ways: the best pairs of an option there and an

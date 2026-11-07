@@ -463,6 +463,11 @@ def choose_airports(settings: TripSettings) -> TripPlaces:
         raise ValueError(tr(reason, km=arrival_km, city=settings.destination, setting=arrival_setting, hours=f"{settings.max_road_hours:g}"))
     return TripPlaces(origin, destination, primary, fallback, arrival, dropped=sorted(excluded), unknown=unknown, too_far=too_far)
 
+def cities_only(settings: TripSettings) -> TripPlaces:
+    """The places of a trip without a plane (ground_only): the two cities and no airport. No shortest distance
+    either: Antwerp to Brussels is too close to fly, not to take a train."""
+    return TripPlaces(geocode(settings.origin), geocode(settings.destination), primary=[], fallback=[], arrival=[])
+
 def remove_airports(places: TripPlaces, removed: list[str]) -> TripPlaces:
     """Drop airports from the trip. Raises ValueError if no departure or no arrival airport is left."""
     dropped = set(places.dropped) | set(removed)

@@ -135,6 +135,7 @@ env\.venv\Scripts\python main.py --prices     ask again the ground prices of the
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map as a file (discover/maps/), leaving between the two days
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 --fast      Ryanair only: a few seconds
+env\.venv\Scripts\python -m discover Coimbra 12/11/2026 --ground    no plane: the cities the trains and coaches reach
 ```
 
 `python -m discover --help` lists the other options (`--light`, `--max-stops`, `--no-confirm`). A map made this way

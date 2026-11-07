@@ -16,6 +16,7 @@ On stdin, first the trip, then the traveller's answers, each when it is asked fo
     {"stop": true}             a map ends at its next city, keeping what it found (map_job.py)
 On stdout, {"kind": ..., "text": ...}:
     say, show                  a progress line (and anything else printed), and Markdown of the result
+    progress                   where the search is, as data (utils.progress), for the page that waits (waiting.py)
     unclear                    {"setting", "name", "options": [labels]}: a name of several places; it waits for "index"
     airports                   {"groups": [{"title", "airports": [...]}], "notes": [...]}: it waits for "dropped"
     refused                    why those airports cannot be left out; it waits for "dropped" again
@@ -106,12 +107,12 @@ async def converse(settings: TripSettings, answers: Iterator[str], events: Event
             return
         index = answer.get("index")
         where.choose_place(name, options[index if isinstance(index, int) and 0 <= index < len(options) else 0][1])
-    try:
-        found = await asyncio.to_thread(where.choose_airports, settings)
+    try:   # by train or coach all the way, the two cities are all there is to find
+        found = await asyncio.to_thread(where.cities_only if settings.ground_only else where.choose_airports, settings)
     except ValueError as error:   # the two places are too close, or one has no airport: the reason is the traveller's
         events.send("failed", str(error))
         return
-    if settings.confirm_airports:
+    if settings.confirm_airports and not settings.ground_only:
         while True:
             answer = await wait("airports", airports_shown(found))
             if answer is None:
@@ -122,9 +123,10 @@ async def converse(settings: TripSettings, answers: Iterator[str], events: Event
                 break
             except ValueError as error:
                 events.send("refused", str(error))
-    else:
+    elif not settings.ground_only:
         where.show_airports(found)
-    await flight_search.connect()
+    if not settings.ground_only:
+        await flight_search.connect()
     await planner.plan_trip(settings, found)
     for trip in planner.PLANNED:
         if trip.get("report") is not None:
@@ -189,6 +191,7 @@ def main(answers: Iterator[str], events: Events) -> int:
     current.SETTINGS = SETTINGS   # the reason a setting is refused is in the language of settings.py
     utils.LISTENERS["say"] = lambda text: events.send("say", text)
     utils.LISTENERS["show"] = lambda markdown: events.send("show", markdown)
+    utils.LISTENERS["progress"] = lambda what: events.send("progress", what)
     try:
         asked = json.loads(first)
     except json.JSONDecodeError:

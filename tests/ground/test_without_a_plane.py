@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta
 
 import pytest
 
+from trip_planner.agents import steps
 from trip_planner.itineraries import ground_only
 from trip_planner.report.formatting import read_timeline
 from trip_planner.report.summary import ground_lines
@@ -195,3 +196,20 @@ def test_flixbus_city_to_city_with_its_change(monkeypatch):
     found = all_the_way.sold_by_flixbus(place("Coimbra"), place("Madrid"), DAY)
     assert len(found) == 1 and found[0]["price_eur"] == 28.98 and found[0]["minutes"] == 6 * 60 + 15
     assert [one["to"] for one in found[0]["steps"]] == ["Salamanca", "Madrid Sur"] and found[0]["arrive"] == 24 * 60 + 7 * 60 + 10
+
+# ---------------------------------------------------------------- a trip asked for without a plane
+def test_a_trip_asked_without_a_plane_runs_no_flight_search(settings):
+    settings.ground_only = True
+    assert steps.steps_of(settings) == steps.GROUND_STEPS
+    assert steps.search_flights not in steps.GROUND_STEPS and steps.search_ground_transport not in steps.GROUND_STEPS
+
+def test_its_report_lists_the_trips_by_the_rules_with_none_recommended(tickets, settings):
+    tickets["AVE"] = [([1, 2], 60.0)]
+    found = steps.rank_by_ground_only({"all_the_way": {"priced": ground_only.price_all({"connections": [trip(5 * 60 + 10, 18 * 60 + 29, TRAINS)]})}})
+    assert found["recommended"] == 0 and found["shown"] == [] and len(found["ground_only"]) == 1
+    price = found["ground_only"][0]["price_eur"]
+    assert price >= 60 and f"{price:.0f} EUR" in found["report"] and "Without a plane" in found["report"]
+
+def test_with_nothing_found_its_report_says_so(settings):
+    found = steps.rank_by_ground_only({"all_the_way": {}})
+    assert found["ground_only"] == [] and "No trip by train or coach" in found["report"]

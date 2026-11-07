@@ -85,7 +85,7 @@ def test_the_log_is_saved_with_the_report_and_goes_with_it(tmp_path, monkeypatch
     monkeypatch.setattr(full, "SAVED_REPORTS", tmp_path / "saved")
     monkeypatch.setattr(full, "render_full_report", lambda response, recommendation: "the report")
     monkeypatch.setattr(full.current, "SETTINGS", type("Settings", (), {"origin": "Coimbra", "destination": "Antwerp", "recent_reports": 5,
-                                                                         "iso_dates": [], "language": "en"}))
+                                                                         "iso_dates": [], "language": "en", "ground_only": False}))
     with utils.logged("Transitous", "plan a -> b") as entry:
         entry["waited"] = 1.5
     report = full.save_report({}, "")

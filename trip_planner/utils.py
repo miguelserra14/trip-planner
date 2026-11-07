@@ -43,8 +43,14 @@ def write_whole(path: Path, text: str, newline: str | None = None) -> None:
     beside.unlink(missing_ok=True)
 
 # Progress lines and results are printed in the terminal, unless something else asked for them: a search of the app (app/job.py)
-# puts its own functions here, under "say" and "show".
+# puts its own functions here, under "say", "show" and "progress".
 LISTENERS: dict = {}
+
+def progress(**what) -> None:
+    """Where a search is, as data, for a page that draws it while it waits (app/waiting.py): the trip and its
+    airports, the step that starts, what a step found. The terminal has the progress lines: nothing is printed."""
+    if "progress" in LISTENERS:
+        LISTENERS["progress"](what)
 
 def say(text: str) -> None:
     """A progress line, wherever the traveller is looking."""

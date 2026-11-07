@@ -7,6 +7,7 @@
   --background: #f5f6f8; --surface: #ffffff; --surface-2: #f8f9fb; --text: #1f2328; --muted: #6b7280;
   --border: #d5d9e0; --hover: #eceff3; --accent: #2563eb; --accent-hover: #1d4ed8; --accent-soft: #e8efff; --on-accent: #ffffff;
   --error: #b42318; --shadow: 0 1px 2px rgba(16, 24, 40, .06);
+  --sea: #dce8fa; --land: #fbfaf6;   /* the map of a search (waiting.py) */
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme=light]) {
@@ -14,6 +15,7 @@
     --background: #0f1115; --surface: #171a21; --surface-2: #1c2029; --text: #e6e8eb; --muted: #9aa3af;
     --border: #2c323d; --hover: #232833; --accent: #6b9bff; --accent-hover: #8bb1ff; --accent-soft: #1c2741; --on-accent: #0f1115;
     --error: #f97066; --shadow: none;
+    --sea: #111a2c; --land: #2a303b;
   }
 }
 :root[data-theme=dark] {
@@ -21,6 +23,7 @@
   --background: #0f1115; --surface: #171a21; --surface-2: #1c2029; --text: #e6e8eb; --muted: #9aa3af;
   --border: #2c323d; --hover: #232833; --accent: #6b9bff; --accent-hover: #8bb1ff; --accent-soft: #1c2741; --on-accent: #0f1115;
   --error: #f97066; --shadow: none;
+  --sea: #111a2c; --land: #2a303b;
 }
 
 /* ---------------------------------------------------------------- the page */
@@ -207,6 +210,37 @@ form.keep { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; marg
 #conversation .answer { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
                         border-radius: 10px; padding: 2px 20px; margin: 10px 0; }
 
+/* ---------------------------------------------------------------- while a search runs (waiting.py) */
+.waiting h2 { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.wait-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px 24px; align-items: start; margin-top: 12px; }
+.trip-map { width: 100%; height: auto; border-radius: 10px; background: var(--sea); }
+.trip-map .land { fill: var(--land); stroke: var(--border); stroke-width: 1; }
+.trip-map .road { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .6; }
+.trip-map .flight { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 7; opacity: .75;
+                    animation: wait-dash 1.2s linear infinite; }
+.trip-map .ground { stroke-width: 3; }
+.trip-map .airport circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.trip-map .city circle { fill: var(--accent); stroke: var(--surface); stroke-width: 3; }
+.trip-map text { font-size: 15px; fill: var(--text); text-anchor: middle; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+.trip-map .city text { font-size: 18px; font-weight: 600; }
+@keyframes wait-dash { to { stroke-dashoffset: -28; } }
+ol.wait-steps { list-style: none; margin: 0; padding: 0; }
+ol.wait-steps li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; }
+ol.wait-steps li.next { color: var(--muted); }
+ol.wait-steps small { display: block; }
+ol.wait-steps .mark { flex: none; width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center;
+                      justify-content: center; font-size: 12px; border: 2px solid var(--border); position: relative; top: 3px; }
+ol.wait-steps .done .mark { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+ol.wait-steps .running .mark { border-color: var(--accent); border-right-color: transparent; animation: wait-turn .9s linear infinite; }
+@keyframes wait-turn { to { transform: rotate(360deg); } }
+.wait-time { margin-top: 12px; }
+.wait-time small { display: block; }
+.wait-bar { height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; margin-top: 6px; }
+.wait-bar i { display: block; height: 100%; background: var(--accent); transition: width 1s; }
+@media (prefers-reduced-motion: reduce) {
+  .trip-map .flight, ol.wait-steps .running .mark { animation: none; }
+}
+
 /* ---------------------------------------------------------------- a report as Markdown (report_page.to_html) */
 .light-A { color: var(--light-A); } .light-B { color: var(--light-B); } .light-C { color: var(--light-C); }
 .table { overflow-x: auto; margin: .6em 0; }
@@ -226,6 +260,13 @@ nav ul a { text-decoration: none; } nav ul a:hover { text-decoration: underline;
                      border-radius: 50%; background: var(--surface); }
 .timeline .first i { margin-left: -6px; } .timeline .last i { margin-right: -6px; }
 .timeline .point span { color: var(--muted); }
+/* A vehicle's icon on its part, and a change of vehicle inside a ground leg: a small dot, its time and place on hover */
+.timeline .vehicle { position: absolute; top: 22px; transform: translateX(-50%); display: flex; padding: 1px;
+                     border-radius: 50%; background: var(--surface); color: var(--muted); font-size: .8em; }
+.timeline .change { position: absolute; top: 25px; width: 14px; height: 12px; transform: translateX(-50%); cursor: help; }
+.timeline .change i { display: block; width: 6px; height: 6px; margin: 3px auto; border: 2px solid var(--text);
+                      border-radius: 50%; background: var(--surface); }
+ul.vehicles li.change { font-size: .9em; padding-left: 1.6em; }
 
 /* ---------------------------------------------------------------- the results of a trip (results.py) */
 .summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
@@ -322,6 +363,7 @@ a.sticky { display: none; }
   header .name { flex-basis: 100%; }   /* the name, then the language, light or dark and Quit, then the parts of the app */
   header nav.inline { margin-left: 0; width: 100%; order: 3; }
   .option .body { padding: 4px 14px 14px; }
+  .wait-body { grid-template-columns: minmax(0, 1fr); }
   .option .body > .timeline { display: none; }   /* its times would overlap: the steps below say them */
   section.days li { grid-template-columns: 1fr auto; } section.days li span.muted { grid-column: 1 / -1; }
   a.sticky { display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 5; justify-content: space-between;

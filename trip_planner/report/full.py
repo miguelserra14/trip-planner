@@ -186,6 +186,27 @@ SAVED_REPORTS = REPORTS / "saved"    # the trips the traveller chose to keep. No
 # of the run (.log), the vehicles of its options (.json) and its options as data (options_*.json). A round trip is
 # one trip: both ways are in one folder.
 
+DURATIONS_KEPT = 20   # searches whose length is kept (durations.json), for the page that waits to say how long is left
+
+def durations_file() -> Path:
+    return REPORTS / "durations.json"
+
+def remember_duration(seconds: float, ground_only: bool) -> None:
+    """How long one way of a trip took to search, kept beside the reports and not with them: the newest DURATIONS_KEPT,
+    whatever happens to the reports. A trip without a plane is kept apart: it takes seconds, not minutes."""
+    kept = past_durations()
+    kept.append({"at": datetime.now().isoformat(timespec="seconds"), "seconds": round(seconds), "ground_only": ground_only})
+    durations_file().parent.mkdir(parents=True, exist_ok=True)
+    durations_file().write_text(json.dumps(kept[-DURATIONS_KEPT:], indent=1), encoding="utf-8")
+
+def past_durations() -> list[dict[str, Any]]:
+    """The searches kept by remember_duration, oldest first. A file that cannot be read is no history at all."""
+    try:
+        kept = json.loads(durations_file().read_text(encoding="utf-8"))
+        return [entry for entry in kept if isinstance(entry, dict) and isinstance(entry.get("seconds"), (int, float))]
+    except (OSError, ValueError, AttributeError, TypeError):
+        return []
+
 def trip_folders(where: Path) -> list[Path]:
     return [folder for folder in where.glob("trip_*") if folder.is_dir()]
 

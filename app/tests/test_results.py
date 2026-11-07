@@ -1,17 +1,21 @@
 """The result of a trip as cards (results.py), from its options as data, and what goes with it: the reports listed as
 cards, the trip searched again, the full report kept, the pages' own style and their dark or light look. Made-up
 options, no network."""
+import dataclasses
 import re
 
 import pytest
 
 from app import fields
+from app.report_page import timeline
+from app.results import ride_parts, vehicles_list
 from app.site import Site
 from app.tests.test_search import DAY, sent
 from settings import SETTINGS
 from tests.report.test_options import DAY as TRAVEL_DAY, NEXT_DAY, itinerary
 from trip_planner import current
 from trip_planner.report import full
+from trip_planner.texts import tr
 from trip_planner.trip.places import Place, TripPlaces
 
 @pytest.fixture
@@ -79,8 +83,44 @@ def test_the_pages_have_their_own_style_and_turn_dark_or_light_when_asked():
     site = Site(SETTINGS)
     style = site.get("/page.css")
     assert style.status == 200 and style.kind.startswith("text/css") and '<link rel="stylesheet" href="/page.css">' in site.get("/").html
-    assert "data-theme" not in site.get("/").html.split(">")[1]   # the computer's choice, until one is made
+    assert '<html lang="en" data-theme="dark">' in site.get("/").html   # dark, until the button turns it
+    site.post("/theme", sent(site, shown="dark", back="/program"))
+    assert '<html lang="en" data-theme="light">' in site.get("/").html
     site.post("/theme", sent(site, shown="light", back="/program"))
     assert '<html lang="en" data-theme="dark">' in site.get("/").html
     turned = site.post("/theme", sent(site, shown="light", back="https://elsewhere.example/"))
     assert turned.location == "/" and '<html lang="en" data-theme="light">' in site.get("/").html
+
+# A coach and two trains from an airport, as the timetables give them: a walk to the coach, a change of 15 minutes
+# at Bergamo, one of 29 at Vicenza, and the last train arriving at the end of the leg
+THREE_RIDES = [{"time": "12:00", "arrive": "12:40", "mode": "COACH", "from": "Linate", "to": "Bergamo"},
+               {"time": "12:55", "arrive": "15:45", "mode": "COACH", "from": "Bergamo", "to": "Vicenza"},
+               {"time": "16:14", "arrive": "16:38", "mode": "REGIONAL_RAIL", "from": "Vicenza", "to": "Cittadella"}]
+
+def test_a_leg_of_three_vehicles_is_three_parts_on_the_line_with_the_changes_between_them():
+    points, parts = ride_parts("11:55", 16 * 60 + 38 - (11 * 60 + 55), "B", THREE_RIDES)
+    assert [(grade, minutes) for grade, minutes, *_ in parts] == [(None, 5), ("B", 40), (None, 15), ("B", 170), (None, 29), ("B", 24)]
+    assert [part[2] for part in parts if part[0]] == ["bus", "bus", "train"]
+    assert len(points) == len(parts) - 1
+    assert [point[:2] for point in points if point] == [("12:40", "Bergamo"), ("12:55", "Bergamo"), ("15:45", "Vicenza"), ("16:14", "Vicenza")]
+
+def test_the_changes_are_dots_said_on_hover_and_the_list_says_where_and_how_long():
+    points, parts = ride_parts("11:55", 283, "B", THREE_RIDES)
+    line = timeline([("11:55", "MXL"), *points, ("16:38", "Cittadella")], parts)
+    assert line.count('class="change"') == 4 and 'title="12:40 Bergamo"' in line
+    assert line.count('class="vehicle"') == 3   # the walk is too short for an icon, and a wait has none
+    listed = vehicles_list(THREE_RIDES)
+    assert "Change at Bergamo: 0h15" in listed and "Change at Vicenza: 0h29" in listed
+
+def test_a_leg_whose_vehicles_do_not_fit_in_its_times_stays_one_part():
+    assert ride_parts("12:30", 60, "B", THREE_RIDES) == ([], [("B", 60, "bus")])
+    assert ride_parts("12:00", 40, "A", THREE_RIDES[:1]) == ([], [("A", 40, "bus")])   # one vehicle: nothing to split
+
+def test_a_trip_asked_without_a_plane_does_not_say_no_option_was_found(monkeypatch):
+    monkeypatch.setattr(current, "TRIP", TripPlaces(Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.2, 4.4),
+                                                    Place("Brussels", "Brussel", "Brussels", "Belgium", 50.8, 4.4), primary=[], fallback=[], arrival=[]))
+    english = current.SETTINGS
+    current.SETTINGS = dataclasses.replace(english, origin="Antwerp", destination="Brussels", ground_only=True)
+    path = full.save_report({"shown": [], "recommended": 0, "warnings": [], "ground_only": [], "report": "## Without a plane"}, "")
+    current.SETTINGS = english
+    assert tr("app_no_options") not in Site(SETTINGS).get(address(path)).html

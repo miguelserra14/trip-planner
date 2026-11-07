@@ -50,6 +50,14 @@ For the people who read or change the code. How to install and use the program i
 
 A round trip is two one-way trips, the way back on the same airports, then a summary that pairs them.
 
+A trip asked without a plane (`ground_only`) chooses no airport and searches no flight: its steps are the whole way by
+train or coach and its ranking (`steps.GROUND_STEPS`), with no model. A round trip of that kind keeps the traveller at
+least `min_stay_hours` at the destination: on a day trip the way back is searched from the first arrival plus that stay.
+
+While a search runs, the planner says where it is as data (`utils.progress`): the trip and its airports, each step
+that starts and what it found. The app draws it (app/waiting.py) on a map of Natural Earth's land, with about how long
+is left from the searches before (`reports/durations.json`).
+
 ## How a Discover map is made
 
 ```
@@ -160,6 +168,9 @@ app/
 ├── map_job.py         a Discover map made in that process, told to the app as it changes
 ├── reports.py         the saved reports, listed, kept or put back
 ├── report_page.py     a report as a page
+├── results.py         a report as cards, from its options as data; each ground leg drawn vehicle by vehicle
+├── waiting.py         the page while a search runs: the trip on a map, its steps, about how long is left
+├── land.json          Natural Earth 1:110m land (public domain), the map of waiting.py
 ├── page.js            the only script of the app's pages, which work without it: the calendar, the parts that change
 └── tests/             its tests; pytest --browser also runs them in Edge or Chrome
 

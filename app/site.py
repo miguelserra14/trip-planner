@@ -53,7 +53,7 @@ class Site:
         self.stop_asked = 0.0                         # when the last map was asked to stop (time.monotonic), or 0
         self.maps_lock = threading.Lock()             # the pages are answered in threads of their own: one map starts at a time
         self.quitting = threading.Event()             # set by the Quit button: the server stops (server.serve)
-        self.theme = ""                               # "light" or "dark" once chosen in the header; "" follows the computer
+        self.theme = "dark"                           # "light" or "dark", turned by the button of the header: dark until then
 
     def begin(self, first: dict[str, Any], title: str) -> Reply:
         """Start a search or one of the program's own jobs, and show how it goes."""
@@ -281,8 +281,7 @@ class Site:
         return Reply(303, location=reports.REPORT_PATH + quote(f"{'saved' if keep else 'recent'}/{moved.stem}"))
 
     def post_theme(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
-        """Dark if the pages were light, light if they were dark. Until then they follow the computer: the first
-        choice is the other one of what the page shows, which the page says in a field (page.js), dark without it."""
+        """Dark if the pages were light, light if they were dark. They start dark (the user's choice of 2026-11-07)."""
         shown = self.theme or one.get("shown", "light")
         self.theme = "light" if shown == "dark" else "dark"
         return Reply(303, location=one.get("back", "/") if one.get("back", "").startswith("/") else "/")

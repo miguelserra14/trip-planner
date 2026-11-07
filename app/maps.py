@@ -14,7 +14,7 @@ from discover import confirm
 from discover.page import SCRIPT, STYLE
 from trip_planner.texts import tr
 
-SOURCES = ("light", "full", "fast")   # the ways to search the flights, as python -m discover has them (discover_win_source_...)
+SOURCES = ("light", "full", "fast", "ground")   # the ways to search the flights, as python -m discover has them (discover_win_source_...)
 DEFAULT_DAYS_AHEAD = 21     # the form starts with a few days in a row to leave on, this far ahead
 DEFAULT_DAYS_SPAN = 3
 # Each map has an address of its own, its number in this run of the app, with what its page asks for under it: its

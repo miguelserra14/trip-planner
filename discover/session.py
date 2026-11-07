@@ -42,8 +42,9 @@ def times() -> dict[str, int]:
     return {"airport_minutes": SETTINGS.min_airport_minutes, "landing_minutes": SETTINGS.min_landing_minutes}
 
 class Session:
-    def __init__(self, city: str, days: Days, fast: bool = False, light: bool = False, max_stops: int = finder.MAX_STOPS):
-        self.city, self.days, self.fast, self.max_stops = city, days, fast, max_stops
+    def __init__(self, city: str, days: Days, fast: bool = False, light: bool = False, max_stops: int = finder.MAX_STOPS,
+                 ground_only: bool = False):
+        self.city, self.days, self.fast, self.max_stops, self.ground_only = city, days, fast, max_stops, ground_only
         self.kiwi_requests = finder.KIWI_LIGHT_REQUESTS if light else finder.KIWI_REQUESTS
         self.found: Found | None = None
         self.path: Path | None = None
@@ -58,8 +59,10 @@ class Session:
         """Find the flights and the ways to and from the airports, and save the map. Returns its file."""
         current.SETTINGS = SETTINGS   # the planner's code reads its language and its rules from here: settings.py's
         place = geocode(self.city)
-        self.found = asyncio.run(discover(place, self.days, fast=self.fast, max_stops=self.max_stops, kiwi_requests=self.kiwi_requests))
-        self.sources = tr("discover_sources_ryanair") + (" " + tr("discover_sources_kiwi") if self.found.kiwi else "")
+        self.found = asyncio.run(discover(place, self.days, fast=self.fast, max_stops=self.max_stops, kiwi_requests=self.kiwi_requests,
+                                          ground_only=self.ground_only))
+        self.sources = (tr("discover_sources_ground") if self.ground_only else
+                        tr("discover_sources_ryanair") + (" " + tr("discover_sources_kiwi") if self.found.kiwi else ""))
         days = self.days
         # The days clicked, when not all in a row, by their day of the month: two maps of the same weeks stay apart
         clicked = lambda chosen: "_" + "-".join(day[8:] for day in chosen) if chosen else ""

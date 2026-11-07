@@ -274,3 +274,18 @@ def test_a_map_in_the_app_runs_no_script_of_its_own_and_its_trip_opens_the_plann
     tab.wait("location.pathname === '/' && document.readyState === 'complete'")
     assert tab.js("document.querySelector('input[name=destination]').value") == "Birmingham"
     assert len(app.started) == 1   # the form filled in, nothing searched
+
+def test_a_map_asked_for_opens_by_itself_once_its_page_is_ready_and_only_then(tab, app):
+    leaving = date.today() + timedelta(days=30)
+    tab.open(app.address + "discover")
+    tab.js(f"document.querySelector('input[name=city]').value = 'Coimbra'; document.querySelector('input[name=dates]').value = '{written(leaving)}'")
+    tab.js("document.querySelector('form[action=\"/discover\"]').requestSubmit()")
+    tab.wait("location.pathname === '/discover' && !!document.querySelector('#live[data-working]')")
+    made = app.started[-1]
+    time.sleep(1)
+    assert tab.js("location.pathname") == "/discover"   # its flights are still searched: nothing to open yet
+    made.read_event("map", "<!doctype html><title>the map</title><p>the map")
+    tab.wait("location.pathname === '/discover/map/1/'", seconds=10)
+    tab.open(app.address + "discover")   # back to the form later: the map is not opened again
+    time.sleep(1)
+    assert tab.js("location.pathname") == "/discover" and tab.js("!!document.querySelector('a[data-open-map]')")

@@ -9,6 +9,8 @@ SETTINGS = TripSettings(
     dates=["17/12/2026", "18/12/2026"],
     return_dates=[],            # dates to come back, written like dates: empty = one way
     language="pt-PT",           # language of the airport list and the final report: "en" or "pt-PT"
+    ground_only=False,          # True = by train or coach all the way: no airport, no flight
+    min_stay_hours=6.0,         # a round trip without a plane stays at least this long at the destination
     # Airports are found by distance. Uncomment to adjust the choice with codes, airport names or cities.
     # include_airports=["Paris"],
     # exclude_airports=["Londres", "LUX"],

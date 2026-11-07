@@ -5,9 +5,11 @@ there and the way back, then a summary that pairs their options.
 The conversation of every trip planned in a run is kept, so `ask` answers follow-up questions about a result
 without searching again. The answer is written by a model from the report: the report stays the reference."""
 import asyncio
+import dataclasses
 import re
 import time
 import traceback
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,14 +17,14 @@ from langchain.messages import AIMessage, HumanMessage
 
 from trip_planner import current
 from trip_planner.agents import claims, coordinator, steps, subagents
-from trip_planner.agents.steps import run_steps, STEPS
-from trip_planner.trip.trip_settings import TripSettings
-from trip_planner.trip.places import ask_airports, ask_places, choose_airports, codes, return_places, show_airports, TripPlaces
-from trip_planner.report.full import keep_report, save_report
-from trip_planner.report.summary import render_round_trip
+from trip_planner.agents.steps import run_steps, steps_of
+from trip_planner.trip.trip_settings import SettingError, TripSettings
+from trip_planner.trip.places import ask_airports, ask_places, choose_airports, cities_only, codes, return_places, show_airports, TripPlaces
+from trip_planner.report.full import keep_report, remember_duration, save_report
+from trip_planner.report.summary import render_ground_round_trip, render_round_trip
 from trip_planner.sources import airlines, web
 from trip_planner.texts import any_of, tr
-from trip_planner.utils import plain, say, show, TIMINGS
+from trip_planner.utils import plain, progress, say, show, TIMINGS
 
 def build_request(settings: TripSettings, places: TripPlaces) -> str:
     """The traveller's request to the coordinator, written from the settings and the confirmed airports."""
@@ -67,7 +69,7 @@ async def run_search(state: dict[str, Any]) -> dict[str, Any]:
         except Exception as error:
             if attempt == RESUME_ATTEMPTS:
                 raise
-            say(tr("progress_resume", error=type(error).__name__, done=state.get("step") or 0, steps=len(STEPS), seconds=RESUME_WAIT_SECONDS))
+            say(tr("progress_resume", error=type(error).__name__, done=state.get("step") or 0, steps=len(steps_of(current.SETTINGS)), seconds=RESUME_WAIT_SECONDS))
             await asyncio.sleep(RESUME_WAIT_SECONDS)
 
 def results_for_model(request: str, state: dict[str, Any]) -> str:
@@ -103,25 +105,50 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
     if places is None:
         if settings.confirm_airports:
             ask_places(settings)   # which Nazaré, when the name is that of several places
-        places = choose_airports(settings)
-        if settings.confirm_airports:
-            ask_airports(places)
+        if settings.ground_only:
+            places = cities_only(settings)
         else:
-            show_airports(places)
+            places = choose_airports(settings)
+            if settings.confirm_airports:
+                ask_airports(places)
+            else:
+                show_airports(places)
     if not settings.return_dates:
         return await plan_one_way(settings, places)
     show(f"# {tr('way_there', origin=settings.origin, destination=settings.destination)}")
     going = await plan_one_way(settings, places)
     there = PLANNED[-1]
     back_settings = settings.return_trip()
+    if settings.ground_only:
+        back_settings = after_the_stay(back_settings, going.get("ground_only") or [])
+        summary = lambda found: render_ground_round_trip(going.get("ground_only") or [], found.get("ground_only") or [],
+                                                         settings.origin, settings.destination, settings.min_stay_hours)
+    else:
+        summary = lambda found: render_round_trip(going.get("shown") or [], found.get("shown") or [], settings.origin, settings.destination)
     current.SETTINGS = back_settings
     show(f"# {tr('way_back', origin=back_settings.origin, destination=back_settings.destination)}")
-    coming = await plan_one_way(back_settings, return_places(places), after=lambda found: render_round_trip(
-        going.get("shown") or [], found.get("shown") or [], settings.origin, settings.destination), beside=there.get("report"))
+    coming = await plan_one_way(back_settings, return_places(places), after=summary, beside=there.get("report"))
     # The questions that follow are about the round trip: the conversation of both ways, the report of both
     back = PLANNED[-1]
     back["there"], back["messages"] = there, there["messages"] + back["messages"]
     return {**coming, "there": going}
+
+def after_the_stay(back: TripSettings, going: list[dict[str, Any]]) -> TripSettings:
+    """The way back of a day trip without a plane, searched from the first arrival there plus the shortest stay
+    (min_stay_hours). The way back is searched as a trip of its own, with the same hours to leave as the way there:
+    on the day of arrival its fastest trips would be those of the morning, before the traveller even arrives, and
+    none of them would pair. Only when every return date is that day: on a later one the whole day is worth searching."""
+    arrivals = [datetime.fromisoformat(option["day"]) + timedelta(minutes=option["arrive"]) for option in going]
+    if not arrivals:
+        return back
+    earliest = min(arrivals) + timedelta(hours=back.min_stay_hours)
+    days = {datetime.strptime(day, "%d/%m/%Y").date() for day in back.dates}
+    if days != {earliest.date()} or f"{earliest:%H:%M}" <= back.earliest_leave:
+        return back
+    try:
+        return dataclasses.replace(back, earliest_leave=f"{earliest:%H:%M}")
+    except SettingError:   # later than the last hour to leave: nothing back that day, as the summary says
+        return back
 
 def start_trip(settings: TripSettings, places: TripPlaces) -> None:
     """Make a one-way trip the current one, and forget what the last one found. Each way of a round trip is a trip.
@@ -145,8 +172,16 @@ async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callab
     started = time.time()
     for advice in settings.advice():
         say(f"{tr('advice')}: {advice}")
-    say(tr("progress_start", origin=settings.origin, destination=settings.destination,
-           departure=codes(current.TRIP.departure), arrival=codes(current.TRIP.arrival)))
+    point = lambda place: {"name": place.written.split(",")[0].strip(), "lat": place.latitude, "lon": place.longitude}
+    airports = lambda group: [{"code": airport["code"], "lat": airport["latitude"], "lon": airport["longitude"]} for airport in group
+                              if "latitude" in airport]
+    progress(trip={"origin": point(current.TRIP.origin), "destination": point(current.TRIP.destination), "ground_only": settings.ground_only,
+                   "departure": airports(current.TRIP.departure), "arrival": airports(current.TRIP.arrival)})
+    if settings.ground_only:
+        say(tr("progress_start_ground", origin=settings.origin, destination=settings.destination))
+    else:
+        say(tr("progress_start", origin=settings.origin, destination=settings.destination,
+               departure=codes(current.TRIP.departure), arrival=codes(current.TRIP.arrival)))
     response = await run_search({
         "origin": settings.origin,
         "final_destination": settings.destination,
@@ -160,10 +195,16 @@ async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callab
     messages = [HumanMessage(content=results_for_model(build_request(settings, current.TRIP), response))]
     PLANNED.append({"settings": settings, "places": current.TRIP, "messages": messages, "state": response})
     writing = time.time()
-    recommendation = await recommend(response, messages)
+    # Without a plane there is no option the rules recommend to put in words: the list is in the rules' order,
+    # and the model's quota is kept for the trips that need it
+    if not settings.ground_only:
+        progress(step="recommend")
+    recommendation = "" if settings.ground_only else await recommend(response, messages)
     response["recommendation"] = recommendation   # kept apart in the options as data (report/options.py): a model wrote it
     TIMINGS["4 coordinator model (writing the recommendation)"] = time.time() - writing
     total = TIMINGS["total"] = time.time() - started
+    remember_duration(total, settings.ground_only)
+    progress(step="done")
     if recommendation:
         show(recommendation)
     summary = after(response) if after else ""

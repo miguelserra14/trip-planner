@@ -7,7 +7,7 @@ Nothing is ranked here. The rules' order is the report's, and the other two tabs
 durations the planner worked out. Every grade is shown on the card as it is closed, and every text that is not the
 app's own (a place, an operator, a link) is escaped: only http and https links become links (report_page.inline)."""
 import html
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from itertools import groupby
 from typing import Any
 
@@ -17,7 +17,7 @@ from trip_planner.report.formatting import grade_text, leg_source, price_grade_t
 from trip_planner.report.summary import booking_checks
 from trip_planner.texts import tr
 from trip_planner.trip.trip_settings import LIGHTS
-from trip_planner.utils import as_duration
+from trip_planner.utils import as_duration, to_minutes
 
 SORTS = ("best", "cheapest", "fastest")   # the tabs, by the address's ?sort=; the first is the rules' order
 esc = lambda text: html.escape(str(text))
@@ -64,19 +64,53 @@ def days_later(first: str, last: str) -> str:
     later = (date.fromisoformat(last) - date.fromisoformat(first)).days
     return f"<sup>+{later}</sup>" if later > 0 else ""
 
+def minutes_between(first: str, last: str) -> int:
+    """From one time of a timetable to the next, crossing midnight when the second is earlier."""
+    return (to_minutes(last) - to_minutes(first)) % (24 * 60)
+
+def ride_parts(leave: str, minutes: int, grade: str, vehicles: list[dict[str, Any]]) -> tuple[list, list]:
+    """A ground leg on the line, one part per vehicle: (the points inside it, its parts). Each vehicle in the colour of
+    the leg's grade with its icon, the walks and the waits for the next one grey, and a change of vehicle where one
+    ends and the next starts. A leg of one vehicle, or whose vehicles' times do not fit in its own, stays one part."""
+    whole = [], [(grade, minutes, mode_of(vehicles[0]) if vehicles else "route")]
+    rides = [vehicle for vehicle in vehicles if mode_of(vehicle) != "walk" and vehicle.get("time") and vehicle.get("arrive")]
+    if len(rides) < 2:
+        return whole
+    segments, at = [], leave   # each part with the point it starts at
+    try:
+        for number, ride in enumerate(rides):
+            before = minutes_between(at, ride["time"])   # a walk to the first stop, or the wait for the next vehicle
+            if before:   # a wait at a change starts where the vehicle before arrived
+                segments.append(((at, rides[number - 1].get("to") or "", "change") if number else None, (None, before)))
+            segments.append(((ride["time"], ride.get("from") or "", "change") if number else None,
+                             (grade, minutes_between(ride["time"], ride["arrive"]), mode_of(ride))))
+            at = ride["arrive"]
+    except ValueError:   # a time a timetable wrote some other way
+        return whole
+    after = minutes - sum(part[1] for _, part in segments)   # a walk from the last stop
+    if after < 0:
+        return whole
+    if after:
+        segments.append((None, (None, after)))
+    return [point for point, _ in segments[1:]], [part for _, part in segments]
+
 # ---------------------------------------------------------------- the options with a flight
 
 def option_line(option: dict[str, Any], origin: str, destination: str) -> str:
     """The option drawn to scale, as the report draws it (summary.option_timeline): each part in the colour of how
-    sure its times are, the waits grey."""
+    sure its times are, the waits grey, and each vehicle of a ground leg apart, so that three trains from the
+    airport are three parts with the changes between them."""
     flight, to_leg, from_leg = option["flight"], option["to"], option["from"]
     usual = flight["date"]
+    to_points, to_parts = ride_parts(to_leg["leave_time"], to_leg["minutes"], to_leg["grade"], to_leg["vehicles"])
+    from_points, from_parts = ride_parts(from_leg["leave_time"], from_leg["minutes"], from_leg["grade"], from_leg["vehicles"])
     return timeline(
-        [(with_day(option["leave"]["time"], option["leave"]["date"], usual), town(origin)), (option["at_airport"], flight["departure_airport"]),
-         (flight["departure_time"], "✈"), (with_day(flight["arrival_time"], flight.get("arrival_date") or usual, usual), flight["arrival_airport"]),
-         (from_leg["leave_time"], ""), (with_day(option["arrive"]["time"], option["arrive"]["date"], usual), town(destination))],
-        [(to_leg["grade"], to_leg["minutes"]), (None, option["airport_wait"]), ("A", flight["duration_minutes"]),
-         (None, option["wait_after_landing"]), (from_leg["grade"], from_leg["minutes"])])
+        [(with_day(option["leave"]["time"], option["leave"]["date"], usual), town(origin)), *to_points,
+         (option["at_airport"], flight["departure_airport"]), (flight["departure_time"], "✈"),
+         (with_day(flight["arrival_time"], flight.get("arrival_date") or usual, usual), flight["arrival_airport"]),
+         (from_leg["leave_time"], ""), *from_points, (with_day(option["arrive"]["time"], option["arrive"]["date"], usual), town(destination))],
+        [*to_parts, (None, option["airport_wait"]), ("A", flight["duration_minutes"], "plane"),
+         (None, option["wait_after_landing"]), *from_parts])
 
 def badges(option: dict[str, Any], data: dict[str, Any]) -> str:
     found = []
@@ -96,11 +130,20 @@ def price_part(total: float, confirmed: float, grade: str, may_cost: list[float]
             f'<small>{light(grade)} {esc(tr("app_confirmed", confirmed=f"{confirmed:.0f}", total=f"{total:.0f}"))}</small>'
             + (f'<span class="versus">{esc(" · ".join(versus))}</span>' if versus else "") + "</div>")
 
+def change_row(before: dict[str, Any], after: dict[str, Any]) -> str:
+    """Between two vehicles: where the traveller changes and how long the wait is, when the timetables give both times."""
+    try:
+        wait = as_duration(minutes_between(before["arrive"], after["time"]))
+    except (KeyError, TypeError, ValueError):
+        return ""
+    return f'<li class="change muted"><span>{esc(tr("app_change_at", place=before.get("to") or after.get("from") or "", wait=wait))}</span></li>'
+
 def vehicles_list(vehicles: list[dict[str, Any]]) -> str:
-    rows = "".join(f'<li>{icon(mode_of(vehicle))}<span><b>{esc(vehicle.get("time") or "")}</b> {esc(vehicle.get("line") or "")} '
+    rows = "".join((change_row(vehicles[number - 1], vehicle) if number else "")
+                   + f'<li>{icon(mode_of(vehicle))}<span><b>{esc(vehicle.get("time") or "")}</b> {esc(vehicle.get("line") or "")} '
                    f'{esc(vehicle.get("from") or "")} → {esc(vehicle.get("to") or "")} ({esc(vehicle.get("arrive") or "")})'
                    + (f', {esc(vehicle["agency"])}' if vehicle.get("agency") and vehicle["agency"] != vehicle.get("line") else "")
-                   + "</span></li>" for vehicle in vehicles)
+                   + "</span></li>" for number, vehicle in enumerate(vehicles))
     return f'<ul class="vehicles">{rows}</ul>' if rows else ""
 
 def leg_facts(leg: dict[str, Any]) -> str:
@@ -207,7 +250,11 @@ def ground_card(number: int, trip: dict[str, Any], data: dict[str, Any]) -> str:
                f'<span class="muted">{esc(tr("app_changes", count=changes))}</span><span class="muted">{esc(weekday(trip["day"]))}</span>{versus}</div>'
                f'</div>{price}</summary>')
     book = f"{tr('ground_book')}: " + (", ".join(trip["urls"]) or tr("no_site"))
-    body = (f'<div class="body"><p class="facts">{lights(esc(grade_text(trip["grade"], trip.get("service_day"))))}</p>'
+    points, parts = ride_parts(minutes_from(trip["leave"]), trip["minutes"], trip["grade"], trip["vehicles"])
+    line = timeline([(minutes_from(trip["leave"]), town(data["origin"]["written"])), *points,
+                     (with_day(minutes_from(trip["arrive"]), (date.fromisoformat(trip["day"]) + timedelta(days=later)).isoformat(), trip["day"]),
+                      town(data["destination"]["written"]))], parts)
+    body = (f'<div class="body">{line}<p class="facts">{lights(esc(grade_text(trip["grade"], trip.get("service_day"))))}</p>'
             f'{vehicles_list(trip["vehicles"])}<p class="book">{inline(book)}</p></div>')
     return f'<li id="ground-{number}"><details class="option">{summary}{body}</details></li>'
 
@@ -257,7 +304,7 @@ def results_page(data: dict[str, Any], sort: str, keep: str, address: str) -> st
             parts.append(f'<p class="notice">{esc(tr("near_title"))}</p>')
         parts.append(sort_tabs(data, sort))
         parts.append('<ol class="options">' + "".join(option_card(option, data) for option in ordered(data, sort)) + "</ol>")
-    else:
+    elif not data.get("ground_only_asked"):   # absent from the reports saved before it existed
         parts.append(f'<p class="notice">{esc(tr("app_no_options"))}</p>')
     if data["ground_only"]:
         parts.append(f'<h2>{esc(tr("ground_title"))}</h2><p class="muted">{esc(tr("ground_intro"))}</p>'

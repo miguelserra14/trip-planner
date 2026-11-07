@@ -25,7 +25,14 @@ from trip_planner.report.summary import ground_lines, render_closest, render_rep
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web
 from trip_planner.sources.timetables.all_the_way import all_the_way
 from trip_planner.texts import tr
-from trip_planner.utils import as_duration, logged, REQUESTS, say, timed
+from trip_planner.utils import as_duration, logged, progress, REQUESTS, say, timed
+
+# What each step found, as one number for the page that waits (utils.progress)
+COUNTED = {
+    "search_flights": lambda found: len(found.get("flights") or []),             # the flights found
+    "search_ground_transport": lambda found: len(found.get("checked") or []),    # those whose ground transport was looked up
+    "search_by_ground_only": lambda found: len((found.get("all_the_way") or {}).get("priced") or []),   # the trips priced
+}
 
 def iata(text: str) -> str:
     """The first IATA code in a text. The model sometimes writes junk after the airport code."""
@@ -426,16 +433,50 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
         "verify": verify.record(shown),   # the vehicles of the options shown, kept next to the report for --verify
         "message": f"{report}\n\nThe rules recommend option {number}." + ground_note}
 
+async def search_by_ground_only(state: dict[str, Any]) -> dict[str, Any]:
+    """A trip without a plane (ground_only): the whole way by train or coach, and nothing else. The same search
+    that is compared with flying (without_a_plane), with its own client of the timetables."""
+    with timed("2 ground transport (the three below run at the same time)"):
+        transit = timetables.Timetables(keep=True)
+        try:
+            found = await without_a_plane(transit)
+        finally:
+            await transit.close()
+    priced = found.get("priced") or []
+    return {"step": 1, "all_the_way": found,
+            "message": f"{len(found.get('connections') or [])} connections by train or coach found, "
+                       f"{sum(option['price_eur'] is not None for option in priced)} of {len(priced)} priced by the operators."}
+
+def rank_by_ground_only(state: dict[str, Any]) -> dict[str, Any]:
+    """The report of a trip without a plane: its best trips by the rules (ground_only.ground_options), with nothing
+    to compare them with. There is no recommended option: the order of the list is the rules' choice."""
+    with timed("3 checks, airline prices and ranking"):
+        by_ground = ground_options(state.get("all_the_way"), None, current.SETTINGS.options_shown)
+        report = "\n".join(ground_lines(by_ground, 0) if by_ground else [f"## {tr('ground_title')}", "", tr("ground_none_found")])
+    return {"step": 2, "report": report, "rejected": [], "warnings": [], "recommended": 0, "shown": [], "ground_only": by_ground,
+            "message": report}
+
 # The steps of a trip, in order. Each one needs the result of the one before.
 STEPS = [search_flights, search_ground_transport, build_itineraries]
+GROUND_STEPS = [search_by_ground_only, rank_by_ground_only]   # a trip without a plane (TripSettings.ground_only)
+
+def steps_of(settings) -> list:
+    return GROUND_STEPS if settings.ground_only else STEPS
 
 async def run_steps(state: dict[str, Any]) -> dict[str, Any]:
     """Run the steps that are left, in order. state["step"] is how many are done: a run that failed in the middle
     is called again with the same state and continues from there. What each step found, in words, is kept under
     "notes" for the model that writes the recommendation."""
-    while (state.get("step") or 0) < len(STEPS):
-        step = STEPS[state.get("step") or 0]
+    steps = steps_of(current.SETTINGS)
+    while (state.get("step") or 0) < len(steps):
+        step = steps[state.get("step") or 0]
+        progress(step=step.__name__)
         found = await step(state) if asyncio.iscoroutinefunction(step) else await asyncio.to_thread(step, state)
         state.setdefault("notes", []).append(found.pop("message"))
         state.update(found)
+        progress(found=step.__name__, count=counted(step.__name__, found))
     return state
+
+def counted(name: str, found: dict[str, Any]) -> int:
+    """By default, the options the report shows, with and without a plane."""
+    return COUNTED[name](found) if name in COUNTED else len(found.get("shown") or []) + len(found.get("ground_only") or [])

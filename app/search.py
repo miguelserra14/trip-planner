@@ -12,9 +12,12 @@ import json
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
+from app.waiting import waiting_part
+from trip_planner.report.full import past_durations
 from trip_planner.texts import tr
 
 ROOT = Path(__file__).parents[1]   # the planner is run from the repository's folder
@@ -90,6 +93,10 @@ class Job:
         self.trips: dict[str, list[str]] = {}
         self.map_state: dict[str, Any] = {}
         self.asked: tuple[str, Any] | None = None   # what the process waits for: ("unclear" | "airports" | "ready", what)
+        # Where the search is, one entry per way of the trip (utils.progress): {"trip", "step", "counts"}, and when
+        # the first way started, for how long is left (waiting.py): the time the traveller took to tick airports is not the search's
+        self.ways: list[dict[str, Any]] = []
+        self.started: float | None = None
         self.lock = threading.Lock()
 
     def tell(self, message: dict[str, Any]) -> None:
@@ -147,10 +154,22 @@ class Job:
             self.map_state = text
         elif kind == "refused":
             self.refusal = text
+        elif kind == "progress" and isinstance(text, dict):
+            self.read_progress(text)
         elif kind in ("unclear", "airports", "ready"):
             self.asked = (kind, text)
         elif isinstance(text, str) and text.strip():
             self.lines.append(text)
+
+    def read_progress(self, what: dict[str, Any]) -> None:
+        """A way of the trip that starts, a step that starts, or what a step found."""
+        if "trip" in what:
+            self.ways.append({"trip": what["trip"], "step": "", "counts": {}})
+            self.started = self.started or time.time()
+        elif self.ways and "step" in what:
+            self.ways[-1]["step"] = what["step"]
+        elif self.ways and "found" in what:
+            self.ways[-1]["counts"][what["found"]] = what.get("count", 0)
 
     @property
     def running(self) -> bool:
@@ -251,6 +270,10 @@ def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html:
         parts.append(airports_form(job.waiting("airports"), token, job.refusal))
     elif job.working and job.pending():   # the search is over: only the model is answering a question
         parts.append(f'<p role="status">{html.escape(tr("ui_asking"))}</p>')
+    elif job.working and job.ways and job.ways[-1]["step"] != "done":   # a way of the trip being searched: its map and steps
+        parts.append(waiting_part(job.ways, bool(job.values.get("return_dates")), time.time() - (job.started or time.time()), past_durations()))
+        parts.append(f'<form method="post" action="/stop">{hidden(token)}<button type="submit" class="quiet">'
+                     f'{html.escape(tr("app_stop"))}</button></form>')
     elif job.working:
         last = job.lines[-1] if job.lines else tr("ui_finding")
         parts.append(f'<p role="status"><b>{html.escape(tr("app_search_running" if job.values else "app_working"))}</b> {html.escape(last)}</p>'
@@ -260,7 +283,7 @@ def live_part(job: Job, token: str, report_link: Callable[[Path], str], to_html:
         parts.append(f'<p role="status">{html.escape(job.done)}</p>')
     if job.map_page and job.map_link:   # a Discover map can be opened as soon as its flights are found, while the rest goes on
         parts.insert(1 if job.failure or job.done else 0,
-                     f'<p><a href="{html.escape(job.map_link)}" target="_blank" class="open">{html.escape(tr("app_open_map"))}</a></p>')
+                     f'<p><a href="{html.escape(job.map_link)}" target="_blank" class="open" data-open-map>{html.escape(tr("app_open_map"))}</a></p>')
     elif job.reports:
         links = "".join(f"<li>{report_link(path)}</li>" for path in job.reports)
         notes = "".join(f'<li class="muted">{html.escape(line)}</li>' for line in job.lines[job.result_at or len(job.lines):])

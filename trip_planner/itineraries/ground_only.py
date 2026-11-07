@@ -104,14 +104,15 @@ def price_all(found: dict[str, Any] | None) -> list[dict[str, Any]]:
     with ThreadPoolExecutor(PRICING_THREADS) as pool:
         return list(pool.map(priced, candidates(found)))
 
-def ground_options(found: dict[str, Any] | None, recommended: dict[str, Any] | None) -> list[dict[str, Any]]:
+def ground_options(found: dict[str, Any] | None, recommended: dict[str, Any] | None, shown: int = GROUND_SHOWN) -> list[dict[str, Any]]:
     """The trips without a plane to show, from those priced by price_all: the priced ones best first by the rules,
     then the fastest one without a price if it is faster than all of them. Each priced one says how it compares
-    with the recommended option."""
+    with the recommended option. shown is how many priced ones: a few after the flights, more when they are the
+    whole result."""
     options = (found or {}).get("priced") or []
     with_price = [option for option in options if option["price_eur"] is not None]
     fastest = min([option["minutes"] for option in options] + ([recommended["total_minutes"]] if recommended else []), default=0)
-    best = sorted(with_price, key=lambda option: (worth(option["price_eur"], option["minutes"], fastest), option["price_eur"]))[:GROUND_SHOWN]
+    best = sorted(with_price, key=lambda option: (worth(option["price_eur"], option["minutes"], fastest), option["price_eur"]))[:shown]
     without_price = sorted((option for option in options if option["price_eur"] is None), key=lambda option: option["minutes"])
     if without_price and all(without_price[0]["minutes"] < option["minutes"] for option in best):
         best.append(without_price[0])

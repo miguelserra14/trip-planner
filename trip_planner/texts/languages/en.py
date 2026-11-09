@@ -510,7 +510,7 @@ TEXTS = {
     "no_flights_too_early": "{count} depart before {time}, the first flight you can catch leaving at {earliest} with {minutes} min at the airport (setting `earliest_leave`)",
     "no_flights_too_late": "{count} land after {latest}, your limit to arrive (setting `latest_arrival`)",
     "no_flights_next_day": "{count} land on a later day than they depart, which `next_day_arrivals` = False leaves out",
-    # ---- discover: the form (app/maps.py) and its days (discover/sources.py)
+    # ---- discover: the form (app/maps.py) and its days (discover/flights/sources.py)
     "discover_win_title": "Discover: where to fly cheaply",
     "discover_win_intro": "Where to fly cheaply from a city: every destination on a map, with the flight and the way to and from the airports on both sides, each price with its source.",
     "discover_win_from": "From",
@@ -532,7 +532,7 @@ TEXTS = {
     "discover_win_no_city": "Write the city to leave from.",
     "discover_win_only_ryanair": "Only Ryanair's flights are on it: {why}.",
     "discover_win_stopping": "The new map starts as soon as the one before stops updating. That one stays open, with what it found so far.",
-    # ---- discover: what was searched, under the map (discover/breakdown.py). Headers are separated by |
+    # ---- discover: what was searched, under the map (discover/view/breakdown.py). Headers are separated by |
     "discover_bd_requests": "Requests",
     "discover_bd_requests_header": "Source|From|Requests|No answer|Full answers|Flights|Destinations|Kept from earlier maps",
     "discover_bd_kept_cell": "{count} (read from {read})",
@@ -608,7 +608,7 @@ TEXTS = {
     "discover_region_greece_and_cyprus": "Greece and Cyprus",
     "discover_region_turkey": "Turkey",
     "discover_region_caucasus": "Caucasus",
-    # ---- discover: the map page (discover/page.py). The page's script fills in the {values}
+    # ---- discover: the map page (discover/view/page.py). The page's script fills in the {values}
     "discover_page_tab_title": "Discover from {origin}",
     "discover_link_book": "Book on {site}",
     "discover_link_compare": "Compare on Google Flights",

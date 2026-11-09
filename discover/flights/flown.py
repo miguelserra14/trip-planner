@@ -22,7 +22,7 @@ from trip_planner.trip.places import distance_km, load_airports
 from trip_planner.texts import tr
 from trip_planner.utils import plain
 
-CACHE = Path(__file__).parent / "cache"
+CACHE = Path(__file__).parents[1] / "cache"
 ROUTES = CACHE / "airport_routes.json"   # the routes read for each airport
 ROUTES_DAYS = 30            # airlines open and close routes each season: the table is read again after this long
 TITLES_BATCH = 150          # article titles asked of Wikidata in one query

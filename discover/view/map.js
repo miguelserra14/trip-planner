@@ -1,4 +1,4 @@
-// The map page's script (discover/page.py builds the page around it): the map, the list, the trip of a destination,
+// The map page's script (discover/view/page.py builds the page around it): the map, the list, the trip of a destination,
 // the filters, and, in the app, the destinations asked for again while the timetables are looked up.
 // Every text is put in the page as text, never as markup.
 // What the page shows, put in it by page.py as JSON: data, never code

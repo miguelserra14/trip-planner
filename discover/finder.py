@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from discover.airports import access, transfers
+from discover.airports import rides as operator_rides
 from discover.flights import flown, regions
 from discover.overland import ground
-from discover.airports import rides as operator_rides
 from discover.flights.routes import known_routes, route_counts
 from discover.flights.sources import Days, kiwi_destinations, ryanair_destinations
 from trip_planner.trip.places import airports_near, distance_km, load_airports, Place

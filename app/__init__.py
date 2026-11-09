@@ -37,7 +37,7 @@ discover/window.py, and discover/plan.py and serve.py between the map and the pl
    windows did that the app did not brought the last few maps kept by address, a map asked to stop, a refused
    setting named as the form names it, an unforeseen error told in one line, and the missing key said at once.
    Then the windows went, with 33 texts only they used, and main.py and TripPlanner.bat start the app. Last, the
-   map's script and style became files (discover/map.js, map.css), so that maps.MAP_POLICY runs no inline script,
+   map's script and style became files (discover/view/map.js, map.css), so that maps.MAP_POLICY runs no inline script,
    and the caches are written whole.
 
 The app may import the planner and Discover; neither imports the app (app/tests/test_independence.py)."""

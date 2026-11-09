@@ -510,7 +510,7 @@ TEXTS = {
     "no_flights_too_early": "{count} partem antes das {time}, o primeiro voo que consegues apanhar saindo às {earliest} com {minutes} min no aeroporto (definição `earliest_leave`)",
     "no_flights_too_late": "{count} aterram depois das {latest}, o teu limite de chegada (definição `latest_arrival`)",
     "no_flights_next_day": "{count} aterram num dia posterior ao da partida, o que `next_day_arrivals` = False exclui",
-    # ---- discover: the form (app/maps.py) and its days (discover/sources.py)
+    # ---- discover: the form (app/maps.py) and its days (discover/flights/sources.py)
     "discover_win_title": "Discover: para onde voar barato",
     "discover_win_intro": "Para onde voar barato a partir de uma cidade: todos os destinos num mapa, com o voo e o caminho de e para os aeroportos dos dois lados, cada preço com a sua fonte.",
     "discover_win_from": "De",
@@ -532,7 +532,7 @@ TEXTS = {
     "discover_win_no_city": "Escreve a cidade de onde partes.",
     "discover_win_only_ryanair": "Só tem os voos da Ryanair: {why}.",
     "discover_win_stopping": "O novo mapa começa assim que o anterior deixar de se atualizar. Esse continua aberto, com o que encontrou até agora.",
-    # ---- discover: what was searched, under the map (discover/breakdown.py). Headers are separated by |
+    # ---- discover: what was searched, under the map (discover/view/breakdown.py). Headers are separated by |
     "discover_bd_requests": "Pedidos",
     "discover_bd_requests_header": "Fonte|De|Pedidos|Sem resposta|Respostas cheias|Voos|Destinos|Guardados de mapas anteriores",
     "discover_bd_kept_cell": "{count} (lidos desde {read})",
@@ -608,7 +608,7 @@ TEXTS = {
     "discover_region_greece_and_cyprus": "Grécia e Chipre",
     "discover_region_turkey": "Turquia",
     "discover_region_caucasus": "Cáucaso",
-    # ---- discover: the map page (discover/page.py). The page's script fills in the {values}
+    # ---- discover: the map page (discover/view/page.py). The page's script fills in the {values}
     "discover_page_tab_title": "Discover a partir de {origin}",
     "discover_link_book": "Reservar na {site}",
     "discover_link_compare": "Comparar no Google Flights",

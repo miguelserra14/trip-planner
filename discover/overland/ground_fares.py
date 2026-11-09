@@ -51,7 +51,7 @@ MAX_DAYS = 4          # days priced each way: the first ones the traveller may l
 MAX_DEPARTURES = 3    # departures of a day asked of an operator that prices one departure at a time, spread over the day
 AT_ONCE = 4           # FlixBus searches at the same time
 FAILURES = (httpx.HTTPError, ValueError, KeyError, TypeError)   # an answer that fails or cannot be read: no price, as with no sale
-RATES = Path(__file__).parent / "cache" / "ground_rates.json"   # the prices per km seen, by operator: [km, EUR per km, day seen]
+RATES = Path(__file__).parents[1] / "cache" / "ground_rates.json"   # the prices per km seen, by operator: [km, EUR per km, day seen]
 RATES_DAYS = 30       # a price per km seen longer ago than this no longer chooses what is asked
 MAX_RATES = 300       # prices per km kept per operator, the newest
 

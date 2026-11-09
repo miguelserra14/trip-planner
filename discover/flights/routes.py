@@ -10,7 +10,7 @@ import httpx
 from trip_planner.trip.trip_settings import USER_AGENT
 
 OPENFLIGHTS = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/"
-CACHE = Path(__file__).parent / "cache"   # the two files of OpenFlights, downloaded once
+CACHE = Path(__file__).parents[1] / "cache"   # the two files of OpenFlights, downloaded once
 # A file is kept only when it looks like OpenFlights': this many rows at least, nearly all of them with the columns
 # the code reads. An error page answered with 200 would otherwise be kept, and read, for ever.
 MIN_ROWS = 1000

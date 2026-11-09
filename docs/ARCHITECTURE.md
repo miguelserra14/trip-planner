@@ -178,18 +178,23 @@ discover/
 ├── __main__.py        a map from the terminal, saved as a file
 ├── session.py         one map, from the city typed to the page saved and improved
 ├── finder.py          the departure airports, every source asked, the cheapest way to each destination; Kiwi's daily limit
-├── sources.py         Ryanair's fare finder and Kiwi asked by country
-├── regions.py         a few more requests for the regions of Europe with fewest cities found
-├── flown.py           the routes flown today from each airport (Wikipedia, through Wikidata): what the map may be missing
-├── routes.py          the routes known from OpenFlights, to choose which countries to ask first
-├── access.py          the way between each airport and its city, on both sides of the trip
-├── rides.py           the coaches sold for the day between the traveller's city and its airports (FlixBus, Rede Expressos)
-├── transfers.py       what it costs to get from an airport into its city, read from the operators' and guides' pages
-├── ground.py          the trains and buses that go straight from the city, with no flight (Transitous)
-├── ground_fares.py    their prices for the days of the trip, with the planner's operators
 ├── confirm.py         the cheapest destinations checked in the real timetables, with the planner's code
-├── breakdown.py       what was searched and what may have been missed, under the map
-├── page.py            the map page (Leaflet and OpenStreetMap), and the trips of a map the planner can be opened on
+├── flights/           the flights of a map
+│   ├── sources.py         Ryanair's fare finder and Kiwi asked by country
+│   ├── regions.py         a few more requests for the regions of Europe with fewest cities found
+│   ├── flown.py           the routes flown today from each airport (Wikipedia, through Wikidata): what the map may be missing
+│   └── routes.py          the routes known from OpenFlights, to choose which countries to ask first
+├── airports/          the way between each airport and its city, on both sides of the trip
+│   ├── access.py          the best way known for each airport, with its grade
+│   ├── rides.py           the coaches sold for the day between the traveller's city and its airports (FlixBus, Rede Expressos)
+│   └── transfers.py       what it costs to get from an airport into its city, read from the operators' and guides' pages
+├── overland/          the trips with no flight
+│   ├── ground.py          the trains and buses that go straight from the city (Transitous)
+│   └── ground_fares.py    their prices for the days of the trip, with the planner's operators
+├── view/              what the traveller sees
+│   ├── page.py            the map page (Leaflet and OpenStreetMap), and the trips of a map the planner can be opened on
+│   ├── map.js, map.css    the page's script and its look
+│   └── breakdown.py       what was searched and what may have been missed, under the map
 └── tests/             its own tests, run by plain pytest too
 ```
 

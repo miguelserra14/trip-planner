@@ -1,5 +1,5 @@
 """Discover in the app: where to fly cheaply from a city, on a map. The form asks for a city and the days, the map is
-made in a process of its own (map_job.py) and its page is Discover's (discover/page.py), served here.
+made in a process of its own (map_job.py) and its page is Discover's (discover/view/page.py), served here.
 
 A map takes minutes, the cheapest destinations being looked up in the timetables after it opens, so it has a process
 of its own, apart from the planner's searches: a trip clicked on the map opens the planner's form in the app, filled

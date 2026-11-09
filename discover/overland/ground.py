@@ -56,7 +56,7 @@ LONG_MODES = ("HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "COACH")   # the 
 # The bus stops read. FlixBus's are also in a "gb-flixbus_" feed, under the same ids and with the same buses;
 # a "Waypoint" of FlixBus is where its buses pass, not where travellers get on.
 COACH_FEEDS = ("eu-blablacar-bus_", "eu-flixbus_", ALSA_STOP)
-GROUND = Path(__file__).parent / "cache" / "ground.json"   # the way out found for each city
+GROUND = Path(__file__).parents[1] / "cache" / "ground.json"   # the way out found for each city
 GROUND_DAYS = 30           # a city's trains and buses are looked for again after this long...
 GROUND_VERSION = 4         # ... or when what is read changes: 4, FlixBus and the operators the planner prices, with where (2026-10-24)
 STOP_KM = 12               # the stations this close to the traveller's city are its stations
@@ -72,7 +72,7 @@ MAX_ONLY = 80
 # cities of at least MIN_POPULATION, or the end of the line, whatever its size (the operator runs it there). The
 # cities are GeoNames' of more than 15000 people (CC BY 4.0), downloaded once: their name, country and population.
 CITIES_URL = "https://download.geonames.org/export/dump/cities15000.zip"
-CITIES = Path(__file__).parent / "cache" / "cities15000.tsv"
+CITIES = Path(__file__).parents[1] / "cache" / "cities15000.tsv"
 MIN_POPULATION = 100_000
 # A numbered district of a city, which GeoNames lists as a city of its own: "Paris 15 Vaugirard", "Lyon 03"
 DISTRICT = re.compile(r"^\S.* \d{1,2}( |$)")

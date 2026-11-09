@@ -27,7 +27,7 @@ from trip_planner.trip.places import airport_from, Place
 from trip_planner.texts import tr
 from trip_planner.utils import message_text, plain, write_whole
 
-CACHE = Path(__file__).parent / "cache"
+CACHE = Path(__file__).parents[1] / "cache"
 TRANSFERS = CACHE / "airport_transfers.json"   # what was found for each airport
 PAGES = CACHE / "wikivoyage_by_plane.json"    # the "By plane" part of each city's Wikivoyage article
 TRANSFER_DAYS = 90          # prices are looked for again after this long: fares change once or twice a year

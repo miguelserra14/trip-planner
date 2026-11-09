@@ -25,7 +25,7 @@ from trip_planner.texts import TEXTS, REFERENCE, text_in, tr
 from trip_planner.trip.trip_settings import LIGHT_COLOURS, TripSettings
 from trip_planner.trip.places import load_airports
 
-ROOT = Path(__file__).parents[1]
+ROOT = Path(__file__).parents[2]
 HERE = Path(__file__).parent
 STYLE, SCRIPT = HERE / "map.css", HERE / "map.js"   # the page's look and its script, served by the app or put in the file
 PAGE_TEXTS = "discover_page_"   # the texts the page's script writes, in the traveller's language (texts/languages)

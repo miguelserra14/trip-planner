@@ -29,7 +29,7 @@ from trip_planner.texts import tr
 from trip_planner.trip.places import airport_from, ask_nominatim, distance_km, load_airports, move_to_centre, place_of, Place, settlement
 from trip_planner.utils import plain, write_whole
 
-CACHE = Path(__file__).parent / "cache"
+CACHE = Path(__file__).parents[1] / "cache"
 CENTRES = CACHE / "city_centres.json"     # the city each destination airport serves, found once
 ACCESS = CACHE / "airport_access.json"    # the ways between an airport and its city looked up in the timetables
 ACCESS_DAYS = 45            # timetables change with the seasons: a way remembered longer than this is not used

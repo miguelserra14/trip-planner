@@ -307,3 +307,17 @@ def test_a_round_trip_without_a_plane_pairs_the_trips_by_ground_after_the_stay(n
                                              ground_only=True), places()))
     assert no_search["planned"] == ["00:00", "15:00"]
     assert "40 EUR" in no_search["shown"][-1] and "6h00" in no_search["shown"][-1]
+
+def test_the_steps_of_the_timings_and_the_sources_of_the_timetables_are_in_the_travellers_language(settings):
+    from trip_planner.report.full import step_name
+    from trip_planner.sources.timetables import timetable_sources
+    settings.language = "pt-PT"
+    assert step_name("2c") == "2c horários reais" and step_name("total") == "total"
+    assert "horários publicados" in timetable_sources() and "published" not in timetable_sources()
+
+def test_a_published_tariff_is_said_in_the_travellers_language_also_in_a_report_saved_before(settings):
+    from trip_planner.report.formatting import ticket_operator
+    settings.language = "pt-PT"
+    assert ticket_operator({"operator": "De Lijn", "tariff": True}) == "De Lijn (tarifa publicada)"
+    assert ticket_operator({"operator": "De Lijn (published tariff)", "tariff": True}) == "De Lijn (tarifa publicada)"
+    assert ticket_operator({"operator": "FlixBus", "tariff": False}) == "FlixBus"

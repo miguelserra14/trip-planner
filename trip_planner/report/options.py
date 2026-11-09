@@ -11,7 +11,7 @@ from typing import Any
 
 from trip_planner import current
 from trip_planner.itineraries.ranking import price_range
-from trip_planner.report.formatting import price_source
+from trip_planner.report.formatting import price_source, ticket_operators
 from trip_planner.report.summary import part_grades
 from trip_planner.utils import to_time
 
@@ -36,7 +36,7 @@ def leg_data(leg: dict[str, Any]) -> dict[str, Any]:
             "grade": leg["grade"], "service_day": leg.get("service_day"),
             "leave_time": to_time(leg["leave"]), "arrive_time": to_time(leg["arrive"]), "minutes": leg["arrive"] - leg["leave"],
             "price_eur": leg["price_eur"], "price_kind": leg["price_kind"], "price_grade": price_source(leg["price_kind"])[1],
-            "operators": list(dict.fromkeys(ticket["operator"] for ticket in leg.get("tickets") or [])),
+            "operators": ticket_operators(leg),
             "vehicles": vehicles(leg), "text": leg.get("text") or "", "urls": leg.get("urls") or [], "later": leg.get("later") or []}
 
 def option_data(number: int, itinerary: dict[str, Any]) -> dict[str, Any]:

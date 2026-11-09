@@ -1,5 +1,7 @@
-"""The app's icons: drawn here, inline in every page (report_page.page), since a page loads nothing from elsewhere. Each
-is a symbol of one sprite, used as <svg><use href="#i-name"></svg>, in the colour of the text around it."""
+"""The icons of every page, the app's (app/report_page.page) and Discover's map (discover/view/page.py): drawn here,
+inline in each page, since a page loads nothing from elsewhere. Here, in the planner, because both import it and
+Discover may not import the app. Each is a symbol of one sprite, used as <svg><use href="#i-name"></svg>, in the
+colour of the text around it."""
 import html
 
 # Each icon on a 24 x 24 grid: lines in the colour of the text, the plane filled
@@ -35,11 +37,11 @@ def icon(name: str, label: str = "") -> str:
 def mode_of(vehicle: dict) -> str:
     """The icon of a vehicle, from how the timetables call it (sources/timetables/client.py)."""
     mode = (vehicle.get("mode") or "").upper()
-    if vehicle.get("rail") or "RAIL" in mode:
+    if vehicle.get("rail") or "RAIL" in mode or mode in ("SUBURBAN", "LONG_DISTANCE"):
         return "train"
     if vehicle.get("coach") or "BUS" in mode or mode == "COACH":
         return "bus"
-    if mode in ("SUBWAY", "TRAM", "METRO", "CABLE_CAR", "FUNICULAR"):
+    if mode in ("SUBWAY", "TRAM", "METRO", "CABLE_CAR", "FUNICULAR", "AERIAL_LIFT"):
         return "tram"
     if mode == "FERRY":
         return "ferry"

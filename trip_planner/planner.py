@@ -20,7 +20,7 @@ from trip_planner.agents import claims, coordinator, steps, subagents
 from trip_planner.agents.steps import run_steps, steps_of
 from trip_planner.trip.trip_settings import SettingError, TripSettings
 from trip_planner.trip.places import ask_airports, ask_places, choose_airports, cities_only, codes, return_places, show_airports, TripPlaces
-from trip_planner.report.full import keep_report, remember_duration, save_report
+from trip_planner.report.full import keep_report, remember_duration, save_report, step_name
 from trip_planner.report.summary import render_ground_round_trip, render_round_trip
 from trip_planner.sources import airlines, web
 from trip_planner.texts import any_of, tr
@@ -201,7 +201,7 @@ async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callab
         progress(step="recommend")
     recommendation = "" if settings.ground_only else await recommend(response, messages)
     response["recommendation"] = recommendation   # kept apart in the options as data (report/options.py): a model wrote it
-    TIMINGS["4 coordinator model (writing the recommendation)"] = time.time() - writing
+    TIMINGS["4"] = time.time() - writing
     total = TIMINGS["total"] = time.time() - started
     remember_duration(total, "ground" if settings.ground_only else "plane")
     progress(step="done")
@@ -256,7 +256,7 @@ def show_timings(planned: list[dict[str, Any]]) -> None:
     for trip in planned:
         print(f"{trip.get('origin')} -> {trip.get('final_destination')}")
     for step, seconds in sorted(TIMINGS.items()):
-        print(f"{seconds:6.0f} s  {step}")
+        print(f"{seconds:6.0f} s  {step_name(step)}")
 
 
 

@@ -8,7 +8,7 @@ import dataclasses
 import html
 from typing import Any
 
-from app.icons import icon
+from trip_planner.report.icons import icon
 from trip_planner.trip.form import CHANGES, HINTS, MAIN_SETTINGS, TABS as FORM_TABS, label, same, shown
 from trip_planner.texts import LANGUAGES, REFERENCE, TEXTS, tr
 from trip_planner.trip.ground_choice import CHOICES, NO_CHANGE_LIMIT

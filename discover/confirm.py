@@ -29,6 +29,7 @@ from discover import finder
 from discover.finder import Found, one_per_city, options_of, with_access
 from trip_planner import current
 from trip_planner.itineraries import legs
+from trip_planner.report.icons import mode_of
 from trip_planner.trip.places import airport_from, load_airports, Place, TripPlaces
 from trip_planner.sources import timetables
 from trip_planner.texts import tr
@@ -108,6 +109,13 @@ def published_fare(leg: dict[str, Any], published: dict[str, Any] | None) -> dic
 def part_estimated(leg: dict[str, Any]) -> bool:
     """Whether part of a connection is an estimate: the timetables know no ride from the airport itself."""
     return any(step.get("estimated") for step in leg.get("steps") or [])
+
+def vehicles(leg: dict[str, Any]) -> list[dict[str, str]]:
+    """The vehicles of a way found in the timetables, each with its times, its stops and its icon (the app's), for
+    the map to draw one by one."""
+    return [{"kind": mode_of(step), "line": step.get("line") or "", "time": step["time"], "arrive": step["arrive"],
+             "from": step.get("from") or "", "to": step.get("to") or ""}
+            for step in leg.get("steps") or [] if step.get("time") and step.get("arrive") and not step.get("estimated")]
 
 def checked_leg(flight: dict[str, Any], ground: dict[str, Any], to_airport: bool) -> tuple:
     """("found", the leg, "") or ("impossible", None, why) or ("not covered", None, why)."""
@@ -235,7 +243,8 @@ async def look_up_city(found: Found, options: list[dict[str, Any]], airports: di
                         # urls: where the planner says this very way is sold (its "where to book"), for the page's own
                         option["access"][position] = {**old, **summary, **extra, "looked_up": True, "how": how,
                                                       "leave": to_time(leg["leave"]), "arrive": to_time(leg["arrive"]),
-                                                      "urls": [url for url in leg.get("urls") or [] if url.startswith("https://")]}
+                                                      "urls": [url for url in leg.get("urls") or [] if url.startswith("https://")],
+                                                      "vehicles": vehicles(leg)}
                         access.remember(old["airport"], to_airport, origin if to_airport else destination, summary, today)
                     elif result == "impossible":
                         option.setdefault("impossible", why)

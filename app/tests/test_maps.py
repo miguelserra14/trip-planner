@@ -102,6 +102,17 @@ def test_the_map_is_served_with_what_it_may_do_and_the_apps_pages_keep_theirs():
     assert json.loads(site.get("/discover/map/1/state").html) == {"version": 3, "running": True}
     assert site.get("/discover").policy == "" and 'href="/discover/map/1/"' in site.get("/discover/part").html
 
+def test_a_map_keeps_the_script_it_was_made_with_when_the_program_changes_while_the_app_is_open(monkeypatch, tmp_path):
+    # Its page holds the texts of its time: a newer script would ask for texts it has not, and show their keys
+    script = tmp_path / "map.js"
+    script.write_text("// the script of then", encoding="utf-8")
+    monkeypatch.setitem(maps.FILES, "map.js", (script, "text/javascript; charset=utf-8"))
+    site, started = site_and_jobs()
+    site.post("/discover", form(site))
+    started[0].read_event("map", "<!doctype html><title>map</title>")
+    script.write_text("// the script of now", encoding="utf-8")
+    assert site.get("/discover/map/1/map.js").html == "// the script of then"
+
 def test_a_trip_of_the_map_fills_the_planners_form_by_its_key_and_searches_nothing():
     site, started = site_and_jobs()
     site.post("/discover", form(site))

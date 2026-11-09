@@ -7,7 +7,7 @@ import re
 import pytest
 
 from app import fields
-from app.report_page import timeline
+from app.report_page import shares, timeline, VEHICLE_SHARE, WAIT_SHARE
 from app.results import ride_parts, vehicles_list
 from app.site import Site
 from app.tests.test_search import DAY, sent
@@ -111,6 +111,14 @@ def test_the_changes_are_dots_said_on_hover_and_the_list_says_where_and_how_long
     assert line.count('class="vehicle"') == 3   # the walk is too short for an icon, and a wait has none
     listed = vehicles_list(THREE_RIDES)
     assert "Change at Bergamo: 0h15" in listed and "Change at Vicenza: 0h29" in listed
+
+def test_short_vehicles_in_a_long_trip_each_get_room_for_their_icon():
+    # Three rides of a few minutes after a flight of seven hours: to scale, each would be under 1% of the line
+    parts = [("A", 420, "plane"), (None, 30), ("B", 5, "subway"), (None, 10), ("B", 9, "bus"), (None, 4), ("B", 6, "train")]
+    drawn = shares(parts)
+    assert sum(drawn) == pytest.approx(100)
+    assert all(drawn[number] >= VEHICLE_SHARE for number in (2, 4, 6)) and all(drawn[number] >= WAIT_SHARE for number in (3, 5))
+    assert timeline([("10:00", "BRU"), *[None] * 6, ("18:00", "Pavia")], parts).count('class="vehicle"') == 4
 
 def test_a_leg_whose_vehicles_do_not_fit_in_its_times_stays_one_part():
     assert ride_parts("12:30", 60, "B", THREE_RIDES) == ([], [("B", 60, "bus")])

@@ -11,7 +11,7 @@ The package, part by part:
 - maps.py and map_job.py: a Discover map, in a process of its own, and its page served here.
 - reports.py and report_page.py: the saved reports as pages: as cards (results.py) when they have their options as
   data (trip_planner/report/options.py), as their Markdown otherwise.
-- page.css and icons.py: the look of every page, light or dark, and its icons, drawn here.
+- page.css: the look of every page, light or dark; its icons are drawn in trip_planner/report/icons.py, shared with Discover.
 - page.js: the only script of the app's own pages, which work without it.
 
 A search and a map each have a process of their own (job.py), because the planner keeps the trip in globals

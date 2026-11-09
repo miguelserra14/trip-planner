@@ -87,7 +87,8 @@ def say(text: str) -> None:
     else:
         print(text, flush=True)
 
-# Where the time goes: seconds spent in each step of the current trip
+# Where the time goes: seconds spent in each step of the current trip, by the step's number ("2a"), which also
+# orders them. What each step is goes through tr(), as timing_<number>, for the report and the terminal
 TIMINGS: dict[str, float] = {}
 
 @contextmanager

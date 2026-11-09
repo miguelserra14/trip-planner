@@ -7,7 +7,7 @@ import html
 import re
 from pathlib import Path
 
-from app.icons import icon, sprite
+from trip_planner.report.icons import icon, sprite
 from trip_planner.report.formatting import read_timeline
 from trip_planner.trip.trip_settings import GRADES, LIGHT_COLOURS, LIGHTS
 
@@ -40,17 +40,36 @@ def lights(text: str) -> str:
     return text
 
 ICON_SHARE = 4   # a part narrower than this share of the line (in %) has no room for its vehicle's icon
+# The least share of the line (in %) a vehicle and a wait are drawn with: three trains of twenty minutes in a trip of
+# ten hours would otherwise be one green line, with no room for their icons nor for the waits between them
+VEHICLE_SHARE = ICON_SHARE
+WAIT_SHARE = 1.5
+
+def shares(parts: list[tuple]) -> list[float]:
+    """The share of the line of each part, in %: its share of the minutes, but no vehicle under VEHICLE_SHARE and no
+    wait under WAIT_SHARE, the longer parts made shorter in proportion to make room for them."""
+    least = [0.0 if part[1] <= 0 else VEHICLE_SHARE if len(part) > 2 and part[2] else WAIT_SHARE if part[0] is None else 0.0
+             for part in parts]
+    widened: set[int] = set()
+    while True:
+        free = [number for number in range(len(parts)) if number not in widened]
+        room = 100 - sum(least[number] for number in widened)
+        minutes = sum(max(0, parts[number][1]) for number in free) or 1
+        drawn = [least[number] if number in widened else room * max(0, parts[number][1]) / minutes for number in range(len(parts))]
+        short = {number for number in free if drawn[number] < least[number]}
+        if not short or room <= 0:
+            return drawn
+        widened |= short
 
 def timeline(points: list[tuple | None], parts: list[tuple]) -> str:
-    """The line of an option drawn to scale: each part as long as its share of the squares, in the colour of its
-    grade, a wait as a thin grey line, and at each point its time above and its place below.
-    A part may name its vehicle's icon as a third item, drawn on the line when there is room. A point may be a change
-    of vehicle, (time, place, "change"): a small dot whose time and place are said on hover, since the changes of a
-    ground leg are too close together for their labels. A point that is None is a boundary with nothing drawn."""
-    total = sum(part[1] for part in parts) or 1
+    """The line of an option nearly to scale: each part as long as its share of the minutes (shares() widens the
+    short ones), in the colour of its grade, a wait as a thin grey line, and at each point its time above and its
+    place below. A part may name its vehicle's icon as a third item, drawn on the line when there is room. A point may
+    be a change of vehicle, (time, place, "change"): a small dot whose time and place are said on hover, since the
+    changes of a ground leg are too close together for their labels. A point that is None is a boundary with nothing drawn."""
     edges = [0.0]
-    for part in parts:
-        edges.append(edges[-1] + 100 * part[1] / total)
+    for share in shares(parts):
+        edges.append(edges[-1] + share)
     drawn = []
     for part, start, end in zip(parts, edges, edges[1:]):
         grade, mark = part[0], part[2] if len(part) > 2 else None

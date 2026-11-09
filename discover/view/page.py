@@ -21,6 +21,7 @@ from urllib.parse import quote, urlencode
 from discover.airports.access import city_name
 from discover.finder import Found
 from trip_planner import current
+from trip_planner.report.icons import sprite
 from trip_planner.texts import TEXTS, REFERENCE, text_in, tr
 from trip_planner.trip.trip_settings import LIGHT_COLOURS, TripSettings
 from trip_planner.trip.places import load_airports
@@ -156,7 +157,7 @@ def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport
     title = tr("discover_page_tab_title", origin=found.place.english_name)
     # In the app the style and the script are files beside the page, so that it may run no script of its own
     # (app/maps.py, MAP_POLICY); a page saved as a file carries them, to open with nothing else
-    parts = {"__TITLE__": html.escape(title), "__DATA__": as_script({**data, "title": title}),
+    parts = {"__TITLE__": html.escape(title), "__DATA__": as_script({**data, "title": title}), "__ICONS__": sprite(),
              "__STYLE__": ('<link rel="stylesheet" href="map.css">' if planner_link else
                            f"<style>\n{STYLE.read_text(encoding='utf-8')}</style>"),
              "__SCRIPT__": ('<script src="map.js"></script>' if planner_link else
@@ -170,7 +171,7 @@ PAGE = """<!doctype html>
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-__STYLE__</head><body>
+__STYLE__</head><body>__ICONS__
 <header><a id="back" hidden></a><h1 id="title"></h1><p id="about"></p><p id="status"></p><p class="legend" id="legend"></p></header>
 <div id="filters"></div>
 <div class="split"><ol id="rows" class="cards"></ol>

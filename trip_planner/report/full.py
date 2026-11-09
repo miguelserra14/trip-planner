@@ -17,6 +17,13 @@ from trip_planner.sources import timetables
 from trip_planner.texts import tr
 from trip_planner.utils import failed, plain, REQUESTS, TIMINGS, to_time
 
+def step_name(step: str) -> str:
+    """A step of the timings by its number ("2a"), in the traveller's language; the number itself for one with no text."""
+    try:
+        return tr(f"timing_{step}")
+    except KeyError:
+        return step
+
 def services_table() -> list[str]:
     """What was asked of each service in this run: how many requests, how many failed, the time they took."""
     services: dict[str, list[dict]] = {}
@@ -128,7 +135,7 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         "",
         f"### 3. {tr('step_ground')}",
         "",
-        tr("ground_explained", sources=timetables.TIMETABLE_SOURCES, requests=ground.get("requests", 0)),
+        tr("ground_explained", sources=timetables.timetable_sources(), requests=ground.get("requests", 0)),
         "",
         tr("ground_choice_report", to_airport=ground_choice.describe(True), from_airport=ground_choice.describe(False)),
         "",
@@ -165,7 +172,7 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
         "",
         f"### 5. {tr('step_timings')}",
         "",
-        *table([tr("col_step"), tr("col_seconds")], [[step, f"{seconds:.0f}"] for step, seconds in sorted(TIMINGS.items())]),
+        *table([tr("col_step"), tr("col_seconds")], [[step_name(step), f"{seconds:.0f}"] for step, seconds in sorted(TIMINGS.items())]),
         "",
         tr("services_explained"),
         "",

@@ -10,11 +10,15 @@ from trip_planner.sources.timetables.airport_stops import find_terminals
 from trip_planner.sources.timetables.client import NOT_COVERED, Timetables
 from trip_planner.sources.timetables.days import landing_day
 from trip_planner.sources.timetables.joined import join_published_ends
+from trip_planner.texts import tr
 from trip_planner.utils import logged, say, to_minutes
 
-TIMETABLE_SOURCES = "Transitous (published timetables of all operators) + " + ", ".join(fares.RIDE_SOURCES)
 MAX_FLIGHTS_CHECKED = 16         # flights whose ground transport is looked up: the cheapest ones
 MAX_FLIGHTS_PER_AIRPORT_DAY = 3  # ... with at most this many per departure airport and date
+
+def timetable_sources() -> str:
+    """Where the real timetables come from, in the traveller's language."""
+    return f"Transitous ({tr('source_transitous')}) + " + ", ".join(fares.RIDE_SOURCES)
 
 def flights_to_check(flights: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The flights whose ground transport is looked up: the cheapest, a few per departure airport and date.

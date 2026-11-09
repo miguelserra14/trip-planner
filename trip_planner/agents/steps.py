@@ -46,7 +46,7 @@ def travel_days(flights: list[dict[str, Any]]) -> str:
 
 async def search_flights(state: dict[str, Any]) -> dict[str, Any]:
     """Search the flights from every departure airport to every arrival airport on every travel date."""
-    with timed("1 flight search"):
+    with timed("1"):
         # What the flight search found: cleared here, not when the trip starts (planner.start_trip), so that the step
         # run again after a failure starts clean
         flight_search.FLIGHTS.clear()
@@ -97,7 +97,7 @@ async def ask_transfer_agent(flights: list[dict[str, Any]], only: set | None = N
                              searches: int = subagents.TRANSFER_SEARCH_LIMIT) -> list[dict[str, Any]]:
     """What the airport transfer agent found for each departure airport. Cleaned, and graded C by whoever uses it.
     only limits it to some airports, searches is how many web searches it may make."""
-    with timed("2a airport transfer agent"):
+    with timed("2a"):
         used = {flight["departure_airport"] for flight in flights} & (only if only is not None else {airport["code"] for airport in current.TRIP.departure})
         airports = [airport for airport in current.TRIP.departure if airport["code"] in used]
         if not airports:
@@ -127,7 +127,7 @@ async def ask_destination_agent(flights: list[dict[str, Any]], only: set | None 
                                 searches: int = subagents.DESTINATION_SEARCH_LIMIT) -> list[dict[str, Any]]:
     """What the destination transport agent found for each arrival airport. Cleaned, and graded C by whoever uses it.
     only limits it to some airports, searches is how many web searches it may make."""
-    with timed("2b destination transport agent"):
+    with timed("2b"):
         used = {flight["arrival_airport"] for flight in flights} & (only if only is not None else {airport["code"] for airport in current.TRIP.arrival})
         airports = [airport for airport in current.TRIP.arrival if airport["code"] in used]
         if not airports:
@@ -155,7 +155,7 @@ async def ask_destination_agent(flights: list[dict[str, Any]], only: set | None 
         ]
 
 async def read_timetables(flights: list[dict[str, Any]], transit: timetables.Timetables | None, known: dict[str, Any] | None) -> dict[str, Any]:
-    with timed("2c real timetables"):
+    with timed("2c"):
         return await timetables.ground_transport_for(flights, transit, known)
 
 async def ground_transport(checked: list[dict[str, Any]], asked: set = frozenset(), transit: timetables.Timetables | None = None,
@@ -243,7 +243,7 @@ async def look_up_in_rounds(flights: list[dict[str, Any]], transit: timetables.T
 async def without_a_plane(transit: timetables.Timetables | None = None) -> dict[str, Any]:
     """The ways from the origin to the destination by train or coach on the travel dates (all_the_way.py), to
     compare with flying. A failure only leaves them out of the report."""
-    with timed("2d whole trip by train or coach"):
+    with timed("2d"):
         try:
             found = await all_the_way(current.SETTINGS.iso_dates, transit)
             found["priced"] = await asyncio.to_thread(price_all, found)
@@ -257,7 +257,7 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
     real timetables read by code, and the two transport specialists for prices and for what no timetable covers.
     The whole trip by train or coach is looked up at the same time."""
     flights = state["flights"]
-    with timed("2 ground transport (the three below run at the same time)"):
+    with timed("2"):
         # One client of the timetables for every round and for the trip without a plane: they share what was asked,
         # and the answers of the last searches (KEPT_HOURS in client.py)
         transit = timetables.Timetables(keep=True)
@@ -328,7 +328,7 @@ def without_a_plane_part(state: dict[str, Any], recommended: dict[str, Any] | No
 def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
     """Combine the flights with their ground transport into door-to-door itineraries, discard the ones that break
     a hard constraint or are not reliable enough, and rank the rest."""
-    with timed("3 checks, airline prices and ranking"):
+    with timed("3"):
         transfers = {transfer["airport"]: transfer for transfer in state.get("transfers") or []}
         routes = {route["airport"]: route for route in state.get("trains") or []}
         ground, checked = state.get("ground") or {}, set(state["checked"])
@@ -436,7 +436,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
 async def search_by_ground_only(state: dict[str, Any]) -> dict[str, Any]:
     """A trip without a plane (ground_only): the whole way by train or coach, and nothing else. The same search
     that is compared with flying (without_a_plane), with its own client of the timetables."""
-    with timed("2 ground transport (the three below run at the same time)"):
+    with timed("2"):
         transit = timetables.Timetables(keep=True)
         try:
             found = await without_a_plane(transit)
@@ -450,7 +450,7 @@ async def search_by_ground_only(state: dict[str, Any]) -> dict[str, Any]:
 def rank_by_ground_only(state: dict[str, Any]) -> dict[str, Any]:
     """The report of a trip without a plane: its best trips by the rules (ground_only.ground_options), with nothing
     to compare them with. There is no recommended option: the order of the list is the rules' choice."""
-    with timed("3 checks, airline prices and ranking"):
+    with timed("3"):
         by_ground = ground_options(state.get("all_the_way"), None, current.SETTINGS.options_shown)
         report = "\n".join(ground_lines(by_ground, 0) if by_ground else [f"## {tr('ground_title')}", "", tr("ground_none_found")])
     return {"step": 2, "report": report, "rejected": [], "warnings": [], "recommended": 0, "shown": [], "ground_only": by_ground,

@@ -90,6 +90,9 @@ class Job:
         self.done = ""                  # how one of the program's own jobs went, once it ended (job.run_task)
         self.map_page = ""              # for a Discover map: its page, its trips by key, and its state as it changes
         self.map_link = ""              # ... and its address in the app (maps.address_of), given by the app
+        # ... and its script and style as they were when its page came: the page holds its texts and its data, so a
+        # script changed since (the program updated while the app stays open) would ask for texts the page has not
+        self.map_files: dict[str, str] = {}
         self.trips: dict[str, list[str]] = {}
         self.map_state: dict[str, Any] = {}
         self.asked: tuple[str, Any] | None = None   # what the process waits for: ("unclear" | "airports" | "ready", what)
@@ -147,7 +150,9 @@ class Job:
         elif kind == "done":
             self.done = text
         elif kind == "map":       # a Discover map (map_job.py): its page, its trips, what changes in it
+            from app.maps import FILES   # here only: a search that is not a map never needs Discover
             self.map_page = text
+            self.map_files = {name: file.read_text(encoding="utf-8") for name, (file, _) in FILES.items()}
         elif kind == "trips":
             self.trips = text
         elif kind == "state":

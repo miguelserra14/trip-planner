@@ -25,3 +25,10 @@ def test_the_days_and_the_page_are_written_in_the_travellers_language(monkeypatc
     assert str(Days("2026-11-12", "2026-11-13", "2026-11-16", "2026-11-17")) == "2026-11-12 a 2026-11-13, volta 2026-11-16 a 2026-11-17"
     texts = page.page_texts()
     assert texts["still_searching"] == "Ainda a pesquisar." and texts["when"] == "{day} às {time}"
+
+def test_no_text_is_written_twice_in_a_language_file():
+    # A key written twice is not an error in Python: the second one wins, silently. "Back" became "← Discover" so.
+    from trip_planner.texts import FOLDER
+    for name in ("en", "pt-PT"):
+        keys = re.findall(r'^    "([A-Za-z0-9_]+)":', (FOLDER / f"{name}.py").read_text(encoding="utf-8"), flags=re.M)
+        assert sorted({key for key in keys if keys.count(key) > 1}) == [], name

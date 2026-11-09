@@ -14,7 +14,7 @@ from typing import Any, Callable, NamedTuple
 from urllib.parse import parse_qs, quote, unquote
 
 from app import fields, maps, reports, search
-from app.icons import icon
+from trip_planner.report.icons import icon
 from app.job import settings_for
 from app.report_page import page, STYLE, to_html
 from trip_planner import current
@@ -326,9 +326,9 @@ class Site:
             return Reply(200, job.map_page, policy=maps.MAP_POLICY, referrer=maps.MAP_REFERRER)
         if what == "state":
             return Reply(200, json.dumps(job.map_state, ensure_ascii=False), kind="application/json; charset=utf-8")
-        if what in maps.FILES:   # the page's script and style
+        if what in maps.FILES:   # the page's script and style, as they were when its page came (search.Job.map_files)
             file, kind = maps.FILES[what]
-            return Reply(200, file.read_text(encoding="utf-8"), kind=kind)
+            return Reply(200, job.map_files.get(what) or file.read_text(encoding="utf-8"), kind=kind)
         if what.startswith("plan/"):
             trip = job.trips.get(unquote(what[len("plan/"):]))
             if trip:

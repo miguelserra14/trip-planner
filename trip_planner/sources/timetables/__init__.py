@@ -21,12 +21,12 @@ from trip_planner.sources.timetables.airport_stops import (AIRFIELD_WALK_MINUTES
 from trip_planner.sources.timetables.client import NOT_COVERED, Timetables
 from trip_planner.sources.timetables.days import landing_day, local_to_utc, reference_day, utc_to_local, zone_of_country
 from trip_planner.sources.timetables.joined import join_published_ends
-from trip_planner.sources.timetables.lookup import flights_to_check, ground_transport_for, TIMETABLE_SOURCES
+from trip_planner.sources.timetables.lookup import flights_to_check, ground_transport_for, timetable_sources
 from trip_planner.sources.timetables.modes import GROUND_MODES
 
 # What the rest of the planner reads as timetables.<name>. A test that replaces one of the module's own names
 # replaces it in the module that uses it (client, joined, airport_stops...), not here.
 __all__ = ["AIRFIELD_WALK_MINUTES", "airport_stop_candidates", "choose_airport_stops", "fill_terminals", "find_terminals",
            "flights_to_check", "GROUND_MODES", "ground_transport_for", "join_published_ends", "landing_day", "local_to_utc",
-           "MIN_STOP_WALK_MINUTES", "NOT_COVERED", "OVERPASS_SERVERS", "reference_day", "TIMETABLE_SOURCES", "Timetables",
+           "MIN_STOP_WALK_MINUTES", "NOT_COVERED", "OVERPASS_SERVERS", "reference_day", "timetable_sources", "Timetables",
            "utc_to_local", "zone_of_country"]

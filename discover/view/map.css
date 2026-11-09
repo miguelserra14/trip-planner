@@ -26,6 +26,15 @@ h2 { font-size: 16px; margin: 28px 20px 4px; } h3 { font-size: 14px; margin: 20p
 #filters label:has(input[type=checkbox]:checked) { border-color: var(--link); background: var(--pick); }
 #filters input[type=checkbox] { margin: 0; accent-color: var(--link); }
 #filters input[type=range] { width: 120px; vertical-align: middle; accent-color: var(--link); }
+/* A limit: the box of its value as wide as the largest value, so that nothing moves while it changes */
+#filters label.limit { gap: 4px; }
+#filters label.limit input[type=range] { margin-left: 8px; }
+#filters label.limit.set { border-color: var(--link); background: var(--pick); }
+#filters input[type=number] { font: inherit; width: 5ch; padding: 1px 4px; text-align: right; font-variant-numeric: tabular-nums;
+                              border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); -moz-appearance: textfield; }
+#filters input[type=number]::-webkit-inner-spin-button, #filters input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+#filters input[type=number]:focus { outline: 2px solid var(--link); outline-offset: 1px; }
+#filters .count { font-variant-numeric: tabular-nums; }
 #filters select { font: inherit; border: 0; background: transparent; color: var(--fg); }
 #filters button { font: inherit; padding: 4px 14px; border-radius: 999px; border: 1px solid var(--link); background: var(--surface); color: var(--link); cursor: pointer; }
 #filters .count { color: var(--muted); margin-left: auto; }
@@ -67,6 +76,29 @@ td, th { text-align: left; padding: 6px 20px; border-bottom: 1px solid var(--lin
 th { color: var(--muted); font-weight: 600; background: var(--panel); } td.n { text-align: right; font-variant-numeric: tabular-nums; }
 #ground-rows tr { cursor: pointer; } #ground-rows tr:hover, #ground-rows tr.picked { background: var(--pick); }
 .wrap { overflow-x: auto; margin: 0 20px; border: 1px solid var(--line); border-radius: 12px; } #tiles { margin: 0; color: var(--muted); }
+/* A trip from top to bottom, as the planner's option (app/page.css, ol.steps): a dot at each place, the vehicles between them */
+.icon { width: 1.15em; height: 1.15em; vertical-align: -.2em; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8;
+        stroke-linecap: round; stroke-linejoin: round; }
+#detail ol.steps { list-style: none; margin: 8px 0 12px; padding: 0; }
+#detail ol.steps > li { display: grid; grid-template-columns: 56px 22px minmax(0, 1fr); column-gap: 10px; margin: 0; }
+ol.steps .at { font-weight: 700; text-align: right; padding-top: 1px; font-variant-numeric: tabular-nums; }
+ol.steps .rail { position: relative; display: flex; justify-content: center; }
+ol.steps .rail::before { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--line); }
+ol.steps > li:first-child .rail::before { top: 9px; } ol.steps > li:last-child .rail::before { bottom: calc(100% - 9px); }
+ol.steps .rail b { position: relative; width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; border: 2px solid var(--fg); background: var(--surface); }
+ol.steps .rail .icon { position: relative; margin-top: 2px; background: var(--surface); color: var(--muted); }
+ol.steps li.ride .rail::before { width: 4px; background: var(--ride, var(--line)); border-radius: 2px; }
+ol.steps .what { padding: 0 0 14px; min-width: 0; }
+#detail ol.steps .what > p { margin: 0; } #detail ol.steps .what > p.muted { font-size: .9em; margin-top: 4px; }
+ol.steps .what > p.quote { font-style: italic; }
+#detail ol.steps ul.vehicles { list-style: none; margin: 4px 0 0; padding: 0; font-size: .95em; color: var(--muted); }
+#detail ol.steps ul.vehicles li { display: flex; gap: 6px; align-items: baseline; margin: 1px 0; }
+#detail ol.steps ul.vehicles li.change { font-size: .9em; padding-left: 1.6em; }
+ol.steps .facts { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: .9em; color: var(--muted); margin-top: 4px; }
+ol.steps details.others { margin-top: 4px; font-size: .9em; color: var(--muted); }
+ol.steps details.others summary { cursor: pointer; color: var(--link); }
+#detail ol.steps details.others ul { margin: 4px 0 0; padding-left: 18px; }
+
 /* The line of each option, as the planner draws it */
 .lines { margin: 8px 0 4px; } .lines .line { overflow-x: auto; } .lines svg { width: 100%; min-width: 560px; height: auto; display: block; font-size: 12px; }
 .lines p.line-title { margin: 10px 0 0; font-weight: 600; }

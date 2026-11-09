@@ -246,7 +246,8 @@ def leg(code: str, to_airport: bool, place: Place | None, today: date, label: st
         return {**base, "price_eur": ride["price_eur"], "minutes": ride["arrive"] - ride["leave"], "grade": "A", "price_grade": "A",
                 "how": tr("discover_ride_sold", source=ride["source"], leave=ride["leave_time"], arrive=ride["arrive_time"]), "looked_up": True,
                 "leave": ride["leave_time"], "arrive": ride["arrive_time"], "url": ride.get("url", ""),
-                "urls": [ride["url"]] if ride.get("url") else []}
+                "urls": [ride["url"]] if ride.get("url") else [],
+                "vehicles": [{"kind": "bus", "line": ride["source"], "time": ride["leave_time"], "arrive": ride["arrive_time"], "from": "", "to": ""}]}
     if place is None:
         country = (load_airports().get(code) or {}).get("country", "")
         return {**base, "price_eur": float(estimated_price(TYPICAL_AIRPORT_KM, country)), "minutes": estimated_minutes(TYPICAL_AIRPORT_KM),

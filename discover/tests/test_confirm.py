@@ -131,10 +131,18 @@ def test_a_way_looked_up_replaces_its_estimate_and_an_impossible_one_takes_its_f
     to_airport, into_madrid = city["access"]
     assert city["from"] == "OPO" and to_airport["looked_up"] and "Coach 4 06:00-07:30" in to_airport["how"]
     assert (to_airport["grade"], to_airport["price_grade"], to_airport["leave"]) == ("B", "C", "06:00")   # a timetable with no price
+    assert to_airport["vehicles"] == [{"kind": "bus", "line": "Coach 4", "time": "06:00", "arrive": "07:30", "from": "Coimbra", "to": "the airport"}]   # for the map's line
     assert into_madrid["checked"] and not into_madrid["looked_up"] and "no timetable covers it" in into_madrid["how"]
     assert (found.lookups[0]["found"], found.lookups[0]["impossible"], found.lookups[0]["not covered"]) == (1, 1, 2)
     assert access.leg("OPO", True, HOME, TODAY)["how"].startswith("looked up on")   # remembered for the next maps
     assert "no destination left" in found.confirm_stop
+
+def test_each_vehicle_of_a_way_is_drawn_with_the_apps_icon_and_an_estimated_walk_is_left_out():
+    steps = [{"mode": "WALK", "time": "05:50", "arrive": "06:00", "estimated": True},
+             {"mode": "LONG_DISTANCE", "time": "06:00", "arrive": "06:40", "from": "Pavia", "to": "Milano"},
+             {"mode": "SUBWAY", "time": "06:45", "arrive": "06:55", "from": "Milano", "to": "Linate"},
+             {"mode": "BUS", "coach": True, "time": "07:00", "arrive": "07:20"}, {"mode": "FERRY", "time": "08:00", "arrive": "09:00"}]
+    assert [vehicle["kind"] for vehicle in confirm.vehicles({"steps": steps})] == ["train", "tram", "bus", "ferry"]
 
 def test_a_lookup_is_the_planners_trip_only_while_it_runs_even_when_it_fails(monkeypatch):
     seen = []

@@ -15,7 +15,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
-from app.icons import icon
+from trip_planner.report.icons import icon
 from trip_planner.texts import tr
 from trip_planner.report.summary import span
 

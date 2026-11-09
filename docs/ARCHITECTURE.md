@@ -151,7 +151,8 @@ trip_planner/
 ├── report/            the Markdown reports
 │   ├── summary.py         the result shown to the traveller
 │   ├── full.py            the full report saved to reports/
-│   └── formatting.py      tables, grades and sources
+│   ├── formatting.py      tables, grades and sources
+│   └── icons.py           the icons of every page, the app's and Discover's map, and the icon of each vehicle
 └── tools/             the maintenance commands of main.py
     ├── check.py           --check: whether every outside service answers
     ├── verify.py          --verify: whether the connections of the kept reports really ran

@@ -84,9 +84,19 @@ def price_source(kind: str) -> tuple:
         "estimate": (tr("price_estimate"), "C"),
     }[kind]
 
+OLD_TARIFF_SUFFIX = " (published tariff)"   # in the operator's own name, in English, in the reports saved before 2026-11-09
+
+def ticket_operator(ticket: dict[str, Any]) -> str:
+    """Who priced a ticket, for the traveller: a published tariff (tariffs.py) said to be one, in their language."""
+    name = ticket["operator"].removesuffix(OLD_TARIFF_SUFFIX)
+    return f"{name} ({tr('price_published_tariff')})" if ticket.get("tariff") else name
+
+def ticket_operators(leg: dict[str, Any]) -> list[str]:
+    return list(dict.fromkeys(ticket_operator(ticket) for ticket in leg.get("tickets") or []))
+
 def price_text(leg: dict[str, Any]) -> str:
     """Where the price of a ground leg comes from, with the operators whose tickets were read."""
-    operators = list(dict.fromkeys(ticket["operator"] for ticket in leg.get("tickets") or []))
+    operators = ticket_operators(leg)
     return price_source(leg["price_kind"])[0] + (f": {', '.join(operators)}" if operators else "")
 
 def steps_text(leg: dict[str, Any]) -> str:

@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta
 from itertools import groupby
 from typing import Any
 
-from app.icons import icon, mode_of
+from trip_planner.report.icons import icon, mode_of
 from app.report_page import inline, lights, timeline, to_html
 from trip_planner.report.formatting import grade_text, leg_source, price_grade_text, price_source, with_day
 from trip_planner.report.summary import booking_checks

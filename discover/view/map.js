@@ -71,23 +71,105 @@ L.circleMarker([data.origin.lat, data.origin.lon], {radius: 8, color: "#1f6fd0",
 const markers = L.layerGroup().addTo(map);
 let line = null;
 
-// One leg of the trip, flight by flight, with the connections between them. What the traveller should know about a
-// connection before booking it goes into warnings. toAirport and fromAirport are the ways to and from its airports:
-// once looked up in the timetables, the warnings about the hour are theirs to give, not the map's.
-function describeLeg(parent, title, leg, warnings, toAirport, fromAirport) {
+// An icon of the app's sprite (trip_planner/report/icons.py, in the page), as the app draws it
+function iconOf(parent, name) {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", "icon icon-" + name); svg.setAttribute("aria-hidden", "true");
+  svgAdd(svg, "use", {href: "#i-" + name});
+  parent.append(svg);
+  return svg;
+}
+// A grade as the planner says it: its coloured dot and what it means
+function gradeText(parent, grade) {
+  add(parent, "span", "●").style.color = data.grade_colours[grade];
+  parent.append(" " + t({A: "grade_a", B: "grade_b"}[grade] || "grade_c"));
+}
+const outward = url => Boolean(url) && url.startsWith("https://");
+function sourceLink(parent, url, text) {
+  const anchor = add(parent, "a", text);
+  anchor.href = url; anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
+}
+
+// A way to or from an airport inside its step, as the planner shows a ground leg (app/results.py): its vehicles one
+// by one with the changes between them, how sure its times and its price are, where they come from, and the other
+// ways published from that airport, closed
+function describeWay(box, way) {
+  const vehicles = way.vehicles || [];
+  if (vehicles.length) {
+    const list = add(box, "ul", undefined, "vehicles");
+    vehicles.forEach((vehicle, i) => {
+      if (i) add(list, "li", t("vehicle_change", {place: vehicles[i - 1].to || vehicle.from,
+                                                  wait: hours((minutesOf(vehicle.time) - minutesOf(vehicles[i - 1].arrive) + 1440) % 1440)}), "change");
+      const row = add(list, "li");
+      iconOf(row, ["train", "bus", "tram", "ferry", "walk"].includes(vehicle.kind) ? vehicle.kind : "route");
+      const text = add(row, "span");
+      add(text, "b", vehicle.time);
+      text.append(" " + [vehicle.line, vehicle.from && vehicle.to ? vehicle.from + " → " + vehicle.to : ""].filter(Boolean).join(" ")
+                  + " (" + vehicle.arrive + ")");
+    });
+  }
+  if (way.price_eur === undefined) return;   // nothing known of it: a map made before the ways were kept
+  const facts = add(box, "div", undefined, "facts");
+  gradeText(add(facts, "span", t("times") + ": "), way.grade);
+  gradeText(add(facts, "span", t("price", {price: eur(way.price_eur)}) + ": "), way.price_grade);
+  const said = way.how || "";
+  if (said || outward(way.url)) {
+    const how = add(box, "p", said ? (way.looked_up ? t("looked_up_for_flight", {how: said}) : said.charAt(0).toUpperCase() + said.slice(1)) + " " : "", "muted");
+    if (outward(way.url)) sourceLink(how, way.url, t("source_link"));
+  }
+  if (way.quote) add(box, "p", "“" + way.quote + "”", "muted quote");
+  // Every published way from that airport, so the traveller sees the choice and where each price was read
+  if (way.options && way.options.length > 1) {
+    const more = add(box, "details", undefined, "others");
+    add(more, "summary", t("other_ways", {count: way.options.length}));
+    const others = add(more, "ul");
+    for (const option of way.options) {
+      const row = add(others, "li", t("published_option", {what: [option.operator, option.mode ? modeName(option.mode) : ""].filter(Boolean).join(" "),
+                                                           to: option.to ? t("to_place", {place: option.to}) : "", from: option.from_price ? t("from_price") : "",
+                                                           price_text: option.price_text, price: eur(option.price_eur), source: option.source}) + " ");
+      if (outward(option.url)) sourceLink(row, option.url, t("source_link_small"));
+    }
+  }
+}
+
+// One way of the trip from top to bottom, as the planner's option (app/results.py option_steps): leaving the city,
+// the way to the airport, the airport, each flight with its stopovers, the landing, the way into the city and the
+// arrival. What the traveller should know about a connection before booking it goes into warnings. toAirport and
+// fromAirport are the ways to and from its airports: once looked up in the timetables, the warnings about the hour
+// are theirs to give, not the map's. A time worked out from the flight, not looked up, is written with "~".
+function describeLeg(parent, title, leg, warnings, toAirport, fromAirport, start, end) {
   add(parent, "h4", title + " — " + leg.airline + ", " + (leg.stops ? t(leg.stops > 1 ? "stops" : "stop", {count: leg.stops}) : t("direct")));
   const [date, time] = before(leg.date, leg.time, data.airport_minutes);
   if (!(toAirport && toAirport.looked_up) && (date !== leg.date || Number(time.slice(0, 2)) < data.early_hour))
     warnings.push(t("warn_early", {airport: place(leg.from), when: when(date, time)}));
-  add(parent, "p", t("be_at", {airport: place(leg.from), when: when(date, time), minutes: data.airport_minutes}));
-  const steps = add(parent, "ol");
+  const landing = Number((leg.arrival_time || "12").slice(0, 2));
+  if (!(fromAirport && fromAirport.looked_up) && leg.arrival_time && (landing >= data.late_hour || landing < data.early_hour))
+    warnings.push(t("warn_late", {airport: place(leg.to), when: when(leg.arrival_date, leg.arrival_time)}));
+  const times = legTimes(leg, toAirport, fromAirport), to = times.toAirport, from = times.fromAirport;
+  const steps = add(parent, "ol", undefined, "steps");
+  // One step of the vertical line: a place (a dot) or a ride (its icon, the line in the colour of its grade)
+  const step = (at, mark, grade) => {
+    const item = add(steps, "li");
+    if (grade) { item.className = "ride"; item.style.setProperty("--ride", data.grade_colours[grade]); }
+    add(item, "span", at, "at");
+    const rail = add(item, "span", undefined, "rail");
+    if (mark) iconOf(rail, mark); else add(rail, "b");
+    return add(item, "div", undefined, "what");
+  };
+  const wayIcon = way => { const first = (way.vehicles || []).find(vehicle => vehicle.kind !== "walk"); return first ? first.kind : "route"; };
+  // A time of a flight, as minutes from midnight of the day the way starts (the line's clock)
+  const flightClock = (day, time) => clock(between(leg.date, "00:00", day || leg.date, time));
+  add(step(times.guess(to, times.leave)), "p", t("step_leave", {place: start}));
+  describeWay(step("", wayIcon(to), to.grade), to);
+  add(step(times.guess(to, times.reach)), "p", t("step_at_airport", {airport: place(leg.from), minutes: times.departs - times.reach}));
   leg.segments.forEach((segment, index) => {
     if (index) {
       const previous = leg.segments[index - 1];
       const wait = between(previous.arrival_date, previous.arrival_time, segment.date, segment.time);
       const night = previous.arrival_date !== segment.date;
-      add(steps, "li", t("change_at", {airport: place(segment.from)}) + (previous.to !== segment.from ? " " + t("change_other_airport", {airport: place(previous.to)}) : "")
-          + ": " + t("change_wait", {hours: hours(wait)}) + (night ? t("through_night") : ""), "muted");
+      add(step(flightClock(previous.arrival_date, previous.arrival_time)), "p",
+          t("step_stopover", {airport: place(segment.from), hours: hours(wait), night: night ? t("through_night") : ""})
+          + (previous.to !== segment.from ? " " + t("change_other_airport", {airport: place(previous.to)}) : ""));
       if (previous.to !== segment.from)
         warnings.push(t("warn_other_airport", {from: place(previous.to), to: place(segment.from)}));
       if (night || wait >= data.long_wait)
@@ -95,48 +177,18 @@ function describeLeg(parent, title, leg, warnings, toAirport, fromAirport) {
       if ((previous.airline || "") !== (segment.airline || ""))
         warnings.push(t("warn_two_tickets", {first: previous.airline, second: segment.airline, airport: place(segment.from)}));
     }
-    add(steps, "li", t("leave_land", {from: place(segment.from), leaves: when(segment.date, segment.time), to: place(segment.to),
-                                      lands: segment.arrival_time ? when(segment.arrival_date, segment.arrival_time) : t("no_time")})
-        + " — " + (segment.airline || leg.airline) + (segment.flight ? " " + segment.flight : ""));
+    const box = step(index ? flightClock(segment.date, segment.time) : clock(times.departs), "plane", "A");
+    add(box, "p", t("step_flight", {flight: [segment.airline || leg.airline, segment.flight].filter(Boolean).join(" "), from: place(segment.from),
+                                    to: place(segment.to), duration: leg.segments.length === 1 && leg.minutes ? ", " + hours(leg.minutes) : ""}));
+    const facts = add(add(box, "div", undefined, "facts"), "span", t("times") + ": ");
+    gradeText(facts, "A");
+    facts.append(" · " + leg.source);
   });
-  const landing = Number((leg.arrival_time || "12").slice(0, 2));
-  if (!(fromAirport && fromAirport.looked_up) && leg.arrival_time && (landing >= data.late_hour || landing < data.early_hour))
-    warnings.push(t("warn_late", {airport: place(leg.to), when: when(leg.arrival_date, leg.arrival_time)}));
-  add(parent, "p", t("arrive", {airport: place(leg.to), when: leg.arrival_time ? when(leg.arrival_date, leg.arrival_time) : t("no_time"),
-                               after: leg.minutes ? t("after_takeoff", {hours: hours(leg.minutes)}) : ""}));
-}
-
-// The ways to and from the airports, each with its grades and where it comes from
-function describeAccess(parent, p) {
-  add(parent, "h4", t("to_from_airports"));
-  const list = add(parent, "ul", undefined, "links");
-  for (const leg of p.access || []) {
-    const where = leg.to_airport ? fromTo(leg.place || t("the_city"), place(leg.airport)) : fromTo(place(leg.airport), leg.place || t("the_city"));
-    const item = add(list, "li", t("access_item", {where: where, price: eur(leg.price_eur), duration: leg.minutes ? t("and_hours", {hours: hours(leg.minutes)}) : "",
-                                                   times: leg.looked_up && leg.leave ? t("leaving_arriving", {leave: leg.leave, arrive: leg.arrive}) : "",
-                                                   grade: leg.grade, price_grade: leg.price_grade})
-        + " " + (leg.looked_up ? t("looked_up_for_flight", {how: leg.how}) : leg.how.charAt(0).toUpperCase() + leg.how.slice(1)) + ".",
-        leg.looked_up ? "" : "muted");
-    if (leg.url && leg.url.startsWith("https://")) {
-      item.append(" ");
-      const source = add(item, "a", t("source_link"));
-      source.href = leg.url; source.target = "_blank"; source.rel = "noopener noreferrer";
-    }
-    if (leg.quote) add(item, "div", "“" + leg.quote + "”", "muted");
-    // Every published way from that airport, so the traveller sees the choice and where each price was read
-    if (leg.options && leg.options.length > 1) {
-      const others = add(item, "ul");
-      for (const option of leg.options) {
-        const line = add(others, "li", t("published_option", {what: [option.operator, option.mode ? modeName(option.mode) : ""].filter(Boolean).join(" "),
-                                                             to: option.to ? t("to_place", {place: option.to}) : "", from: option.from_price ? t("from_price") : "",
-                                                             price_text: option.price_text, price: eur(option.price_eur), source: option.source}) + " ", "muted");
-        if (option.url && option.url.startsWith("https://")) {
-          const link = add(line, "a", t("source_link_small"));
-          link.href = option.url; link.target = "_blank"; link.rel = "noopener noreferrer";
-        }
-      }
-    }
-  }
+  add(step(leg.arrival_time ? clock(times.lands) : t("no_time")), "p", t("step_landing", {airport: place(leg.to)}));
+  const onward = step(times.guess(from, times.out), wayIcon(from), from.grade);
+  add(onward, "p", t("step_onward", {minutes: times.out - times.lands}));
+  describeWay(onward, from);
+  add(step(times.guess(from, times.arrive)), "p", t("step_arrival", {place: end}));
 }
 
 // Times as minutes from midnight of the day the trip starts, and back: a time past midnight says the day it falls on
@@ -148,19 +200,45 @@ const svgAdd = (parent, tag, attributes, text) => { const element = document.cre
   for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
   if (text !== undefined) element.textContent = text; parent.append(element); return element; };
 
+// The vehicles drawn with their icon on the line: the app's icons (trip_planner/report/icons.py), whose sprite is in
+// the page, named as icons.mode_of names a vehicle (confirm.vehicles)
+const VEHICLE_ICONS = new Set(["train", "bus", "tram", "ferry"]);
+const SHORTEST = 78;     // the least width of a part between two points with their time and place: room for the labels
+const SHORTEST_RIDE = 34, SHORTEST_WAIT = 12;   // ... of a vehicle and of a change inside a way: room for its icon, and a gap that shows
+
 // An option drawn as the app draws it (app/report_page.py): a straight line from the first point to the last, each
 // part as long as its share of the time, in the colour of the grade of its times, a wait as a thin grey line, and
-// at each point its time above and its place below. points has one more item than parts.
+// at each point its time above and its place below. points has one more item than parts. A part may name its
+// vehicle's kind as a third item, drawn on the line. A point may be a change of vehicle, [time, place, "change"]: a
+// small dot whose time and place are said on hover; a point that is null is a boundary with nothing drawn.
 function drawLine(parent, title, points, parts) {
   add(parent, "p", title, "line-title");
-  const shortest = 78, edge = 6, y = 30, room = Math.max(760, parts.length * shortest + 2 * edge);
+  const edge = 6, y = 30;
+  const labelled = point => point && point.length < 3;
+  const least = parts.map((part, i) => labelled(points[i]) && labelled(points[i + 1]) ? SHORTEST : part[2] ? SHORTEST_RIDE : SHORTEST_WAIT);
+  const room = Math.max(760, least.reduce((sum, width) => sum + width, 0) + 2 * edge);
   const svg = svgAdd(add(parent, "div", undefined, "line"), "svg", {viewBox: "0 0 " + room + " 64", role: "img", "aria-label": title});
   const total = parts.reduce((sum, [, minutes]) => sum + Math.max(1, minutes), 0);
+  const free = room - 2 * edge - least.reduce((sum, width) => sum + width, 0);
   const xs = [edge];
-  for (const [, minutes] of parts) xs.push(xs[xs.length - 1] + shortest + (room - 2 * edge - parts.length * shortest) * Math.max(1, minutes) / total);
+  parts.forEach(([, minutes], i) => xs.push(xs[i] + least[i] + free * Math.max(1, minutes) / total));
   parts.forEach(([grade], i) => svgAdd(svg, "line", {x1: xs[i], x2: xs[i + 1], y1: y, y2: y, "stroke-width": grade ? 7 : 3,
                                                      stroke: grade ? data.grade_colours[grade] : "var(--line)"}));
-  points.forEach(([time, place], i) => {
+  parts.forEach(([, , kind], i) => {
+    if (!VEHICLE_ICONS.has(kind) || xs[i + 1] - xs[i] < SHORTEST_RIDE - 4) return;
+    const middle = (xs[i] + xs[i + 1]) / 2;
+    svgAdd(svg, "circle", {cx: middle, cy: y, r: 11, fill: "var(--bg)"});
+    svgAdd(svg, "use", {href: "#i-" + kind, x: middle - 8, y: y - 8, width: 16, height: 16, class: "vehicle",
+                    fill: "none", stroke: "var(--fg)", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-linejoin": "round"});
+  });
+  points.forEach((point, i) => {
+    if (!point) return;
+    const [time, place, change] = point;
+    if (change) {   // the changes of a way are too close together for their labels: said on hover
+      const dot = svgAdd(svg, "circle", {cx: xs[i], cy: y, r: 3.5, fill: "var(--bg)", stroke: "var(--fg)", "stroke-width": 1.5});
+      svgAdd(dot, "title", {}, (time + " " + place).trim());
+      return;
+    }
     const anchor = i === 0 ? "start" : i === points.length - 1 ? "end" : "middle";
     svgAdd(svg, "circle", {cx: xs[i], cy: y, r: 5, fill: "var(--bg)", stroke: "var(--fg)", "stroke-width": 2});
     svgAdd(svg, "text", {x: xs[i], y: y - 10, "text-anchor": anchor, "font-weight": 700, fill: "var(--fg)"}, time);
@@ -168,26 +246,64 @@ function drawLine(parent, title, points, parts) {
   });
 }
 
+// A way to or from an airport on the line, one part per vehicle when its vehicles are known (as the planner's
+// results.ride_parts): [the points inside it, its parts]. Each vehicle in the colour of the way's grade with its icon,
+// the walks and the waits for the next one grey, a change where one ends and the next starts. A way of one vehicle,
+// or whose vehicles' times do not fit in its own, stays one part.
+function wayParts(way, minutes) {
+  const vehicles = way.vehicles || [], rides = vehicles.filter(vehicle => vehicle.kind !== "walk");
+  const whole = [[], [[way.grade, minutes, rides.length ? rides[0].kind : ""]]];
+  if (rides.length < 2 || !way.leave) return whole;
+  const gap = (first, last) => (minutesOf(last) - minutesOf(first) + 1440) % 1440;
+  const segments = [];
+  let at = way.leave;
+  rides.forEach((ride, i) => {
+    const before = gap(at, ride.time);   // a walk to the first stop, or the wait for the next vehicle
+    if (before) segments.push([i ? [at, rides[i - 1].to, "change"] : null, [null, before]]);
+    segments.push([i ? [ride.time, ride.from, "change"] : null, [way.grade, gap(ride.time, ride.arrive), ride.kind]]);
+    at = ride.arrive;
+  });
+  const after = minutes - segments.reduce((sum, [, part]) => sum + part[1], 0);   // a walk from the last stop
+  if (after < 0) return whole;
+  if (after) segments.push([null, [null, after]]);
+  return [segments.slice(1).map(([point]) => point), segments.map(([, part]) => part)];
+}
+
 // One way of a flight as the planner's line: from the city to the airport, the wait there, the flight, the wait
 // after landing and the way into the city. A way to or from an airport looked up for this flight has its own times;
 // the others are worked out from the flight and the minutes known, and written with "~".
-function flightLine(parent, title, leg, toAirport, fromAirport, start, end) {
+// A way to or from an airport read for this very flight, with its own times
+const knownWay = way => way.looked_up && way.leave && way.arrive;
+
+// The times of one way of a trip, as minutes from midnight of its day: leaving the city, at the airport, the take-off,
+// the landing, leaving the airport and reaching the city. The line and the steps both say these, so they agree.
+function legTimes(leg, toAirport, fromAirport) {
   toAirport = toAirport || {grade: "C", minutes: 0}; fromAirport = fromAirport || {grade: "C", minutes: 0};
   const departs = minutesOf(leg.time), atAirport = departs - data.airport_minutes;
   const flying = leg.minutes || Math.max(0, between(leg.date, leg.time, leg.arrival_date || leg.date, leg.arrival_time || leg.time));
   // The landing in the local time of the airport landed at, as the flight gives it: the way into the city is in that time
   const lands = leg.arrival_time ? minutesOf(leg.arrival_time) + 1440 * Math.round(between(leg.date, "12:00", leg.arrival_date || leg.date, "12:00") / 1440)
                                  : departs + flying;
-  const known = way => way.looked_up && way.leave && way.arrive;
+  const known = knownWay;
   const reach = known(toAirport) ? minutesOf(toAirport.arrive) - (minutesOf(toAirport.arrive) > departs ? 1440 : 0) : atAirport;
   const leave = known(toAirport) ? reach - ((minutesOf(toAirport.arrive) - minutesOf(toAirport.leave) + 1440) % 1440) : atAirport - toAirport.minutes;
   let out = lands + data.landing_minutes;
   if (known(fromAirport)) { out = minutesOf(fromAirport.leave); while (out < lands) out += 1440; }
   const arrive = known(fromAirport) ? out + (minutesOf(fromAirport.arrive) - minutesOf(fromAirport.leave) + 1440) % 1440 : out + fromAirport.minutes;
   const guess = (way, minutes) => (known(way) ? "" : "~") + clock(minutes);
-  drawLine(parent, title, [[guess(toAirport, leave), start], [guess(toAirport, reach), leg.from], [clock(departs), "✈"], [clock(lands), leg.to],
-                           [guess(fromAirport, out), ""], [guess(fromAirport, arrive), end]],
-           [[toAirport.grade, reach - leave], [null, departs - reach], ["A", flying], [null, out - lands], [fromAirport.grade, arrive - out]]);
+  return {toAirport, fromAirport, departs, flying, lands, reach, leave, out, arrive, guess};
+}
+
+function flightLine(parent, title, leg, toAirport, fromAirport, start, end) {
+  const {departs, flying, lands, reach, leave, out, arrive, guess} = legTimes(leg, toAirport, fromAirport);
+  toAirport = toAirport || {grade: "C", minutes: 0}; fromAirport = fromAirport || {grade: "C", minutes: 0};
+  const known = knownWay;
+  // A way looked up for this flight is drawn vehicle by vehicle; the others are one part, their vehicles unknown
+  const [toPoints, toParts] = known(toAirport) ? wayParts(toAirport, reach - leave) : [[], [[toAirport.grade, reach - leave]]];
+  const [fromPoints, fromParts] = known(fromAirport) ? wayParts(fromAirport, arrive - out) : [[], [[fromAirport.grade, arrive - out]]];
+  drawLine(parent, title, [[guess(toAirport, leave), start], ...toPoints, [guess(toAirport, reach), leg.from], [clock(departs), "✈"],
+                           [clock(lands), leg.to], [guess(fromAirport, out), ""], ...fromPoints, [guess(fromAirport, arrive), end]],
+           [...toParts, [null, departs - reach], ["A", flying], [null, out - lands], ...fromParts]);
 }
 
 // An operator with its mode, unless its name says it already: "ÖBB (train)", "FlixBus", "BlaBlaCar Bus"
@@ -201,13 +317,13 @@ function groundLine(parent, option) {
   const what = operatorText(option);
   const ride = (title, leg, from, to) => {
     const leaves = minutesOf(leg.leave), arrives = minutesOf(leg.arrive) + 1440 * Math.round(between(leg.day, "12:00", leg.arrive_day, "12:00") / 1440);
-    drawLine(parent, title + ", " + what + ", " + day(leg.day) + ": " + eur(leg.price_eur), [[clock(leaves), from], [clock(arrives), to]], [[leg.grade, arrives - leaves]]);
+    drawLine(parent, title + ", " + what + ", " + day(leg.day) + ": " + eur(leg.price_eur), [[clock(leaves), from], [clock(arrives), to]], [[leg.grade, arrives - leaves, option.mode]]);
   };
   if (out) ride(data.round_trip ? t("out") : t("by_mode", {mode: modeName(option.mode)}), out, option.from_stop, option.stop);
   else {
     const leaves = minutesOf(option.times[0]);
     drawLine(parent, (data.round_trip ? t("out") + ", " : "") + t("ground_no_price_line", {what: what, time: option.times[0], weekdays: weekdays(option.weekdays)}),
-             [[clock(leaves), option.from_stop], [clock(leaves + option.minutes), option.stop]], [[option.grade, option.minutes]]);
+             [[clock(leaves), option.from_stop], [clock(leaves + option.minutes), option.stop]], [[option.grade, option.minutes, option.mode]]);
   }
   if (!data.round_trip) return;
   if (back) {
@@ -220,7 +336,7 @@ function groundLine(parent, option) {
     const leaves = minutesOf(time);
     drawLine(parent, t("back_timetable_line", {what: what, why: out ? t("not_sold_days") : t("no_price"), time: time, date: date})
              + (timetable.times.length > 1 ? " " + t("more_count", {count: timetable.times.length - 1}) : ""),
-             [[clock(leaves), option.stop], [clock(leaves + timetable.minutes), option.from_stop]], [["B", timetable.minutes]]);
+             [[clock(leaves), option.stop], [clock(leaves + timetable.minutes), option.from_stop]], [["B", timetable.minutes, option.mode]]);
     return;
   }
   add(parent, "p", t("back") + ", " + what + ": " + (timetable === null ? t("back_no_answer")
@@ -344,14 +460,13 @@ function explain(p, scroll) {
   const warnings = [];
   const warning = add(panel, "div");
   const access = p.access || [];
-  describeLeg(panel, t("out"), p, warnings, access[0], access[1]);
+  describeLeg(panel, t("out"), p, warnings, access[0], access[1], data.origin.short, p.name);
   if (p.back) {
     add(panel, "p", t("landing_to_back", {hours: hours(between(p.arrival_date || p.date, p.arrival_time || p.time, p.back.date, p.back.time))})
         + (p.stay ? ": " + t("stay_detail", {stay: stayText(p.stay), city: p.name, minutes: data.airport_minutes})
            + (p.stay.estimated ? t("stay_estimated") : "") : "") + ".", "muted");
-    describeLeg(panel, t("back"), p.back, warnings, access[2], access[3]);
+    describeLeg(panel, t("back"), {...p.back, source: p.source}, warnings, access[2], access[3], p.name, data.origin.short);
   }
-  describeAccess(panel, p);
   if (warnings.length) {
     add(warning, "h4", t("before_booking"), "warn");
     const list = add(warning, "ul", undefined, "links");
@@ -394,7 +509,7 @@ const rows = document.getElementById("rows");   // the destinations by air, one 
 // In the app, the way back to Discover's form; a page opened as a file has none
 if (data.planner_link) {
   const back = document.getElementById("back");
-  back.textContent = t("back"); back.href = "/discover"; back.hidden = false;
+  back.textContent = t("back_link"); back.href = "/discover"; back.hidden = false;
 }
 
 // Whether the program is still searching or has seen everything. The flights of every destination were all
@@ -477,14 +592,30 @@ function describeFilters() {
     input.onchange = () => { filter[key] = input.checked; draw(); };
     label.append(" " + text);
   };
-  // A slider up to the largest value of the map, its last step meaning no limit
-  const slider = (key, top, step, text) => {
-    const label = add(box, "label"), shown = add(label, "span"), input = add(label, "input");
-    input.type = "range"; input.min = step; input.max = top; input.step = step;
-    input.value = filter[key] === null ? top : Math.min(filter[key], top);
-    const say = () => { shown.textContent = text(filter[key]) + " "; };
-    input.oninput = () => { filter[key] = Number(input.value) >= top ? null : Number(input.value); say(); draw(); };
-    say();
+  // A limit as the booking sites have it: a box to type the exact value in and a slider beside it, the two kept
+  // together, up to the largest value of the map (which means no limit). The words around the value are the text's
+  // own, split where {limit} goes, and do not change: the slider stays where it is while it moves.
+  const slider = (key, text, top, step, unit, none) => {
+    const label = add(box, "label", undefined, "limit"), [before, after] = text.split("\u0000");
+    label.append(before);
+    const typed = add(label, "input"), range = add(label, "input");
+    label.insertBefore(document.createTextNode(unit + after), range);
+    typed.type = "number"; typed.min = 0; typed.max = top; typed.step = 1; typed.inputMode = "numeric";
+    range.type = "range"; range.min = step; range.max = top; range.step = step;
+    typed.setAttribute("aria-label", before.trim() || key);
+    range.setAttribute("aria-label", before.trim() || key);
+    const show = () => {
+      typed.value = filter[key] === null ? top : filter[key];
+      range.value = filter[key] === null ? top : Math.min(filter[key], top);
+      label.title = filter[key] === null ? none : "";
+      label.classList.toggle("set", filter[key] !== null);
+    };
+    const choose = value => { filter[key] = value === null || value >= top ? null : Math.max(0, value); show(); draw(); };
+    range.oninput = () => choose(Number(range.value));
+    // A typed value counts once it is complete: on Enter or on leaving the box, not at each digit
+    typed.onchange = () => choose(typed.value === "" ? null : Math.round(Number(typed.value)));
+    typed.onkeydown = event => { if (event.key === "Enter") typed.blur(); };
+    show();
   };
   check("flights", t("filter_flights"));
   check("direct", t("filter_direct"));
@@ -493,9 +624,9 @@ function describeFilters() {
   if (modes.has("train")) check("train", t("filter_train"));
   if (modes.has("bus")) check("bus", t("filter_bus"));
   const top = Math.max(10, Math.ceil(Math.max(0, ...state.points.map(p => p.total_eur), ...byGround.map(g => fareOf(g) || 0)) / 10) * 10);
-  slider("price", top, 10, value => t("filter_price", {limit: value === null ? t("any_price") : value + " €"}));
+  slider("price", t("filter_price", {limit: "\u0000"}), top, 10, " €", t("any_price"));
   const longest = Math.max(1, ...state.points.map(p => p.minutes || 0), ...byGround.map(g => g.minutes));
-  slider("hours", Math.ceil(longest / 60), 1, value => t("filter_hours", {limit: value === null ? t("any_time") : value + " h"}));
+  slider("hours", t("filter_hours", {limit: "\u0000"}), Math.ceil(longest / 60), 1, " h", t("any_time"));
   const countries = {};
   for (const p of [...state.points, ...byGround]) if (p.country) countries[p.country] = (countries[p.country] || 0) + 1;
   const label = add(box, "label", t("filter_country") + " ");
@@ -655,7 +786,9 @@ function render() {
       + (seen.ryanair_no_fare ? t("coverage_ryanair", {count: seen.ryanair_no_fare}) : "")
       + (seen.missing.length ? t("coverage_missing", {count: seen.missing.length}) : ".");
   describeStatus();
-  describeFilters();
+  // The filters are made again with the new destinations, but not under the traveller's hand: a slider being dragged
+  // or a value being typed would be lost. They follow at the next change after the traveller is done.
+  if (!document.getElementById("filters").contains(document.activeElement)) describeFilters();
   draw();
   const discarded = document.getElementById("discarded");
   discarded.replaceChildren();

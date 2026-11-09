@@ -36,19 +36,19 @@ def budapest_fare(trip: Trip) -> float | None:
 
 TARIFFS = [
     # https://pid.cz/en/new-pid-tariff-from-1-january-2026-dont-pay-more-than-you-have-to/ : paper tickets, zones P, 0 and B
-    FareSource("PID Prague (published tariff)", "CZ", lambda step: agency(step) == "prazska integrovana doprava", prague_fare, through=True, checked="2026-10-13"),
+    FareSource("PID Prague", "CZ", lambda step: agency(step) == "prazska integrovana doprava", prague_fare, through=True, checked="2026-10-13"),
     # https://bkk.hu/en/tickets-and-passes/prices/ : single ticket 500 Ft, airport shuttle bus single ticket 2 500 Ft
-    FareSource("BKK Budapest (published tariff)", "HU", lambda step: agency(step) == "bkk", budapest_fare, checked="2026-10-13"),
+    FareSource("BKK Budapest", "HU", lambda step: agency(step) == "bkk", budapest_fare, checked="2026-10-13"),
     # https://www.vrt.be/vrtnws/en/2026/01/27/brussels-public-transport-company-to-increase-fare-prices-from-1 : 2.40 from 1 February 2026.
     # Line 12 to the airport has a dearer ticket, which was not read: it is left to the estimate
-    FareSource("STIB Brussels (published tariff)", "BE", lambda step: agency(step) == "stib" and str(step.get("line")) != "12",
+    FareSource("STIB Brussels", "BE", lambda step: agency(step) == "stib" and str(step.get("line")) != "12",
                timed([(60, 2.40)]), through=True, checked="2026-10-13"),
     # https://www.vrt.be/vrtnws/en/2026/01/02/de-lijn-to-increase-its-fares-from-february : the single ticket stays at 3.00, 60 minutes
-    FareSource("De Lijn (published tariff)", "BE", lambda step: agency(step) == "de lijn", timed([(60, 3.00)]), through=True, checked="2026-10-13"),
+    FareSource("De Lijn", "BE", lambda step: agency(step) == "de lijn", timed([(60, 3.00)]), through=True, checked="2026-10-13"),
     # https://www.belgiantrain.be/en/tickets-and-railcards/bus-ticket-charleroi-airport : the bus between the airport and Charleroi station
-    FareSource("TEC Charleroi Airport (published tariff)", "BE", lambda step: agency(step) == "letec" and str(step.get("line")) == "A1",
+    FareSource("TEC Charleroi Airport", "BE", lambda step: agency(step) == "letec" and str(step.get("line")) == "A1",
                lambda trip: 6.00, checked="2026-10-13"),
     # https://www.metrolisboa.pt/wp-content/uploads/2025/12/Tarifas_site_2026_PT.pdf : Carris/Metro ticket, one hour on both networks
-    FareSource("Carris/Metro Lisbon (published tariff)", "PT", lambda step: agency(step) in ("metropolitano de lisboa, e.p.e.", "carris"),
+    FareSource("Carris/Metro Lisbon", "PT", lambda step: agency(step) in ("metropolitano de lisboa, e.p.e.", "carris"),
                timed([(60, 1.90)]), through=True, checked="2026-10-13"),
 ]

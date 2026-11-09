@@ -34,10 +34,10 @@ from typing import Any, Callable
 
 import httpx
 
-from discover import ground
+from discover.overland import ground
 from discover.confirm import TOP
 from discover.finder import Found
-from discover.sources import Days
+from discover.flights.sources import Days
 from trip_planner.sources import fares
 from trip_planner.sources.operators.flixbus import flixbus_price, flixbus_search
 from trip_planner.sources.timetables.client import step_of

@@ -1,5 +1,5 @@
 """The regions of Europe (regions.py): which ones a map found too few cities in, and what each is asked again. No network."""
-from discover import regions
+from discover.flights import regions
 from trip_planner.trip.places import Place
 
 ANTWERP = Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40)
@@ -33,8 +33,9 @@ def test_a_region_asked_again_makes_at_most_a_few_requests():
     assert len(wanted[0]["targets"]) == regions.REGION_REQUESTS
 
 def test_the_map_says_how_many_cities_of_each_region_it_found():
-    from discover import breakdown, finder
-    from discover.sources import Days
+    from discover.view import breakdown
+    from discover import finder
+    from discover.flights.sources import Days
     found = finder.Found(ANTWERP, Days("2026-11-12", "2026-11-19"), [], [], [], [],
                          regions=[{"region": "Baltic states", "large": 5, "before": 0, "requests": 3, "after": 2},
                                   {"region": "Iberia", "large": 20, "before": 9, "requests": 0, "after": 9}])

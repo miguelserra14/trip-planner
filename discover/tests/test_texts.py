@@ -3,8 +3,8 @@ asks for exists, English and Portuguese have the same texts with the same {value
 import dataclasses
 import re
 
-from discover import page
-from discover.sources import Days
+from discover.view import page
+from discover.flights.sources import Days
 from trip_planner import current
 from trip_planner.texts import TEXTS
 

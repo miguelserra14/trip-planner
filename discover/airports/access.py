@@ -22,7 +22,7 @@ from typing import Any
 
 import httpx
 
-from discover import transfers
+from discover.airports import transfers
 from trip_planner.trip.trip_settings import USER_AGENT
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price
 from trip_planner.texts import tr

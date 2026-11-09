@@ -239,8 +239,9 @@ def test_the_kind_of_trip_follows_the_days_to_come_back(tab):
 
 def test_a_map_in_the_app_runs_no_script_of_its_own_and_its_trip_opens_the_planners_form(tab, app, monkeypatch):
     """The one test that needs more than this computer: Leaflet comes from unpkg. The map's tiles are not asked for."""
-    from discover import finder, page
-    from discover.sources import Days
+    from discover import finder
+    from discover.view import page
+    from discover.flights.sources import Days
     from trip_planner.trip.places import Place
     airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7}}
     monkeypatch.setattr(page, "load_airports", lambda: airports)
@@ -292,8 +293,9 @@ def test_a_map_asked_for_opens_by_itself_once_its_page_is_ready_and_only_then(ta
 
 def test_a_city_reached_by_train_or_bus_has_a_card_beside_the_flights_by_its_price(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the test above."""
-    from discover import finder, page
-    from discover.sources import Days
+    from discover import finder
+    from discover.view import page
+    from discover.flights.sources import Days
     from trip_planner.trip.places import Place
     airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7}}
     monkeypatch.setattr(page, "load_airports", lambda: airports)

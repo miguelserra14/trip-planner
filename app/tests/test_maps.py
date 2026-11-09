@@ -12,8 +12,9 @@ from urllib.parse import urlencode
 from app import job, maps
 from app.tests.test_search import StandIn
 from app.site import Site
-from discover import finder, page
-from discover.sources import Days
+from discover import finder
+from discover.view import page
+from discover.flights.sources import Days
 from settings import SETTINGS
 from trip_planner.texts import tr
 from trip_planner.trip.places import Place
@@ -136,7 +137,7 @@ def test_the_page_opens_the_planner_in_the_app_and_asks_for_its_destinations_whe
     assert 'fetch("state")' in script and 'fetch("/state")' not in script   # relative: under the map's address in the app
 
 def test_the_maps_process_tells_the_app_the_page_the_trips_and_each_change(monkeypatch):
-    import discover.page as discover_page
+    import discover.view.page as discover_page
     import discover.session as discover_session
     import trip_planner.trip.places as places
 
@@ -174,7 +175,7 @@ def test_the_maps_process_tells_the_app_the_page_the_trips_and_each_change(monke
     assert said[1]["text"] == "<page link=/discover/map/1/plan/>" and said[-2]["text"] == {"version": 2, "running": True}
 
 def test_a_map_told_to_stop_ends_its_lookups_at_the_next_step(monkeypatch):
-    import discover.page as discover_page
+    import discover.view.page as discover_page
     import discover.session as discover_session
     import trip_planner.trip.places as places
 

@@ -16,7 +16,7 @@ from datetime import datetime
 
 from discover import finder
 from discover.session import Session
-from discover.sources import Days
+from discover.flights.sources import Days
 
 def day(text: str) -> str:
     try:

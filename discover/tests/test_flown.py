@@ -8,8 +8,9 @@
 import asyncio
 from datetime import date
 
-from discover import finder, flown
-from discover.sources import Days
+from discover import finder
+from discover.flights import flown
+from discover.flights.sources import Days
 from trip_planner.trip.places import Place
 
 ARTICLE = """## Airlines and destinations
@@ -91,7 +92,7 @@ def test_the_destinations_missed_are_asked_of_kiwi_once_more_by_name(monkeypatch
     assert found.coverage["found"] == 1 and "OTP" not in found.coverage["missing"]   # found by asking it by name
 
 def test_the_map_lists_the_destinations_flown_and_not_found_with_their_airlines():
-    from discover import breakdown
+    from discover.view import breakdown
     seen = flown.seen_codes(ROUTES, {"STN", "OTP"}, AIRPORTS)
     found = finder.Found(Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40), Days("2026-11-12", "2026-11-19"), [], [], [], [],
                          flown=ROUTES, coverage=flown.coverage(ROUTES, seen, {"CRL"}, asked={"BOJ"}))

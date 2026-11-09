@@ -24,7 +24,7 @@ from datetime import date, datetime
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
-from discover import access, transfers
+from discover.airports import access, transfers
 from discover import finder
 from discover.finder import Found, one_per_city, options_of, with_access
 from trip_planner import current

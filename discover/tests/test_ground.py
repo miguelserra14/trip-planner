@@ -2,8 +2,8 @@
 timetables, matched to the cities, checked on the way back, never priced. No network: Transitous is a made-up one."""
 from datetime import date
 
-from discover import ground
-from discover.sources import Days
+from discover.overland import ground
+from discover.flights.sources import Days
 from trip_planner.trip.places import Place
 
 COIMBRA = Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43)

@@ -25,9 +25,9 @@ def make_map(asked: dict[str, Any], events, answers: Iterator[str] | None = None
     # discover's Session reads the language of its texts from settings.py: the one of the app's pages instead
     settings.SETTINGS = dataclasses.replace(settings.SETTINGS, language=current.SETTINGS.language)
     from discover import confirm, finder
-    from discover.page import map_page, map_state, trips
+    from discover.view.page import map_page, map_state, trips
     from discover.session import Session, snapshot, times
-    from discover.sources import read_days
+    from discover.flights.sources import read_days
     from trip_planner.trip.places import load_airports
 
     try:

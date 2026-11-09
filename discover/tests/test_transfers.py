@@ -12,7 +12,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from discover import access, rides, transfers
+from discover.airports import access, rides, transfers
 from trip_planner import current
 from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.trip.places import Place

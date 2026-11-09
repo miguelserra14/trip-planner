@@ -8,9 +8,9 @@ gaps to look into, it does not prove them."""
 from collections import Counter
 from typing import Any
 
-from discover import flown, regions
+from discover.flights import flown, regions
 from discover.finder import COUNTRIES_KM, Found, KIWI_ANSWER_HOURS
-from discover.routes import airline_names, known_routes
+from discover.flights.routes import airline_names, known_routes
 from trip_planner.trip.places import distance_km, load_airports
 from trip_planner.sources import kiwi
 from trip_planner.texts import tr

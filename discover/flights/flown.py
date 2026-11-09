@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote
 
-from discover import access
+from discover.airports import access
 from trip_planner.trip.places import distance_km, load_airports
 from trip_planner.texts import tr
 from trip_planner.utils import plain
@@ -144,7 +144,7 @@ def routes(codes: list, today: date, say: Callable = print, extract: Callable | 
     """The routes flown from each airport, by code: {"routes", "article", "checked"}; kept ROUTES_DAYS. An airport
     whose article or table could not be read has none, and is read again by the next map."""
     if extract is None:
-        from discover.transfers import tavily_extract as extract
+        from discover.airports.transfers import tavily_extract as extract
     known = access.read(ROUTES)
     fresh = lambda code: code in known and date.fromisoformat(known[code]["checked"]) > today - timedelta(days=ROUTES_DAYS)
     new = [code for code in codes if not fresh(code)]

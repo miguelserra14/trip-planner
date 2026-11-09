@@ -11,7 +11,8 @@ from trip_planner.trip.trip_settings import settings_file
 
 SETTINGS = settings_file().SETTINGS   # read first here, as the map reads it (discover/session.py imports it too)
 
-from discover import finder, ground, ground_fares
+from discover import finder
+from discover.overland import ground, ground_fares
 from trip_planner import current
 
 @pytest.fixture(autouse=True)

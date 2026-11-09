@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from discover.access import city_name
+from discover.airports.access import city_name
 from discover.finder import Found
 from trip_planner import current
 from trip_planner.texts import TEXTS, REFERENCE, text_in, tr

@@ -11,7 +11,7 @@ from typing import Any
 
 from app.fields import calendar_data
 from discover import confirm
-from discover.page import SCRIPT, STYLE
+from discover.view.page import SCRIPT, STYLE
 from trip_planner.texts import tr
 
 SOURCES = ("light", "full", "fast", "ground")   # the ways to search the flights, as python -m discover has them (discover_win_source_...)
@@ -53,7 +53,7 @@ def read(sent: dict[str, str]) -> dict[str, Any]:
 
 def refusal_of(asked: dict[str, Any]) -> str:
     """Why the form cannot make a map, or nothing. The process reads the days the same way."""
-    from discover.sources import read_days
+    from discover.flights.sources import read_days
     if not asked["city"]:
         return tr("discover_win_no_city")
     try:

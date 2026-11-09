@@ -13,9 +13,10 @@ from datetime import date, timedelta
 import httpx
 import pytest
 
-from discover import access, confirm, finder
+from discover.airports import access
+from discover import confirm, finder
 from discover.finder import Found
-from discover.sources import Days
+from discover.flights.sources import Days
 from trip_planner import current
 from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.itineraries import legs

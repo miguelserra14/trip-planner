@@ -4,9 +4,9 @@ that can still be among the map's cheapest. No network: FlixBus, the timetables 
 import threading
 from datetime import date
 
-from discover import ground_fares
+from discover.overland import ground_fares
 from discover.finder import Found
-from discover.sources import Days
+from discover.flights.sources import Days
 from trip_planner.trip.places import Place
 
 ANTWERP = Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40)

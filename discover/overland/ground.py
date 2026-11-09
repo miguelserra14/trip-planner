@@ -29,7 +29,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from discover.sources import Days
+from discover.flights.sources import Days
 from trip_planner.sources import fares
 from trip_planner.sources.operators.alsa import ALSA_STOP
 from trip_planner.sources.timetables.client import TRANSITOUS_API

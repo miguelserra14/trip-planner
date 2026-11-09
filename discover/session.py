@@ -15,11 +15,12 @@ import time
 from pathlib import Path
 from typing import Any
 
-from discover import confirm, finder, ground, ground_fares
-from discover.breakdown import as_text, breakdown
+from discover import confirm, finder
+from discover.overland import ground, ground_fares
+from discover.view.breakdown import as_text, breakdown
 from discover.finder import discover, Found
-from discover.page import map_page, map_state
-from discover.sources import Days
+from discover.view.page import map_page, map_state
+from discover.flights.sources import Days
 from trip_planner import current, utils
 from trip_planner.report.full import remember_duration
 from trip_planner.texts import tr

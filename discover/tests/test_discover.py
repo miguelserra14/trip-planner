@@ -17,10 +17,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from discover import __main__ as command, breakdown, confirm, finder, ground, ground_fares, page, sources
+from discover import __main__ as command, confirm, finder
+from discover.view import breakdown, page
+from discover.overland import ground, ground_fares
+from discover.flights import sources
 from discover import session as session_module
-from discover import routes as routes_module
-from discover.sources import Days
+from discover.flights import routes as routes_module
+from discover.flights.sources import Days
 from trip_planner.trip.places import Place
 
 ROOT = Path(__file__).parents[2]

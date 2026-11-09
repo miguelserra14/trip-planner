@@ -111,6 +111,8 @@ function calendar(field, form) {
 
 function calendars() {
   for (const field of document.querySelectorAll("input[data-calendar]")) {
+    // The browser's list of dates typed before would cover the calendar.
+    field.autocomplete = "off";
     let open = null;
     const close = () => { if (open) { open.remove(); open = null; } };
     const show = () => {

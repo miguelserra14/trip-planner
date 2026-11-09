@@ -238,7 +238,7 @@ def airports_form(asked: dict[str, Any], token: str, refusal: str) -> str:
 
 def question_form(token: str) -> str:
     return (f'<form method="post" action="/ask" class="ask question">{hidden(token)}'
-            f'<label>{html.escape(tr("ui_question"))}<input name="question" required maxlength="500" autofocus></label>'
+            f'<label>{html.escape(tr("ui_question"))}<input name="question" required maxlength="500"></label>'
             f'<button type="submit">{html.escape(tr("ui_ask"))}</button><small>{html.escape(tr("followup_note"))}</small></form>')
 
 def conversation_part(job: Job, token: str, to_html: Callable[[str], str]) -> str:

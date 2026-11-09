@@ -38,7 +38,7 @@ from trip_planner.texts import tr
 from trip_planner.trip.ground_choice import is_rail
 from trip_planner.trip.places import distance_km, Place
 from trip_planner.trip.trip_settings import USER_AGENT
-from trip_planner.utils import say as print_line, write_whole
+from trip_planner.utils import plain, say as print_line, write_whole
 
 # The operators shown, by the start of their name in Transitous (lower case): the name shown and where to buy
 OPERATORS = {
@@ -52,13 +52,30 @@ OPERATORS = {
     "cp - comboios": ("CP", "https://www.cp.pt"),
     "flixbus": ("FlixBus", "https://global.flixbus.com"),
 }
+# The long-distance trains of any other operator are shown too, by their timetable only: one name for the ways
+# the feeds write each of these (by the start of the name in lower case, with no accents), and where to buy. An
+# operator not listed is shown under its name in the timetable, without the kind of company it is ("a.s.", "AB").
+RAIL_OPERATORS = {
+    "schweizerische bundesbahnen": ("SBB", "https://www.sbb.ch"),
+    "sbb": ("SBB", "https://www.sbb.ch"),
+    "dsb": ("DSB", "https://www.dsb.dk"),
+    "danische staatsbahnen": ("DSB", "https://www.dsb.dk"),
+    "ceske drahy": ("České dráhy", "https://www.cd.cz"),
+    "zeleznicna spolocnost slovensko": ("ZSSK", "https://www.zssk.sk"),
+    "zssk": ("ZSSK", "https://www.zssk.sk"),
+    "leo express": ("Leo Express", "https://www.leoexpress.com"),
+    "snalltaget": ("Snälltåget", "https://www.snalltaget.se"),
+    "oresundstag": ("Öresundståg", "https://www.oresundstag.se"),
+    "mav": ("MÁV", "https://jegy.mav.hu"),   # at stations of other countries' feeds, where fares.py does not price it
+}
+COMPANY = re.compile(r",?\s+(a\.\s?s\.|s\.r\.o\.|ab|ag|gmbh\b.*|zrt\.|s\.?a\.?|s\.p\.a\.|s\.?\s?l\.?(\s?u\.?)?)$", re.IGNORECASE)
 LONG_MODES = ("HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "COACH")   # the departures read: no local ones
 # The bus stops read. FlixBus's are also in a "gb-flixbus_" feed, under the same ids and with the same buses;
 # a "Waypoint" of FlixBus is where its buses pass, not where travellers get on or off ("Kornwestheim Pre Waypoint").
 COACH_FEEDS = ("eu-blablacar-bus_", "eu-flixbus_", ALSA_STOP)
 GROUND = Path(__file__).parents[1] / "cache" / "ground.json"   # the way out found for each city
 GROUND_DAYS = 30           # a city's trains and buses are looked for again after this long...
-GROUND_VERSION = 4         # ... or when what is read changes: 4, FlixBus and the operators the planner prices, with where (2026-10-24)
+GROUND_VERSION = 5         # ... or when what is read changes: 5, the long-distance trains of every operator (2026-11-09)
 STOP_KM = 12               # the stations this close to the traveller's city are its stations
 MATCH_KM = 20              # a station this close to the centre of a city of the map reaches that city
 # A city no flight of the map goes to is shown when a train or bus reaches it straight, farther than this (Antwerp
@@ -87,6 +104,7 @@ WEEK_SECONDS = 7 * 24 * 3600
 MAX_DEPARTURES = 1000
 MAX_TRIPS = 80             # trains and buses read per city, one of each pattern (operator, where it goes): 2 minutes once a month
 MAX_PER_CITY = 4           # operators shown per destination, the quickest first
+SAME_VEHICLE_MINUTES = 15  # two operators leaving at the same time and arriving this close are one train (same_vehicle)
 MAX_BACK_REQUESTS = 60     # ways back asked for per map, once it is open: a minute and a half of timetables
 BACK_WINDOW_DAYS = 3       # the way back is looked for over the first days to come back on, at most this many
 SPACING_SECONDS = 1.5      # between two requests: Transitous is a free community service
@@ -115,14 +133,19 @@ def operator_of(agency: str, mode: str = "", stop_id: str = "") -> tuple[str, st
     """The operator shown, its site and where code can read its price for a day (ground_fares.py), for a departure
     of Transitous: one of OPERATORS (FlixBus is read everywhere, "EU"), or one the planner's fares.py prices (ÖBB,
     RegioJet, Trenitalia, MÁV, Elron, ALSA, and Renfe and Ouigo through Movelia, shown under their own name), with
-    the country it sells in as fares.py says. "" where it is not read. None for the others, and for a published
-    tariff or Luxembourg's free transport: city networks, not trips."""
+    the country it sells in as fares.py says. "" where it is not read. Any other long-distance train by its
+    timetable only (RAIL_OPERATORS). None for the other coaches, and for a published tariff or Luxembourg's free
+    transport: city networks, not trips."""
     name = (agency or "").lower()
     known = next((shown for start, shown in OPERATORS.items() if name.startswith(start)), None)
     if known:
         return known[0], known[1], "EU" if known[0] == "FlixBus" else ""
     source = fares.source_of({"agency": agency or "", "rail": is_rail(mode), "coach": mode == "COACH", "mode": mode,
                               "from_id": stop_id, "to_id": stop_id})
+    if source is None and mode in LONG_MODES and mode != "COACH" and agency.strip():
+        known = next((shown for start, shown in RAIL_OPERATORS.items() if plain(agency).startswith(start)), None)
+        shown, site = known or (COMPANY.sub("", agency.strip()), "")
+        return shown, site, ""
     if source is None or source.tariff or source.name.startswith("Luxembourg"):
         return None
     # Movelia sells for others: their own name is shown, "RENFE OPERADORA" as Renfe Operadora
@@ -218,6 +241,18 @@ def reached(trip: dict[str, Any], pattern: dict[str, Any]) -> list[dict[str, Any
         del stop["call"]
     return found
 
+def shared(patterns_found: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """MAX_TRIPS of the patterns, taken in turn from each operator: in Zurich the SBB alone has more than that,
+    and would leave out the coaches and the other countries' trains."""
+    by_operator: dict[str, list[dict[str, Any]]] = {}
+    for pattern in patterns_found:
+        by_operator.setdefault(pattern["operator"], []).append(pattern)
+    queues = list(by_operator.values())
+    taken: list[dict[str, Any]] = []
+    while len(taken) < MAX_TRIPS and any(queues):
+        taken += [queue.pop(0) for queue in queues if queue][:MAX_TRIPS - len(taken)]
+    return taken
+
 def from_city(place: Place, today: date, say: Callable = print_line, transitous: Transitous | None = None) -> list[dict[str, Any]]:
     """Every station these operators reach straight from the traveller's city, kept GROUND_DAYS, or until what is
     read changes (GROUND_VERSION)."""
@@ -240,19 +275,32 @@ def from_city(place: Place, today: date, say: Callable = print_line, transitous:
                 found[key_of]["weekdays"] |= pattern["weekdays"]
             else:
                 found[key_of] = pattern
-    stops = [stop for pattern in list(found.values())[:MAX_TRIPS] for stop in reached(transitous.trip(pattern["trip_id"]), pattern)]
+    stops = [stop for pattern in shared(list(found.values())) for stop in reached(transitous.trip(pattern["trip_id"]), pattern)]
     known[key] = {"checked": today.isoformat(), "place": place.label, "version": GROUND_VERSION, "reached": stops}
     write(known)
     return stops
 
+def same_vehicle(one: dict[str, Any], other: dict[str, Any]) -> bool:
+    """Whether an option is another one's train under another name: each country's feed names an international
+    train after its own railway (Prague to Berlin is České dráhy, ZSSK, MÁV and DSB), at the same times. At least
+    half of its departures are the other's: the SBB's many to Basel are not the one Trenitalia leaving with one."""
+    shared = set(one["times"]) & set(other["times"])
+    return (one["mode"] == other["mode"] and abs(one["minutes"] - other["minutes"]) <= SAME_VEHICLE_MINUTES
+            and len(shared) * 2 >= len(set(one["times"])) > 0)
+
 def to_city(stops: list[dict[str, Any]], latitude: float, longitude: float) -> list[dict[str, Any]]:
-    """The quickest train or bus of each operator to a city, by a station within MATCH_KM of its centre."""
+    """The quickest train or bus of each operator to a city, by a station within MATCH_KM of its centre, one
+    name for each train (same_vehicle): the one whose price code can read, else the one with most departures."""
     best: dict[str, dict[str, Any]] = {}
     for stop in stops:
         km = distance_km(latitude, longitude, stop["lat"], stop["lon"])
         if km <= MATCH_KM and (stop["operator"] not in best or stop["minutes"] < best[stop["operator"]]["minutes"]):
             best[stop["operator"]] = {**stop, "km": round(km), "grade": "B"}
-    return sorted(best.values(), key=lambda option: option["minutes"])[:MAX_PER_CITY]
+    kept: list[dict[str, Any]] = []
+    for option in sorted(best.values(), key=lambda option: (not option.get("sold"), -len(option["times"]))):
+        if not any(same_vehicle(option, other) for other in kept):
+            kept.append(option)
+    return sorted(kept, key=lambda option: option["minutes"])[:MAX_PER_CITY]
 
 CITY_LIST: list[dict[str, Any]] = []   # the cities read from CITIES, once per run
 
@@ -416,7 +464,8 @@ def ways_back(cities: list[list[dict[str, Any]]], days: Days, say: Callable = pr
         return 0
     transitous = transitous or Transitous()
     waiting = [option for options in sorted(cities, key=lambda options: min(option["minutes"] for option in options))
-               for option in options if "back" not in option and not (option.get("price") and option["price"]["back"])]
+               for option in options if "back" not in option and not (option.get("price") and option["price"]["back"])
+               and not option.get("source")]   # a coach of sold.py has no timetable to come back by: only its price
     for option in waiting[:MAX_BACK_REQUESTS]:
         try:
             option["back"] = way_back(option, days, transitous)

@@ -12,7 +12,7 @@ from typing import Any
 from discover.airports import access, transfers
 from discover.airports import rides as operator_rides
 from discover.flights import flown, regions
-from discover.overland import ground
+from discover.overland import ground, sold
 from discover.flights.routes import known_routes, route_counts
 from discover.flights.sources import Days, kiwi_destinations, ryanair_destinations
 from trip_planner.trip.places import airports_near, distance_km, load_airports, Place
@@ -236,8 +236,8 @@ async def discover(place: Place, days: Days, fast: bool = False, max_stops: int 
     the cities the trains and buses reach, each one a city by ground only."""
     today = date.today()
     # The trains and buses leaving the city need only the city: read while the flights are searched, as the
-    # first time it takes about two minutes of timetables (ground.py)
-    reading = asyncio.create_task(asyncio.to_thread(ground.stations_reached, place, today, say))
+    # first time it takes about two minutes of timetables (ground.py), and the coaches of sold.py
+    reading = asyncio.create_task(asyncio.to_thread(sold.stations_reached, place, today, say))
     if ground_only:
         progress(step="discover_ground")
         by_ground = ground.look_up(place, await reading, [], {}, load_airports(), say)

@@ -732,16 +732,16 @@ function groundCount() {
 // What the map and the lists show, chosen above the map, so that a crowded map can be thinned out: a destination
 // left out by a filter is only hidden. price and hours are null for no limit. flights hides the flights; train and
 // bus the trains and buses of every city, a flight going there or not: London by bus stays with its flight
-// hidden. A train or bus with no price yet is not hidden by the price. leave and arrive are the latest hours the
-// outward flight, or the train or bus, may leave and arrive at, null for any: a way arriving the next day is let
-// through by no limit.
+// hidden. A train or bus with no price yet is not hidden by the price. leave is the earliest hour the outward
+// flight, or the train or bus, may leave at, arrive the latest it may arrive at, null for any: a way arriving the
+// next day is let through by no limit.
 const filter = {flights: true, train: true, bus: true, price: null, hours: null, leave: null, arrive: null, country: "", looked: false, direct: false};
 const SHOW_ALL = {...filter};   // what "show all" brings the filters back to
 const regions = (() => { try { return new Intl.DisplayNames([data.locale, "en"], {type: "region"}); } catch (error) { return null; } })();
 const countryName = code => { try { return (regions && regions.of(code)) || code; } catch (error) { return code; } };
 // Whether a way leaving at leaves and arriving at arrives (minutes from the midnight of the day it leaves) is within
 // the hours of the filters
-const inHours = (leaves, arrives) => (filter.leave === null || leaves <= filter.leave * 60) && (filter.arrive === null || arrives <= filter.arrive * 60);
+const inHours = (leaves, arrives) => (filter.leave === null || leaves >= filter.leave * 60) && (filter.arrive === null || arrives <= filter.arrive * 60);
 const dayShift = (from, to) => (from && to && to !== from ? Math.round((Date.parse(to) - Date.parse(from)) / 86400000) * 1440 : 0);
 const flightInHours = p => !p.time || !p.arrival_time
   || inHours(minutesOf(p.time), minutesOf(p.arrival_time) + dayShift(p.date, p.arrival_date));
@@ -778,23 +778,29 @@ function describeFilters() {
   };
   // A limit as the booking sites have it: a box to type the exact value in and a slider beside it, the two kept
   // together, up to the largest value of the map (which means no limit). The words around the value are the text's
-  // own, split where {limit} goes, and do not change: the slider stays where it is while it moves.
-  const slider = (key, text, top, step, unit, none) => {
+  // own, split where {limit} goes, and do not change: the slider stays where it is while it moves. A lowest limit
+  // (atLeast: from an hour on) has no limit at 0 instead.
+  const slider = (key, text, top, step, unit, none, atLeast = false) => {
     const label = add(box, "label", undefined, "limit"), [before, after] = text.split("\u0000");
     label.append(before);
     const typed = add(label, "input"), range = add(label, "input");
     label.insertBefore(document.createTextNode(unit + after), range);
+    const free = atLeast ? 0 : top;   // the value that means no limit
     typed.type = "number"; typed.min = 0; typed.max = top; typed.step = 1; typed.inputMode = "numeric";
-    range.type = "range"; range.min = step; range.max = top; range.step = step;
+    range.type = "range"; range.min = atLeast ? 0 : step; range.max = top; range.step = step;
     typed.setAttribute("aria-label", before.trim() || key);
     range.setAttribute("aria-label", before.trim() || key);
     const show = () => {
-      typed.value = filter[key] === null ? top : filter[key];
-      range.value = filter[key] === null ? top : Math.min(filter[key], top);
+      typed.value = filter[key] === null ? free : filter[key];
+      range.value = filter[key] === null ? free : Math.min(filter[key], top);
       label.title = filter[key] === null ? none : "";
       label.classList.toggle("set", filter[key] !== null);
     };
-    const choose = value => { filter[key] = value === null || value >= top ? null : Math.max(0, value); show(); draw(); };
+    const choose = value => {
+      if (atLeast) filter[key] = value === null || value <= 0 ? null : Math.min(value, top);
+      else filter[key] = value === null || value >= top ? null : Math.max(0, value);
+      show(); draw();
+    };
     range.oninput = () => choose(Number(range.value));
     // A typed value counts once it is complete: on Enter or on leaving the box, not at each digit
     typed.onchange = () => choose(typed.value === "" ? null : Math.round(Number(typed.value)));
@@ -811,7 +817,7 @@ function describeFilters() {
   slider("price", t("filter_price", {limit: "\u0000"}), top, 10, " €", t("any_price"));
   const longest = Math.max(1, ...state.points.map(p => p.minutes || 0), ...byGround.map(g => g.minutes));
   slider("hours", t("filter_hours", {limit: "\u0000"}), Math.ceil(longest / 60), 1, " h", t("any_time"));
-  slider("leave", t("filter_leave", {limit: "\u0000"}), 24, 1, " h", t("any_hour"));   // 24 h: any hour
+  slider("leave", t("filter_leave", {limit: "\u0000"}), 23, 1, " h", t("any_hour"), true);   // from 0 h: any hour
   slider("arrive", t("filter_arrive", {limit: "\u0000"}), 24, 1, " h", t("any_hour"));
   const countries = {};
   for (const p of [...state.points, ...byGround]) if (p.country) countries[p.country] = (countries[p.country] || 0) + 1;

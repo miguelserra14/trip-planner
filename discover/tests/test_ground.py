@@ -67,6 +67,29 @@ def test_the_operators_read_and_where_code_reads_their_prices():
     assert ground.operator_of("RENFE OPERADORA", "HIGHSPEED_RAIL", "es-RENFE-Larga-Distancia-y-AVE_17000") == ("Renfe Operadora", "", "ES")
     assert ground.operator_of("RENFE OPERADORA", "REGIONAL_RAIL", "es-renfe-cercanias_1") is None   # Movelia does not sell the Cercanías
     assert ground.operator_of("Rede Expressos", "COACH", "pt-rede_1") is None
+    assert ground.operator_of("Österreichische Bundesbahnen", "LONG_DISTANCE", "sk-zsr_1") == ("ÖBB", "", "AT")
+
+def test_the_long_distance_trains_of_any_other_operator_are_read_by_their_timetable():
+    assert ground.operator_of("Schweizerische Bundesbahnen SBB", "LONG_DISTANCE", "ch-x_1") == ("SBB", "https://www.sbb.ch", "")
+    assert ground.operator_of("České dráhy, a.s.", "HIGHSPEED_RAIL", "sk-zsr_1")[0] == ground.operator_of("Ceske Drahy", "LONG_DISTANCE")[0] == "České dráhy"
+    assert ground.operator_of("Dänische Staatsbahnen", "NIGHT_RAIL", "no-Entur_1")[0] == "DSB"
+    assert ground.operator_of("Some Railway AB", "LONG_DISTANCE", "se-x_1") == ("Some Railway", "", "")   # unknown: its own name
+    assert ground.operator_of("Some Railway AB", "REGIONAL_RAIL", "se-x_1") is None   # a local train is no trip
+    assert ground.operator_of("Some Coaches", "COACH", "pl-x_1") is None
+
+def test_one_train_named_after_several_railways_is_shown_once():
+    train = {"lat": 52.52, "lon": 13.37, "mode": "train", "stop": "Berlin Hbf"}
+    stops = [{**train, "operator": "DSB", "minutes": 238, "times": ["06:28", "10:28"], "sold": ""},
+             {**train, "operator": "České dráhy", "minutes": 238, "times": ["06:28", "08:28", "10:28"], "sold": ""},
+             {**train, "operator": "FlixBus", "minutes": 290, "times": ["06:28"], "sold": "EU", "mode": "bus"},
+             {**train, "operator": "European Sleeper", "minutes": 288, "times": ["18:00"], "sold": ""},
+             {**train, "operator": "SBB", "minutes": 240, "times": ["08:28", "09:00", "11:00", "13:00"], "sold": ""}]   # one in common only
+    assert [option["operator"] for option in ground.to_city(stops, 52.52, 13.40)] == ["České dráhy", "SBB", "European Sleeper", "FlixBus"]
+
+def test_the_trains_and_coaches_read_are_shared_out_between_the_operators():
+    found = [{"operator": "SBB", "n": n} for n in range(100)] + [{"operator": "FlixBus", "n": 0}]
+    taken = ground.shared(found)
+    assert len(taken) == ground.MAX_TRIPS and {"operator": "FlixBus", "n": 0} in taken
 
 def test_a_city_read_before_flixbus_was_added_is_read_again(monkeypatch):
     ground.write({ground.place_key(COIMBRA): {"checked": TODAY.isoformat(), "place": "Coimbra", "reached": []}})

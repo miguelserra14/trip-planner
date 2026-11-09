@@ -42,7 +42,7 @@ from typing import Any, Callable
 
 import httpx
 
-from discover.overland import ground
+from discover.overland import ground, sold
 from discover.confirm import TOP
 from discover.finder import Found
 from discover.flights.sources import Days
@@ -162,6 +162,11 @@ def timetable_day(option: dict[str, Any], start_id: str, end_id: str, day: str, 
                         "arrive_day": arrives.date().isoformat(), "seller": ticket["operator"], "grade": "A", "url": option["site"]}
     return best
 
+def by_timetable(option: dict[str, Any]) -> bool:
+    """Whether an option is priced through the timetables (timetable_day), which are asked one request at a time:
+    not FlixBus's, nor sold.py's coaches, asked of their operator straight."""
+    return option["operator"] != "FlixBus" and not sold.is_sold(option)
+
 def ends(option: dict[str, Any], back: bool) -> tuple[str, str]:
     return (option["stop_id"], option["from_stop_id"]) if back else (option["from_stop_id"], option["stop_id"])
 
@@ -175,6 +180,7 @@ def cheapest_day(option: dict[str, Any], back: bool, chosen: list[str], transito
     for day in chosen:
         try:
             price = (flixbus_day(start, end, day, towns=(towns[::-1] if back else towns) if towns else None) if option["operator"] == "FlixBus"
+                     else sold.day_price(option, back, day) if sold.is_sold(option)
                      else timetable_day(option, start, end, day, transitous))
         except FAILURES:
             price = None
@@ -337,10 +343,10 @@ def price(found: Found, on_change: Callable[[Found], None] = lambda found: None,
         selling = {index: [option for option in cities[index][1] if sellable(option, cities[index][3]) and not option.get("price")] for index in chosen}
         names = [cities[index][0].get("name") or cities[index][0]["to"] for index in chosen]
         say(tr("discover_say_fares_cities", cities=", ".join(names), number=len(found.fare_lookups) - before + len(chosen), most=MAX_PRICED))
-        buses = [option for index in chosen for option in selling[index] if option["operator"] == "FlixBus"]
-        trains = [option for index in chosen for option in selling[index] if option["operator"] != "FlixBus"]
+        buses = [option for index in chosen for option in selling[index] if not by_timetable(option)]
+        trains = [option for index in chosen for option in selling[index] if by_timetable(option)]
         with ThreadPoolExecutor(AT_ONCE + 1) as pool:
-            # The trains one after the other, in one worker, as they share the timetables; FlixBus in the others
+            # The trains one after the other, in one worker, as they share the timetables; the coaches in the others
             holders = {id(option): cities[index][0] for index in chosen for option in selling[index]}
             by_train = pool.submit(lambda: [price_of(option, found.days, today, transitous) for option in trains])
             by_bus = list(pool.map(lambda option: price_of(option, found.days, today, transitous,
@@ -385,8 +391,8 @@ def price_asked(found: Found, key: str, before_trains: Callable[[], Any] = lambd
     holder, options, _, countries = cities[index]
     # Asked again for one that was sold on none of the days: the traveller asks, and FlixBus's seats come and go
     selling = [option for option in options if sellable(option, countries) and not (option.get("price") or {}).get("out")]
-    buses = [option for option in selling if option["operator"] == "FlixBus"]
-    trains = [option for option in selling if option["operator"] != "FlixBus"]
+    buses = [option for option in selling if not by_timetable(option)]
+    trains = [option for option in selling if by_timetable(option)]
     with ThreadPoolExecutor(AT_ONCE) as pool:
         priced = list(zip(buses, pool.map(lambda option: price_of(option, found.days, today, transitous,
                                                                   towns=towns_of(found, holder, option)), buses)))

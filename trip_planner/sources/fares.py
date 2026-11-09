@@ -41,7 +41,7 @@ FARE_SOURCES = [
                lambda step: all((step.get(end) or "").startswith(LUXEMBOURG_STOPS) for end in ("from_id", "to_id")), luxembourg_fare, through=True),
     FareSource("FlixBus", "EU", lambda step: all((step.get(end) or "").startswith("eu-flixbus_") for end in ("from_id", "to_id")), flixbus_fare, confirms=True),
     FareSource("RegioJet", "EU", lambda step: agency(step).startswith(("regiojet", "student agency")), regiojet_fare, confirms=True),   # Student Agency runs its coaches
-    FareSource("ÖBB", "AT", lambda step: step["rail"] and agency(step).startswith(("oebb", "obb")), oebb_fare, through=True, confirms=True),
+    FareSource("ÖBB", "AT", lambda step: step["rail"] and agency(step).startswith(("oebb", "obb", "osterreichische bundesbahnen")), oebb_fare, through=True, confirms=True),
     FareSource("Trenitalia", "IT", lambda step: step["rail"] and agency(step) in ("trenitalia", "trenord"), trenitalia_fare, through=True, confirms=True),
     FareSource("MÁV", "HU", lambda step: step["rail"] and (step.get("from_id") or "").startswith("hu-mav_"), mav_fare, through=True, confirms=True),
     FareSource("Elron", "EE", lambda step: step["rail"] and "elron" in agency(step), elron_fare, confirms=True),

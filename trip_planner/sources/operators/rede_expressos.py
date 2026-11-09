@@ -42,6 +42,14 @@ def town_of(stop_name: str) -> str:
     """The town of a stop: "Lisboa (Sete Rios)" and "Lisboa - Oriente" are both in Lisboa."""
     return plain(re.split(r"\s+\(|\s+-\s+", stop_name)[0])
 
+def rede_expressos_schedules(start_id: str, end_id: str, day: str) -> list[dict[str, Any]]:
+    """Everything it sells between two of its stops on one day (yyyy-mm-dd), as its site gets it."""
+    found = http.post(f"{REDE_EXPRESSOS}/OneWayForSelectedDate", headers=rede_expressos_headers(), json={
+        "from": start_id, "to": end_id, "date": day, "campaign": "", "isCampaignFirstSearch": False,
+        "returnNextMinPrice": False, "passengers": [{"fareTypeId": "1", "quantity": 1}],
+    }).raise_for_status().json()
+    return found.get("outgoingSchedules") or []
+
 def rede_expressos_rides(city: Place, airport: dict[str, Any], day: str, to_airport: bool = True) -> list[dict[str, Any]] | None:
     """Every Rede Expressos ride between a city and an airport of Portugal on one day (yyyy-mm-dd), with the
     cheapest price on sale. A ride may arrive the next day: its arrival is then counted past 24:00. Returns None
@@ -58,11 +66,7 @@ def rede_expressos_rides(city: Place, airport: dict[str, Any], day: str, to_airp
     rides = []
     for city_stop in city_stops:
         start, end = (city_stop, airport_stops[0]) if to_airport else (airport_stops[0], city_stop)
-        found = http.post(f"{REDE_EXPRESSOS}/OneWayForSelectedDate", headers=rede_expressos_headers(), json={
-            "from": start["id"], "to": end["id"], "date": day, "campaign": "", "isCampaignFirstSearch": False,
-            "returnNextMinPrice": False, "passengers": [{"fareTypeId": "1", "quantity": 1}],
-        }).raise_for_status().json()
-        for ride in found.get("outgoingSchedules") or []:
+        for ride in rede_expressos_schedules(start["id"], end["id"], day):
             departure, arrival = ride["departureDate"], ride["arrivalDate"]
             if departure[:10] != day or not ride.get("minPrice") or not ride.get("availableSeats", 1):
                 continue

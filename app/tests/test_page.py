@@ -318,7 +318,7 @@ def test_a_limit_of_the_map_can_be_typed_and_its_slider_stays_where_it_is(tab, a
     assert tab.js("document.querySelector('#filters .limit input[type=number]').value") == "17"   # and the value typed is the one kept
     assert tab.js(where) == left
 
-def test_the_latest_hours_of_leaving_and_arriving_hide_the_flights_outside_them(tab, app, monkeypatch):
+def test_the_hours_of_leaving_and_arriving_hide_the_flights_outside_them(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the tests above."""
     from discover import finder
     from discover.view import page
@@ -350,9 +350,10 @@ def test_the_latest_hours_of_leaving_and_arriving_hide_the_flights_outside_them(
     tab.wait("document.querySelectorAll('#rows li').length === 2")
     shown = "[...document.querySelectorAll('#rows li')].map(row => row.dataset.to).join()"
     choose = "{{ const typed = document.querySelectorAll('#filters .limit input[type=number]')[{0}]; typed.value = '{1}'; typed.dispatchEvent(new Event('change')) }}"
-    tab.js(choose.format(2, 20))   # leaving by 20:00: the flight leaving at 21:30 is hidden
-    tab.wait(f"{shown} === 'BHX'")
-    tab.js(choose.format(2, 24))   # 24: any hour again
+    assert tab.js("document.querySelectorAll('#filters .limit input[type=number]')[2].value") == "0"   # from 0 h: any hour
+    tab.js(choose.format(2, 8))   # leaving from 08:00: the flight leaving at 07:00 is hidden
+    tab.wait(f"{shown} === 'STN'")
+    tab.js(choose.format(2, 0))   # 0: any hour again
     tab.wait("document.querySelectorAll('#rows li').length === 2")
     tab.js(choose.format(3, 23))   # arriving by 23:00: the one landing after midnight is hidden
     tab.wait(f"{shown} === 'BHX'")

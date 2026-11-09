@@ -12,13 +12,14 @@ from trip_planner.trip.trip_settings import settings_file
 SETTINGS = settings_file().SETTINGS   # read first here, as the map reads it (discover/session.py imports it too)
 
 from discover import finder
-from discover.overland import ground, ground_fares
+from discover.overland import ground, ground_fares, sold
 from trip_planner import current
 
 @pytest.fixture(autouse=True)
 def no_ground(monkeypatch, tmp_path):
     monkeypatch.setattr(current, "SETTINGS", dataclasses.replace(current.SETTINGS or SETTINGS, language="en"))
     monkeypatch.setattr(ground, "GROUND", tmp_path / "ground.json")
+    monkeypatch.setattr(sold, "SOLD", tmp_path / "sold.json")   # with no list of cities, sold.py asks no operator either
     monkeypatch.setattr(finder, "KIWI_ANSWERS", tmp_path / "kiwi_answers.json")
     monkeypatch.setattr(ground_fares, "RATES", tmp_path / "ground_rates.json")
     ground_fares.FLIXBUS_ANSWERS.clear()

@@ -34,7 +34,7 @@ RANGES = {
     "city_walk_minutes": (5, 120), "wide_city_walk_minutes": (5, 180), "airport_walk_minutes": (5, 60),
     "airport_floor_minutes": (15, 360), "night_minutes": (0, 360),
     "min_trip_km": (0, 500), "city_airport_radius_km": (5, 150), "ambiguous_importance": (0, 1),
-    "recent_reports": (1, 100), "min_stay_hours": (0, 24),
+    "recent_reports": (1, 100), "min_stay_hours": (0, 24), "max_coach_changes": (0, 3),
 }
 MAX_DATES = 7                # travel dates in one search: each one multiplies the routes to search
 MAX_DAYS_AHEAD = 360         # airlines do not sell further ahead than about this
@@ -148,6 +148,10 @@ class TripSettings:
     city_airport_radius_km: int = 45      # a city in the airport settings ("Paris") means every airport this close to it
     ambiguous_importance: float = 0.2     # places of the same name whose importance (0 to 1, from OpenStreetMap) differs by less
                                           # than this could each be the one meant: the traveller chooses ("Nazare": Bahia or Leiria)
+    # Discover's map (discover/): the most changes of coach of a trip by coach it prices (ground_fares.py). Only FlixBus
+    # sells such trips to code; trains are priced straight only. 0 = straight only
+    max_coach_changes: int = 0
+
     # Reports (report/full.py)
     recent_reports: int = 5               # trips kept in reports/, a folder each. Older ones are deleted, except those kept in reports/saved/
 

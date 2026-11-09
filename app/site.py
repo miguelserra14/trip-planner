@@ -20,6 +20,7 @@ from app.report_page import page, STYLE, to_html
 from trip_planner import current
 from trip_planner.report.full import keep_report
 from trip_planner.texts import LANGUAGES, REFERENCE, TEXTS, tr, translate
+from trip_planner.tools import prices
 from trip_planner.tools.prices import PRICE_VALID_HOURS, stale_reports
 from trip_planner.trip.form import named
 from trip_planner.trip.trip_settings import TripSettings
@@ -47,11 +48,14 @@ class Site:
         self.languages_added = False                  # a language job ran: the languages are read again once it ends
         self.map_job: search.Job | None = None        # the last Discover map, in a process of its own (map_job.py)
         self.maps: dict[str, search.Job] = {}         # the last maps (maps.MAPS_KEPT), by their address
-        self.map_values = maps.values_of(defaults.origin)   # what Discover's form shows
+        self.map_values = maps.values_of(defaults.origin, coach_changes=defaults.max_coach_changes)   # what Discover's form shows
         self.maps_made = 0                            # how many maps were asked for: each one's address is its number
         self.map_next: dict[str, Any] | None = None   # a map asked for while the last one stops: it starts once that one ended
         self.stop_asked = 0.0                         # when the last map was asked to stop (time.monotonic), or 0
         self.maps_lock = threading.Lock()             # the pages are answered in threads of their own: one map starts at a time
+        # The prices asked for on the maps made before, by map: the job pricing some of its cities, and the cities
+        # asked meanwhile, priced by the next job once it ends (one at a time per map: each writes the whole file)
+        self.saved_prices: dict[str, dict[str, Any]] = {}
         self.quitting = threading.Event()             # set by the Quit button: the server stops (server.serve)
         self.theme = "dark"                           # "light" or "dark", turned by the button of the header: dark until then
 
@@ -82,10 +86,11 @@ class Site:
         theme = (f'<form method="post" action="/theme" data-theme-form>{search.hidden(self.token)}<input type="hidden" name="shown">'
                  f'<input type="hidden" name="back"><button type="submit" class="quiet theme" '
                  f'title="{escape(tr("app_theme"))}" aria-label="{escape(tr("app_theme"))}">{icon("moon")}{icon("sun")}</button></form>')
-        header = (f'<header><a href="/" class="name">{escape(tr("ui_title"))}</a><nav class="inline">{parts}</nav>'
+        # The language, light or dark and Quit stay together on one line, however long the parts of the app are in a language
+        header = (f'<header><a href="/" class="name">{escape(tr("ui_title"))}</a><nav class="inline">{parts}</nav><div class="controls">'
                   f'<form method="post" action="/language">{search.hidden(self.token)}<label class="inline"><span class="visually-hidden">{escape(tr("ui_language"))}</span>'
                   f'<select name="language" data-submit>{languages}</select></label><noscript><button type="submit">OK</button></noscript></form>'
-                  f'{theme}<form method="post" action="/quit">{search.hidden(self.token)}<button type="submit" class="quiet">{escape(tr("app_quit"))}</button></form></header>')
+                  f'{theme}<form method="post" action="/quit">{search.hidden(self.token)}<button type="submit" class="quiet">{escape(tr("app_quit"))}</button></form></div></header>')
         return page(title, header + body, current.SETTINGS.language, refresh=3 if working else 0, theme=self.theme)
 
     def home(self, refusal: str = "", note: str = "") -> str:
@@ -111,12 +116,30 @@ class Site:
             small = f"<small>{html.escape(note)}</small>" if note else ""
             return (f'<form method="post" action="{path}" class="tool">{search.hidden(self.token)}'
                     f'<button type="submit" class="quiet"{off}>{html.escape(text)}</button>{small}</form>')
-        stale = len(self.stale())
-        prices = button("/prices", tr("ui_prices_count", count=stale) if stale else tr("ui_prices"),
-                        "" if stale else tr("prices_none", hours=PRICE_VALID_HOURS), disabled=not stale)
+        stale = self.stale()
+        prices = self.prices_form(stale) if stale else button("/prices", tr("ui_prices"), tr("prices_none", hours=PRICE_VALID_HOURS), disabled=True)
         return (f'<div class="tools card">{prices}'
                 f'{button("/check", tr("ui_check"), tr("app_check_note"))}'
                 f'<p><a href="/languages">{html.escape(tr("ui_languages"))}</a></p></div>')
+
+    def prices_form(self, stale: list[Path]) -> str:
+        """The reports whose ground prices are too old, a box each, all ticked: the traveller chooses which to ask
+        again now (a report's prices are asked of every operator of its options, which takes a while each)."""
+        rows = []
+        for path in stale:
+            report = prices.report_of(path)
+            title = reports.title_of(report) if report.exists() else path.stem
+            try:
+                read = prices.read_on(path, json.loads(path.read_text(encoding="utf-8"))).strftime("%d/%m/%Y %H:%M")
+            except (OSError, ValueError):
+                read = ""
+            rows.append(f'<label class="check"><input type="checkbox" name="report" value="{html.escape(path.stem)}" checked>'
+                        f'<span>{html.escape(title)}' + (f'<small>{html.escape(tr("app_prices_read", when=read))}</small>' if read else "")
+                        + "</span></label>")
+        off = " disabled" if self.busy() else ""
+        return (f'<form method="post" action="/prices" class="tool prices">{search.hidden(self.token)}'
+                f'<p>{html.escape(tr("app_prices_choose"))}</p>{"".join(rows)}'
+                f'<button type="submit" class="quiet"{off}>{html.escape(tr("app_prices_chosen"))}</button></form>')
 
     def languages_page(self, asking: str = "", refusal: str = "", note: str = "") -> str:
         """The languages of the program, each with how complete it is, to add one or remove one. asking is the
@@ -202,6 +225,10 @@ class Site:
                    "/language/remove": self.post_remove_language, "/discover": self.post_discover,
                    "/discover/stop": self.post_discover_stop, "/restore": self.post_restore, "/quit": self.post_quit,
                    "/theme": self.post_theme}
+        if path.startswith(maps.MAPS):
+            return self.post_map_price(path, one)
+        if path.startswith(maps.SAVED) and path.endswith("/price"):
+            return self.post_saved_price(unquote(path[len(maps.SAVED):-len("/price")]), one)
         return answers[path](one, sent) if path in answers else self.not_found()
 
     def post_search(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
@@ -299,6 +326,7 @@ class Site:
             body += f'<p role="status">{html.escape(tr("discover_win_stopping"))}</p>'
         if self.map_job is not None:
             body += self.map_live()   # with its button to stop the map, while it works
+        body += maps.saved_list()
         return self.page(tr("discover_win_title"), body, working=self.map_next is not None or
                          (self.map_job is not None and self.map_job.working), here="/discover")
 
@@ -312,6 +340,18 @@ class Site:
         self.map_turn()
         if path == "/discover":
             return Reply(200, self.discover_page())
+        if path.startswith(maps.SAVED) and path.endswith("/state"):   # a map made before, followed while a price comes
+            name = unquote(path[len(maps.SAVED):-len("/state")])
+            state = maps.saved_state(name, self.saved_turn(name))
+            if state is None:
+                return self.not_found()
+            return Reply(200, json.dumps(state, ensure_ascii=False), kind="application/json; charset=utf-8")
+        if path.startswith(maps.SAVED):   # a map made before (maps.saved_page)
+            name = unquote(path[len(maps.SAVED):])
+            saved = maps.saved_page(name, self.token, self.saved_turn(name))
+            if saved is None:
+                return self.not_found()
+            return Reply(200, saved[0], policy=saved[1], referrer=maps.MAP_REFERRER)
         if self.map_job is None:
             return Reply(303, location="/discover")
         if path == "/discover/part":
@@ -349,6 +389,49 @@ class Site:
         self.map_turn()
         return Reply(303, location="/discover")
 
+    def post_map_price(self, path: str, one: dict[str, str]) -> Reply:
+        """The map's page asking for the price of one of its cities (map_job.py): told to the map's process, which
+        sends the page its state again. Answered at once; a map that has ended, or that another one replaced, has no
+        process left to ask (410)."""
+        address, what = maps.part_of(path)
+        job = self.maps.get(address)
+        if what != "price" or job is None:
+            return self.not_found()
+        kind = "application/json; charset=utf-8"
+        if job is not self.map_job or not job.running or job.stopped:
+            return Reply(410, json.dumps({"asked": False}), kind=kind)
+        job.tell({"price": one.get("city", "")[:maps.MAX_KEY]})
+        return Reply(202, json.dumps({"asked": True}), kind=kind)
+
+    def post_saved_price(self, name: str, one: dict[str, str]) -> Reply:
+        """The page of a map made before asking for the price of one of its cities: priced by a job of its own
+        (map_job.price_saved), which writes it into the map's file; the page follows its state meanwhile."""
+        if maps.saved_path(name) is None:
+            return self.not_found()
+        key = one.get("city", "")[:maps.MAX_KEY]
+        with self.maps_lock:
+            entry = self.saved_prices.setdefault(name, {"job": None, "pricing": [], "next": []})
+            if key and key not in entry["pricing"] + entry["next"]:
+                entry["next"].append(key)
+        self.saved_turn(name)
+        return Reply(202, json.dumps({"asked": True}), kind="application/json; charset=utf-8")
+
+    def saved_turn(self, name: str) -> list[str]:
+        """The job pricing a map made before is started once the last one ended, with the cities asked meanwhile.
+        Returns the cities being priced or waiting to be, for its page."""
+        with self.maps_lock:
+            entry = self.saved_prices.get(name)
+            if entry is None:
+                return []
+            if entry["job"] is not None and not entry["job"].running:
+                entry["job"], entry["pricing"] = None, []
+            if entry["job"] is None and entry["next"]:
+                entry["pricing"], entry["next"] = entry["next"], []
+                # The changes of coach of Discover's form as it is now: a map made before is priced as a new one would be
+                entry["job"] = self.start({"task": "price_saved", "language": current.SETTINGS.language, "name": name, "keys": entry["pricing"],
+                                           "coach_changes": self.map_values.get("coach_changes", "0")})
+            return entry["pricing"] + entry["next"]
+
     def post_discover_stop(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         self.map_next = None
         if self.map_job is not None and self.map_job.running:
@@ -372,7 +455,8 @@ class Site:
             asked, self.map_next, self.stop_asked = self.map_next, None, 0.0
             self.maps_made += 1
             address = maps.address_of(self.maps_made)
-            self.map_job = self.start({**asked, "planner_link": address + "plan/"})
+            # The token, for the page's own requests to price a city (post_map_price): served by the app only, never saved
+            self.map_job = self.start({**asked, "planner_link": address + "plan/", "token": self.token})
             self.map_job.map_link = address
             self.maps[address] = self.map_job
             while len(self.maps) > maps.MAPS_KEPT:   # the oldest first: a dict keeps its order
@@ -384,9 +468,15 @@ class Site:
         return self.begin({"task": "check", "language": current.SETTINGS.language}, tr("ui_check"))
 
     def post_prices(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        """The prices of the reports ticked asked again: each named by its file, and only one of the reports whose
+        prices are old (stale), never a path the browser wrote."""
         if self.busy():
             return Reply(303, location="/search")
-        return self.begin({"task": "prices", "language": current.SETTINGS.language}, tr("ui_prices"))
+        chosen = set(sent.get("report") or [])
+        paths = [str(path) for path in self.stale() if path.stem in chosen]
+        if not paths:   # nothing ticked: nothing to ask
+            return Reply(303, location="/program")
+        return self.begin({"task": "prices", "reports": paths, "language": current.SETTINGS.language}, tr("ui_prices"))
 
     def post_add_language(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         name = one.get("name", "").strip()[:40]

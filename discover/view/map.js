@@ -132,6 +132,20 @@ function describeWay(box, way) {
   }
 }
 
+// A vertical line of steps, as the planner's option (app/results.py option_steps): step(at, mark, grade) adds a place
+// (a dot) or a ride (its icon, the line in the colour of its grade), and gives the box for its words
+function stepsIn(parent) {
+  const steps = add(parent, "ol", undefined, "steps");
+  return (at, mark, grade) => {
+    const item = add(steps, "li");
+    if (grade) { item.className = "ride"; item.style.setProperty("--ride", data.grade_colours[grade]); }
+    add(item, "span", at, "at");
+    const rail = add(item, "span", undefined, "rail");
+    if (mark) iconOf(rail, mark); else add(rail, "b");
+    return add(item, "div", undefined, "what");
+  };
+}
+
 // One way of the trip from top to bottom, as the planner's option (app/results.py option_steps): leaving the city,
 // the way to the airport, the airport, each flight with its stopovers, the landing, the way into the city and the
 // arrival. What the traveller should know about a connection before booking it goes into warnings. toAirport and
@@ -146,16 +160,7 @@ function describeLeg(parent, title, leg, warnings, toAirport, fromAirport, start
   if (!(fromAirport && fromAirport.looked_up) && leg.arrival_time && (landing >= data.late_hour || landing < data.early_hour))
     warnings.push(t("warn_late", {airport: place(leg.to), when: when(leg.arrival_date, leg.arrival_time)}));
   const times = legTimes(leg, toAirport, fromAirport), to = times.toAirport, from = times.fromAirport;
-  const steps = add(parent, "ol", undefined, "steps");
-  // One step of the vertical line: a place (a dot) or a ride (its icon, the line in the colour of its grade)
-  const step = (at, mark, grade) => {
-    const item = add(steps, "li");
-    if (grade) { item.className = "ride"; item.style.setProperty("--ride", data.grade_colours[grade]); }
-    add(item, "span", at, "at");
-    const rail = add(item, "span", undefined, "rail");
-    if (mark) iconOf(rail, mark); else add(rail, "b");
-    return add(item, "div", undefined, "what");
-  };
+  const step = stepsIn(parent);
   const wayIcon = way => { const first = (way.vehicles || []).find(vehicle => vehicle.kind !== "walk"); return first ? first.kind : "route"; };
   // A time of a flight, as minutes from midnight of the day the way starts (the line's clock)
   const flightClock = (day, time) => clock(between(leg.date, "00:00", day || leg.date, time));
@@ -309,50 +314,19 @@ function flightLine(parent, title, leg, toAirport, fromAirport, start, end) {
 // An operator with its mode, unless its name says it already: "ÖBB (train)", "FlixBus", "BlaBlaCar Bus"
 const operatorText = option => option.operator + (option.operator.toLowerCase().includes(option.mode) ? "" : " (" + modeName(option.mode) + ")");
 
-// A train or bus straight to a city as the flights are drawn, the way there and, for a return trip, the way back:
-// each the ride priced for a day (grade A), or else what the timetables give (grade B): the first departure of the
-// week read there, the first straight one back on the days to come back on (ground.ways_back)
-function groundLine(parent, option) {
-  const out = option.price && option.price.out, back = option.price && option.price.back;
-  const what = operatorText(option);
-  const ride = (title, leg, from, to) => {
-    const leaves = minutesOf(leg.leave), arrives = minutesOf(leg.arrive) + 1440 * Math.round(between(leg.day, "12:00", leg.arrive_day, "12:00") / 1440);
-    drawLine(parent, title + ", " + what + ", " + day(leg.day) + ": " + eur(leg.price_eur), [[clock(leaves), from], [clock(arrives), to]], [[leg.grade, arrives - leaves, option.mode]]);
-  };
-  if (out) ride(data.round_trip ? t("out") : t("by_mode", {mode: modeName(option.mode)}), out, option.from_stop, option.stop);
-  else {
-    const leaves = minutesOf(option.times[0]);
-    drawLine(parent, (data.round_trip ? t("out") + ", " : "") + t("ground_no_price_line", {what: what, time: option.times[0], weekdays: weekdays(option.weekdays)}),
-             [[clock(leaves), option.from_stop], [clock(leaves + option.minutes), option.stop]], [[option.grade, option.minutes, option.mode]]);
-  }
-  if (!data.round_trip) return;
-  if (back) {
-    ride(option.price.stay ? t("back_after", {stay: stayText(option.price.stay)}) : t("back"), back, option.stop, option.from_stop);
-    return;
-  }
-  const timetable = option.back;   // "dd/mm hh:mm" of each straight departure back, in the city's time
-  if (timetable && timetable.times.length) {
-    const [date, time] = timetable.times[0].split(" ");
-    const leaves = minutesOf(time);
-    drawLine(parent, t("back_timetable_line", {what: what, why: out ? t("not_sold_days") : t("no_price"), time: time, date: date})
-             + (timetable.times.length > 1 ? " " + t("more_count", {count: timetable.times.length - 1}) : ""),
-             [[clock(leaves), option.stop], [clock(leaves + timetable.minutes), option.from_stop]], [["B", timetable.minutes, option.mode]]);
-    return;
-  }
-  add(parent, "p", t("back") + ", " + what + ": " + (timetable === null ? t("back_no_answer")
-      : timetable ? t("back_none_straight") : state.running ? t("back_not_yet") : t("back_not_looked_up")), "muted");
+// The flights of a trip drawn to scale, the way there and the way back; the trains and buses are steps only (describeGround)
+function describeLines(panel, p) {
+  const box = add(panel, "div", undefined, "lines");
+  const access = p.access || [];
+  flightLine(box, t(p.back ? "flight_out_line" : "flight_line", {airline: p.airline, day: day(p.date), total: eur(p.total_eur)}),
+             p, access[0], access[1], data.origin.short, p.name);
+  if (p.back) flightLine(box, t("flight_back_line", {airline: p.back.airline, day: day(p.back.date)}), p.back, access[2], access[3], p.name, data.origin.short);
+  colourLegend(box);
 }
 
-function describeLines(panel, p, ground) {
-  const box = add(panel, "div", undefined, "lines");
-  const access = p ? p.access || [] : [];
-  if (p) {
-    flightLine(box, t(p.back ? "flight_out_line" : "flight_line", {airline: p.airline, day: day(p.date), total: eur(p.total_eur)}),
-               p, access[0], access[1], data.origin.short, p.name);
-    if (p.back) flightLine(box, t("flight_back_line", {airline: p.back.airline, day: day(p.back.date)}), p.back, access[2], access[3], p.name, data.origin.short);
-  }
-  for (const option of byPrice(ground || [])) groundLine(box, option);
-  const legend = add(box, "p", "", "muted");
+// What the colour of each part of a line means, once per trip
+function colourLegend(parent) {
+  const legend = add(parent, "p", "", "muted");
   legend.append(t("colours_intro") + " ");
   [["A", t("grade_a")], ["B", t("grade_b")], ["C", t("grade_c")]].forEach(([grade, text]) => {
     const dot = add(legend, "span", "●"); dot.style.color = data.grade_colours[grade]; legend.append(" " + text + " · ");
@@ -375,78 +349,273 @@ function describeBooking(panel, p) {
   }
 }
 
-// The trains and buses that go straight to a city (ground.py): their timetable, the way back, and where to buy
-// them, at the price the map does not have
-function describeGround(panel, options) {
-  const list = add(panel, "ul");
+// The trains and buses that go straight to a city (ground.py), each as a flight is shown (describeLeg): its price in
+// its title, then each way from top to bottom, the station left, the ride with how sure its times and its price are,
+// and the station reached; where to buy it, or why the map has no price for it
+function describeGround(panel, options, key) {
   for (const option of byPrice(options)) {
-    const times = option.times.slice(0, 4).join(", ") + (option.times.length > 4 ? " " + t("and_more_count", {count: option.times.length - 4}) : "");
-    const item = add(list, "li", t("ground_item", {what: operatorText(option), from: option.from_stop, times: times, weekdays: weekdays(option.weekdays),
-                                                   hours: hours(option.minutes), to: option.stop}) + " ");
-    if (option.back === null) item.append(t("back_unknown") + " ");
-    else if (option.back) item.append((option.back.times.length
-        ? t("back_straight", {stop: option.stop, times: option.back.times.slice(0, 4).join(", ") + (option.back.times.length > 4 ? " " + t("and_more") : ""),
-                              hours: hours(option.back.minutes)})
-        : t("no_straight_back", {operator: option.operator, days: option.back.days > 1 ? t("first_days_back", {count: option.back.days}) : day(option.back.day)})) + " ");
     const priced = option.price, out = priced && priced.out, back = priced && priced.back;
-    if (option.back === undefined && data.round_trip && !back) item.append(t("back_not_asked") + " ");
-    if (out) {   // read from the operator for that day (ground_fares.py): grade A
-      const way = (leg, from, to) => t("ground_way", {price: eur(leg.price_eur), day: day(leg.day), leave: leg.leave, arrive: leg.arrive,
-                                                      next_day: leg.arrive_day !== leg.day ? " " + t("next_day") : "", from: from, to: to});
-      add(item, "strong", (priced.total_eur !== null ? eur(priced.total_eur) + (back ? " " + t("there_and_back") : "") + ". " : ""));
-      item.append(t("sold_by", {seller: out.seller, way: way(out, option.from_stop, option.stop)})
-        + (back ? "; " + t("back_way", {way: way(back, option.stop, option.from_stop)}) : data.round_trip ? "; " + t("no_way_back_sold") : "")
-        + ", " + t("cheapest_days")
-        + (priced.stay ? ": " + t("ground_stay", {stay: stayText(priced.stay), stop: option.stop}) : "") + ". ");
-      for (const [label, leg] of [[t("buy_there"), out], [t("buy_back"), back]]) {
-        const url = leg && (leg.url || "");
-        if (!url.startsWith("https://")) continue;
-        const anchor = add(item, "a", label); anchor.href = url; anchor.target = "_blank"; anchor.rel = "noopener noreferrer"; item.append(" ");
-      }
-      continue;
-    }
-    if (priced) item.append(t("not_sold_by", {operator: option.operator}) + " ");
-    else if (option.sold) item.append(t("price_not_asked") + " ");
-    item.append(t("buy_it_on", {grade: option.grade}) + " ");
-    const site = add(item, "a", (option.site || "").replace("https://", "").split("/")[0] || t("operator_site", {operator: option.operator}));
-    if ((option.site || "").startsWith("https://")) { site.href = option.site; site.target = "_blank"; site.rel = "noopener noreferrer"; }
-    item.append(t("searching_on_day", {from: option.from_stop, to: option.stop}));
+    const title = add(panel, "h4", operatorText(option) + " ", "ground-title");
+    if (totalOf(option) !== null) add(title, "strong", eur(totalOf(option)) + (back ? " " + t("there_and_back") : ""), "price");
+    else if (out) add(title, "strong", t("out_only_price", {price: eur(out.price_eur)}), "price");
+    else add(title, "span", t("no_price"), "price none");
+    if (out) groundWay(panel, option, t("out"), out, option.from_stop, option.stop);
+    else groundTimetable(panel, option);
+    if (data.round_trip && back) {
+      if (priced.stay) add(panel, "p", t("ground_stay_line", {stay: stayText(priced.stay), stop: option.stop}), "muted");
+      groundWay(panel, option, t("back"), back, option.stop, option.from_stop);
+    } else if (data.round_trip) groundBack(panel, option, out);
+    if (out) continue;
+    const why = add(panel, "p", (priced ? t("not_sold_by", {operator: option.operator}) + " " : option.sold ? t("price_not_asked") + " " : "")
+                    + t("buy_it_on", {grade: option.grade}) + " ", "muted");
+    const site = add(why, "a", (option.site || "").replace("https://", "").split("/")[0] || t("operator_site", {operator: option.operator}));
+    if (outward(option.site)) { site.href = option.site; site.target = "_blank"; site.rel = "noopener noreferrer"; }
+    why.append(t("searching_on_day", {from: option.from_stop, to: option.stop}));
   }
+  if ((state.asked_prices || {})[key] === "none" && !options.some(option => option.price && option.price.out))
+    add(panel, "p", t("price_asked_none"), "muted");
+}
+
+// One way sold for a day (ground_fares.py, grade A): leaving the station, the ride, the station reached
+function groundWay(panel, option, title, leg, from, to) {
+  add(panel, "h5", title + ", " + day(leg.day));
+  const step = stepsIn(panel);
+  const leaves = minutesOf(leg.leave), arrives = minutesOf(leg.arrive) + 1440 * Math.round(between(leg.day, "12:00", leg.arrive_day, "12:00") / 1440);
+  // FlixBus asked city to city sells from its own stations, maybe not the timetable's (ground_fares.flixbus_town_day)
+  const leaving = leg.from_stop || from, reaching = leg.to_stop || to;
+  add(step(clock(leaves)), "p", t("step_leave", {place: leaving}));
+  const ride = step("", option.mode, leg.grade);
+  add(ride, "p", t("ground_ride", {what: operatorText(option), hours: hours(arrives - leaves)}));
+  // A trip sold with changes of coach (TripSettings.max_coach_changes): where, and how long the wait
+  for (const change of leg.changes || []) add(ride, "p", t("ground_change", {place: change.at || "?", wait: hours(change.wait)}), "warn");
+  const price = add(ride, "p", undefined, "ground-price");
+  add(price, "strong", eur(leg.price_eur));
+  price.append(" " + t("ground_price_sold", {seller: leg.seller}) + " ");
+  if (outward(leg.url)) sourceLink(price, leg.url, t("buy"));
+  gradeText(add(add(ride, "div", undefined, "facts"), "span", t("times") + ": "), leg.grade);
+  add(step(clock(arrives)), "p", t("step_arrival", {place: reaching}));
+}
+
+// The way there with no price: its first departure of the week in the timetables (grade B), and the others
+function groundTimetable(panel, option) {
+  add(panel, "h5", (data.round_trip ? t("out") + ", " : "") + t("ground_days", {weekdays: weekdays(option.weekdays)}));
+  const step = stepsIn(panel);
+  const leaves = minutesOf(option.times[0]);
+  add(step(clock(leaves)), "p", t("step_leave", {place: option.from_stop}));
+  const ride = step("", option.mode, option.grade);
+  add(ride, "p", t("ground_ride", {what: operatorText(option), hours: hours(option.minutes)}));
+  if (option.times.length > 1)
+    add(ride, "p", t("ground_also_at", {times: option.times.slice(1, 6).join(", ")
+                                               + (option.times.length > 6 ? " " + t("and_more_count", {count: option.times.length - 6}) : "")}), "muted");
+  const facts = add(ride, "div", undefined, "facts");
+  gradeText(add(facts, "span", t("times") + ": "), option.grade);
+  add(facts, "span", t("ground_price_none"));
+  add(step(clock(leaves + option.minutes)), "p", t("step_arrival", {place: option.stop}));
+}
+
+// The way back with no price: its first straight departure in the timetables (ground.ways_back, grade B) drawn as
+// the way there, or what is known of it: none those days, or not looked up
+function groundBack(panel, option, out) {
+  const timetable = option.back;
+  if (!(timetable && timetable.times.length)) {
+    add(panel, "h5", t("back"));
+    add(panel, "p", (out ? t("no_way_back_sold_line") + " " : "")
+        + (timetable === null ? t("back_unknown") : timetable === undefined ? t("back_not_asked")
+           : t("no_straight_back", {operator: option.operator, days: timetable.days > 1 ? t("first_days_back", {count: timetable.days}) : day(timetable.day)})), "muted");
+    return;
+  }
+  const [date, time] = timetable.times[0].split(" ");   // "dd/mm hh:mm", in the city's time
+  add(panel, "h5", t("back") + ", " + date);
+  if (out) add(panel, "p", t("no_way_back_sold_line"), "muted");
+  const step = stepsIn(panel);
+  const leaves = minutesOf(time);
+  add(step(clock(leaves)), "p", t("step_leave", {place: option.stop}));
+  const ride = step("", option.mode, "B");
+  add(ride, "p", t("ground_ride", {what: operatorText(option), hours: hours(timetable.minutes)}));
+  if (timetable.times.length > 1)
+    add(ride, "p", t("ground_also_at", {times: timetable.times.slice(1, 5).join(", ") + (timetable.times.length > 5 ? " " + t("and_more") : "")}), "muted");
+  const facts = add(ride, "div", undefined, "facts");
+  gradeText(add(facts, "span", t("times") + ": "), "B");
+  add(facts, "span", t("ground_price_none"));
+  add(step(clock(leaves + timetable.minutes)), "p", t("step_arrival", {place: option.from_stop}));
+}
+
+// In the app, beside the button that closes the trip: one that asks for the prices of a city whose trains and buses
+// the map did not price, as it prices only what can be among its cheapest (ground_fares.price_asked); the page
+// follows the state until they come. A page opened as a file has no app to ask.
+function priceButton(panel, options, key) {
+  const asked = (state.asked_prices || {})[key];
+  // Shown while one of its trains or buses that code can price has no price for the way there: asked again after "none"
+  if (!data.token || !key || asked === "priced" || !(options || []).some(option => option.sold && !(option.price && option.price.out))) return;
+  const button = add(panel, "button", t(asked === "waiting" ? "price_asking" : asked === "none" ? "price_ask_again" : "price_ask"), "ask-price");
+  button.disabled = asked === "waiting";
+  button.onclick = () => {
+    button.disabled = true;
+    fetch(data.price_link || "price", {method: "POST", body: new URLSearchParams({token: data.token, city: key})})
+      .then(response => {
+        if (response.status === 410) { button.replaceWith(add(panel, "p", t("price_map_ended"), "muted")); return; }
+        if (!response.ok) throw new Error(String(response.status));
+        state.asked_prices = {...(state.asked_prices || {}), [key]: "waiting"};
+        render();
+        follow();
+      })
+      .catch(() => { button.disabled = false; });
+  };
 }
 
 // A city no flight goes to, reached straight by train or bus: its options only, with no price and no planner
-function explainGround(g, scroll) {
-  picked = "~" + g.key;
+// The route of the trip open, as the filters show its city: its flight, its trains and buses, or both. Made again
+// when the filters change (draw), so the map never shows a way the list has hidden.
+let routeMaker = null;
+function showRoute(make, fit) {
+  routeMaker = make;
+  if (line) line.remove();
+  line = make().addTo(map);
+  if (fit && line.getLayers().length) map.fitBounds(line.getBounds(), {padding: [30, 30], maxZoom: 9});
+  fitIcons();
+}
+function closeTrip(panel) {
+  panel.hidden = true; picked = null; routeMaker = null;
+  if (line) line.remove();
+  map.invalidateSize();
+}
+// A city a flight goes to: its flight's route while the filters show the flight, even when they show its trains and
+// buses too (the trip open is the flight's); its trains and buses' route once the flight is hidden
+const tripRoute = p => (shownFlight(p) || !shownByGround(p.ground, p.country) ? routeOf(p) : groundRouteOf(p));
+
+// key is the city's in the lists: "~" and its own for a city no flight goes to, its airport for one whose flight
+// the filters hide
+function explainGround(g, scroll, key) {
+  picked = key || "~" + g.key;
   const panel = document.getElementById("detail");
   panel.replaceChildren();
   panel.hidden = false;
   const close = add(panel, "button", t("close"), "close");
-  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); map.invalidateSize(); };
+  close.onclick = () => closeTrip(panel);
+  priceButton(panel, g.ground, picked);
   add(panel, "h2", data.origin.name + " → " + g.name);
-  describeLines(panel, null, g.ground);
   add(panel, "p", t("no_flight_here", {modes: g.modes.map(modeName).join(t("and")), origin: data.origin.name, hours: hours(g.minutes)}) + " "
       + (fareOf(g) !== null ? t("ground_ranked", {price: eur(fareOf(g)) + (data.round_trip ? " " + t("there_and_back") : "")}) : t("ground_not_ranked")), "muted");
-  describeGround(panel, g.ground);
+  colourLegend(panel);
+  describeGround(panel, g.ground, picked);
   add(panel, "h4", t("links"));
   const anchor = add(add(add(panel, "ul", undefined, "links"), "li"), "a", t("by_public_transport", {from: data.origin.name, to: g.name}));
   anchor.href = "https://www.google.com/maps/dir/?" + new URLSearchParams({api: 1, origin: data.origin.name, destination: g.ground[0].stop, travelmode: "transit"});
   anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
-  if (line) line.remove();
-  line = L.polyline([[data.origin.lat, data.origin.lon], [g.lat, g.lon]], {color: GROUND_COLOUR, weight: 2, dashArray: "4 6"}).addTo(map);
   document.querySelectorAll("#rows li, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === picked));
   map.invalidateSize();
+  showRoute(() => groundRouteOf(g), true);   // after the map took its new size
   if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
+// The route of a trip on the map, as its line and its steps say it: from home to the airport and from the airport
+// into the city in the colour of the grade of each way's times, each flight as an arc from airport to airport through
+// its stopovers, the way back the same on the other side. A place whose position is not known is left out of it.
+const FLIGHT_COLOUR = "#1f6fd0";
+const WALK_COLOUR = "#8a94a3";   // the way to a station, not timetabled: an SVG stroke takes no CSS variable
+// The icon of a vehicle on the map, in the middle of its part of the route (from, to), as the line and the steps show
+// it. Shown only while that part is long enough on the screen: a way of a few kilometres would hide its own ends
+// until the map is brought closer (fitIcons)
+const ICON_ROOM = 48;   // pixels a part needs on the screen for its icon
+function vehicleMarker(group, where, kind, from, to) {
+  const name = ["plane", "train", "bus", "tram", "ferry"].includes(kind) ? kind : "route";
+  const marker = L.marker(where, {interactive: false, keyboard: false,
+                                  icon: L.divIcon({className: "route-icon", iconSize: [24, 24],
+                                                   html: '<svg class="icon" aria-hidden="true"><use href="#i-' + name + '"/></svg>'})});
+  marker.ends = [from, to];
+  marker.addTo(group);
+}
+function fitIcons() {
+  if (!line) return;
+  line.eachLayer(layer => {
+    if (!layer.ends || !layer.getElement()) return;
+    const [from, to] = layer.ends.map(where => map.latLngToContainerPoint(where));
+    layer.getElement().hidden = from.distanceTo(to) < ICON_ROOM;
+  });
+}
+map.on("zoomend", fitIcons);
+// The kind of the first vehicle of a way, as its step's icon (wayParts): "route" when its vehicles are not known
+const kindOfWay = way => { const first = ((way && way.vehicles) || []).find(vehicle => vehicle.kind !== "walk"); return first ? first.kind : "route"; };
+const middleOf = (from, to) => [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+
+function routeOf(p) {
+  const group = L.featureGroup(), access = p.access || [];
+  const at = code => (state.places || {})[code] || (code === p.to ? [p.lat, p.lon] : null);
+  const centreOf = code => (p.centres || {})[code] || at(code);
+  const home = [data.origin.lat, data.origin.lon];
+  const ground = (from, to, way) => {
+    if (!from || !to || (from[0] === to[0] && from[1] === to[1])) return;
+    L.polyline([from, to], {color: data.grade_colours[(way && way.grade) || "C"], weight: 4, opacity: 0.9}).addTo(group);
+    vehicleMarker(group, middleOf(from, to), kindOfWay(way), from, to);
+  };
+  // An arc between two airports, bent to one side so that the way back does not hide the way there
+  const arc = (from, to, side) => {
+    if (!from || !to) return;
+    const [lat1, lon1] = from, [lat2, lon2] = to, bend = 0.18 * side;
+    const middle = [(lat1 + lat2) / 2 - (lon2 - lon1) * bend, (lon1 + lon2) / 2 + (lat2 - lat1) * bend];
+    const points = [];
+    for (let i = 0; i <= 24; i++) {
+      const s = i / 24, a = (1 - s) * (1 - s), b = 2 * s * (1 - s), c = s * s;
+      points.push([a * lat1 + b * middle[0] + c * lat2, a * lon1 + b * middle[1] + c * lon2]);
+    }
+    L.polyline(points, {color: FLIGHT_COLOUR, weight: 3, opacity: 0.9}).addTo(group);
+    vehicleMarker(group, points[12], "plane", from, to);   // the middle of the arc
+  };
+  const airport = code => {
+    if (at(code)) L.circleMarker(at(code), {radius: 4, color: "#fff", weight: 1.5, fillColor: FLIGHT_COLOUR, fillOpacity: 1})
+      .bindTooltip(tip(place(code))).addTo(group);
+  };
+  const flights = (leg, side) => {
+    for (const segment of leg.segments && leg.segments.length ? leg.segments : [leg]) { arc(at(segment.from), at(segment.to), side); airport(segment.from); airport(segment.to); }
+  };
+  ground(home, at(p.from), access[0]);
+  flights(p, 1);
+  ground(at(p.to), centreOf(p.to), access[1]);
+  if (p.back) {
+    ground(centreOf(p.back.from), at(p.back.from), access[2]);
+    flights(p.back, -1);
+    ground(at(p.back.to), home, access[3]);
+  }
+  return group;
+}
+
+// The route of a city reached by train or bus only: its quickest priced option (or its quickest), from the station it
+// leaves from to the one it reaches, in the colour of the grade of its times, with its vehicle's icon. A station not
+// known (a map made before they were kept) is the traveller's city.
+function groundRouteOf(g) {
+  const group = L.featureGroup();
+  const allowed = (g.ground || []).filter(option => filter[option.mode]);   // a train hidden by the filters is not drawn
+  const option = cheapestGround(allowed) || byPrice(allowed)[0];
+  if (!option) return group;
+  const home = [data.origin.lat, data.origin.lon];
+  const from = option.from_lat !== undefined && option.from_lat !== null ? [option.from_lat, option.from_lon] : home;
+  const to = option.lat !== undefined ? [option.lat, option.lon] : [g.lat, g.lon];
+  const grade = option.price && option.price.out ? "A" : option.grade || "B";
+  if (from !== home) L.polyline([home, from], {color: WALK_COLOUR, weight: 2, dashArray: "2 5"}).addTo(group);   // to the station
+  L.polyline([from, to], {color: data.grade_colours[grade], weight: 4, opacity: 0.9}).addTo(group);
+  for (const [where, name] of [[from, option.from_stop], [to, option.stop]])
+    L.circleMarker(where, {radius: 4, color: "#fff", weight: 1.5, fillColor: GROUND_COLOUR, fillOpacity: 1}).bindTooltip(tip(name)).addTo(group);
+  vehicleMarker(group, middleOf(from, to), option.mode, from, to);
+  return group;
+}
+
 function explain(p, scroll) {
+  if (!shownFlight(p) && shownByGround(p.ground, p.country)) {   // its flight hidden: the trip is its trains and buses
+    const best = cheapestGround(p.ground);
+    explainGround({key: p.to, name: p.name, lat: p.lat, lon: p.lon, ground: p.ground, fare_eur: best ? totalOf(best) : undefined,
+                   modes: [...new Set(p.ground.map(option => option.mode))].sort(),
+                   minutes: Math.min(...p.ground.map(option => option.minutes))}, scroll, p.to);
+    return;
+  }
   picked = p.to;
   const panel = document.getElementById("detail");
   panel.replaceChildren();
   panel.hidden = false;
   const close = add(panel, "button", t("close"), "close");
-  close.onclick = () => { panel.hidden = true; picked = null; if (line) line.remove(); map.invalidateSize(); };
+  close.onclick = () => closeTrip(panel);
+  priceButton(panel, p.ground, p.to);
   add(panel, "h2", data.origin.name + " → " + p.name + " (" + p.to + ", " + p.country + ")");
-  describeLines(panel, p, p.ground);
+  describeLines(panel, p);
   add(panel, "p", t("total_line", {total: eur(p.total_eur), stay: p.stay ? ", " + t("in_the_city", {stay: stayText(p.stay)}) : "",
                                    flights: t(p.back ? "flights_there_back" : "flight_one"), price: eur(p.price_eur), source: p.source, ground: eur(p.ground_eur)})
       + " " + (p.confirmed ? t("all_looked_up") : t("not_all_looked_up")), "muted");
@@ -455,7 +624,7 @@ function explain(p, scroll) {
         + " (" + (other.access && other.access.every(leg => leg.looked_up) ? t("looked_up") : t("estimated")) + ")").join("; ")}), "muted");
   if (p.ground && p.ground.length) {   // trains and buses to the same city, with no flight: timetables only (ground.py), never a price
     add(panel, "h4", t("also_no_flight"));
-    describeGround(panel, p.ground);
+    describeGround(panel, p.ground, p.to);
   }
   const warnings = [];
   const warning = add(panel, "div");
@@ -482,10 +651,11 @@ function explain(p, scroll) {
   }
   add(panel, "p", t("price_may_change"), "muted");
   describePlan(panel, p);
-  if (line) line.remove();
-  line = L.polyline([[data.origin.lat, data.origin.lon], [p.lat, p.lon]], {color: "#1f6fd0", weight: 2, dashArray: "4 6"}).addTo(map);
   document.querySelectorAll("#rows li, #ground-rows tr").forEach(row => row.classList.toggle("picked", row.dataset.to === p.to));
   map.invalidateSize();   // the trip opened beside the map, which shrank to make room
+  // The whole route in view, after the map took its new size. Nothing else moves the map when a trip opens: a
+  // second move while the first is still animated is ignored by Leaflet
+  showRoute(() => tripRoute(p), true);
   if (scroll !== false) panel.scrollIntoView({behavior: "smooth", block: "nearest"});
 }
 
@@ -562,13 +732,27 @@ function groundCount() {
 // What the map and the lists show, chosen above the map, so that a crowded map can be thinned out: a destination
 // left out by a filter is only hidden. price and hours are null for no limit. flights hides the flights; train and
 // bus the trains and buses of every city, a flight going there or not: London by bus stays with its flight
-// hidden. A train or bus with no price yet is not hidden by the price.
-const filter = {flights: true, train: true, bus: true, price: null, hours: null, country: "", looked: false, direct: false};
+// hidden. A train or bus with no price yet is not hidden by the price. leave and arrive are the latest hours the
+// outward flight, or the train or bus, may leave and arrive at, null for any: a way arriving the next day is let
+// through by no limit.
+const filter = {flights: true, train: true, bus: true, price: null, hours: null, leave: null, arrive: null, country: "", looked: false, direct: false};
 const SHOW_ALL = {...filter};   // what "show all" brings the filters back to
 const regions = (() => { try { return new Intl.DisplayNames([data.locale, "en"], {type: "region"}); } catch (error) { return null; } })();
 const countryName = code => { try { return (regions && regions.of(code)) || code; } catch (error) { return code; } };
+// Whether a way leaving at leaves and arriving at arrives (minutes from the midnight of the day it leaves) is within
+// the hours of the filters
+const inHours = (leaves, arrives) => (filter.leave === null || leaves <= filter.leave * 60) && (filter.arrive === null || arrives <= filter.arrive * 60);
+const dayShift = (from, to) => (from && to && to !== from ? Math.round((Date.parse(to) - Date.parse(from)) / 86400000) * 1440 : 0);
+const flightInHours = p => !p.time || !p.arrival_time
+  || inHours(minutesOf(p.time), minutesOf(p.arrival_time) + dayShift(p.date, p.arrival_date));
+// A train or bus: the outward way sold for a day when it has one, otherwise any of its timetable's departures
+const groundInHours = option => {
+  const out = option.price && option.price.out;
+  if (out) return inHours(minutesOf(out.leave), minutesOf(out.arrive) + dayShift(out.day, out.arrive_day));
+  return !(option.times || []).length || option.times.some(time => inHours(minutesOf(time), minutesOf(time) + option.minutes));
+};
 const shownFlight = p => filter.flights && (filter.price === null || p.total_eur <= filter.price)
-  && (filter.hours === null || !p.minutes || p.minutes <= filter.hours * 60)
+  && (filter.hours === null || !p.minutes || p.minutes <= filter.hours * 60) && flightInHours(p)
   && (!filter.country || p.country === filter.country) && (!filter.looked || p.confirmed)
   && (!filter.direct || (!p.stops && (!p.back || !p.back.stops)));   // direct both ways
 // The trains and buses of a city, with a flight or not, let through by the boxes of their modes, the hours on board,
@@ -576,7 +760,7 @@ const shownFlight = p => filter.flights && (filter.price === null || p.total_eur
 const shownByGround = (options, country) => {
   if (!options || !options.length) return false;
   const best = cheapestGround(options), fare = best ? totalOf(best) : null;
-  return options.some(option => filter[option.mode]) && (filter.hours === null || Math.min(...options.map(option => option.minutes)) <= filter.hours * 60)
+  return options.some(option => filter[option.mode] && groundInHours(option)) && (filter.hours === null || Math.min(...options.map(option => option.minutes)) <= filter.hours * 60)
     && (!filter.country || country === filter.country) && (filter.price === null || fare === null || fare <= filter.price);
 };
 const shownGround = g => shownByGround(g.ground, g.country);
@@ -627,6 +811,8 @@ function describeFilters() {
   slider("price", t("filter_price", {limit: "\u0000"}), top, 10, " €", t("any_price"));
   const longest = Math.max(1, ...state.points.map(p => p.minutes || 0), ...byGround.map(g => g.minutes));
   slider("hours", t("filter_hours", {limit: "\u0000"}), Math.ceil(longest / 60), 1, " h", t("any_time"));
+  slider("leave", t("filter_leave", {limit: "\u0000"}), 24, 1, " h", t("any_hour"));   // 24 h: any hour
+  slider("arrive", t("filter_arrive", {limit: "\u0000"}), 24, 1, " h", t("any_hour"));
   const countries = {};
   for (const p of [...state.points, ...byGround]) if (p.country) countries[p.country] = (countries[p.country] || 0) + 1;
   const label = add(box, "label", t("filter_country") + " ");
@@ -652,7 +838,7 @@ function groundCard(city, options, key, fare, colour, open) {
   card.dataset.price = fare === null ? "" : fare;
   card.tabIndex = 0;
   card.classList.toggle("picked", picked === key);
-  card.onclick = () => { map.setView([city.lat, city.lon], Math.max(map.getZoom(), 5)); open(); };
+  card.onclick = () => open();   // which brings its route into view (explainGround)
   card.onkeydown = event => { if (event.key === "Enter") card.onclick(); };
   const modes = [...new Set(options.map(option => option.mode))].map(modeName).join(", ");
   const top = add(card, "div", undefined, "top");
@@ -673,6 +859,7 @@ function groundCard(city, options, key, fare, colour, open) {
 // filter does not change the colour of a dot. A city is coloured by its cheapest way there, by air or by train or
 // bus; one reached by train or bus too has a purple ring around its dot.
 function draw() {
+  if (routeMaker) showRoute(routeMaker, false);
   const totals = [...state.points.map(cityPrice), ...(state.by_ground || []).map(fareOf).filter(fare => fare !== null)].sort((a, b) => a - b);
   const band = total => Math.min(colours.length - 1, Math.floor(colours.length * totals.filter(t => t < total).length / Math.max(1, totals.length)));
   markers.clearLayers();
@@ -701,7 +888,7 @@ function draw() {
     card.dataset.price = p.total_eur;
     card.tabIndex = 0;
     card.classList.toggle("picked", picked === p.to);
-    card.onclick = () => { map.setView([p.lat, p.lon], Math.max(map.getZoom(), 5)); explain(p); };
+    card.onclick = () => explain(p);   // which brings its whole route into view
     card.onkeydown = event => { if (event.key === "Enter") card.onclick(); };
     const top = add(card, "div", undefined, "top");
     add(top, "span", undefined, "dot").style.background = colour;
@@ -753,7 +940,7 @@ function draw() {
     const row = groundRows.insertRow();
     row.dataset.to = entry.key;
     row.classList.toggle("picked", picked === entry.key);
-    row.onclick = () => { map.setView([city.lat, city.lon], Math.max(map.getZoom(), 5)); entry.open(); };
+    row.onclick = () => entry.open();   // which brings its route into view (explain, explainGround)
     const back = options.map(option => option.back).filter(Boolean);
     const asked = options.some(option => option.price);
     const first = byPrice(options)[0];
@@ -815,12 +1002,16 @@ function render() {
   else if (openGround) explainGround(openGround, false);
 }
 
-// While the timetables are looked up, the page in the app asks for the destinations again
+// While the timetables are looked up, or a price asked for is on its way, the page in the app asks for the
+// destinations again: one request at a time, more often for a price, which takes seconds
+let following = false;
+const pricing = () => Object.values(state.asked_prices || {}).includes("waiting");
 function follow() {
-  if (!data.planner_link || !state.running) return;
-  setTimeout(() => fetch("state").then(response => response.json())
-    .then(next => { if (next.version !== state.version) { state = next; render(); } follow(); })
-    .catch(() => { lost = true; describeStatus(); }), 4000);
+  if (!(data.planner_link || data.state_link) || following || !(state.running || pricing())) return;
+  following = true;
+  setTimeout(() => fetch(data.state_link || "state").then(response => response.json())
+    .then(next => { following = false; if (next.version !== state.version) { state = next; render(); } follow(); })
+    .catch(() => { following = false; lost = true; describeStatus(); }), pricing() ? 1500 : 4000);
 }
 render();
 follow();

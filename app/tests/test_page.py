@@ -318,13 +318,53 @@ def test_a_limit_of_the_map_can_be_typed_and_its_slider_stays_where_it_is(tab, a
     assert tab.js("document.querySelector('#filters .limit input[type=number]').value") == "17"   # and the value typed is the one kept
     assert tab.js(where) == left
 
+def test_the_latest_hours_of_leaving_and_arriving_hide_the_flights_outside_them(tab, app, monkeypatch):
+    """Leaflet comes from unpkg, as in the tests above."""
+    from discover import finder
+    from discover.view import page
+    from discover.flights.sources import Days
+    from trip_planner.trip.places import Place
+    airports = {code: {"city": city, "name": city + " Airport", "country": "GB", "latitude": 52.4, "longitude": longitude}
+                for code, city, longitude in (("BHX", "Birmingham", -1.7), ("STN", "London", 0.2))}
+    monkeypatch.setattr(page, "load_airports", lambda: airports)
+    leaving = date.today() + timedelta(days=30)
+    flights = []
+    for code, leaves, arrives, landing_day in (("BHX", "07:00", "09:45", leaving), ("STN", "21:30", "00:15", leaving + timedelta(days=1))):
+        leg = {"from": "OPO", "to": code, "date": leaving.isoformat(), "time": leaves, "arrival_date": landing_day.isoformat(),
+               "arrival_time": arrives, "minutes": 165, "airline": "Ryanair", "stops": 0}
+        flights.append({**leg, "segments": [dict(leg)], "price_eur": 10.0, "carrier": "FR", "source": "Ryanair", "back": None,
+                        "ground_eur": 5.0, "total_eur": 15.0})
+    found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
+                         Days(leaving.isoformat(), leaving.isoformat()), [], flights, [], [])
+    app.post("/discover", f"token={app.token}&city=Coimbra&dates={written(leaving)}&source=light".encode())
+    made = app.started[-1]
+    made.read_event("map", page.map_page(found, "Ryanair", [], planner_link=made.map_link + "plan/"))
+    made.read_event("state", page.map_state(found, []))
+    tab.call("Network.enable")
+    tab.call("Network.setBlockedURLs", urls=["*tile.openstreetmap.org*"])
+    tab.open(app.address + "discover/map/1/")
+    try:
+        tab.wait("typeof L === 'object'", seconds=15)
+    except AssertionError:
+        pytest.skip("Leaflet could not be fetched from unpkg")
+    tab.wait("document.querySelectorAll('#rows li').length === 2")
+    shown = "[...document.querySelectorAll('#rows li')].map(row => row.dataset.to).join()"
+    choose = "{{ const typed = document.querySelectorAll('#filters .limit input[type=number]')[{0}]; typed.value = '{1}'; typed.dispatchEvent(new Event('change')) }}"
+    tab.js(choose.format(2, 20))   # leaving by 20:00: the flight leaving at 21:30 is hidden
+    tab.wait(f"{shown} === 'BHX'")
+    tab.js(choose.format(2, 24))   # 24: any hour again
+    tab.wait("document.querySelectorAll('#rows li').length === 2")
+    tab.js(choose.format(3, 23))   # arriving by 23:00: the one landing after midnight is hidden
+    tab.wait(f"{shown} === 'BHX'")
+
 def test_a_way_to_the_airport_of_three_vehicles_is_three_parts_on_the_maps_line(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the tests above."""
     from discover import finder
     from discover.view import page
     from discover.flights.sources import Days
     from trip_planner.trip.places import Place
-    airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7}}
+    airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7},
+                "OPO": {"city": "Porto", "name": "Porto Airport", "country": "PT", "latitude": 41.2, "longitude": -8.7}}
     monkeypatch.setattr(page, "load_airports", lambda: airports)
     leaving = date.today() + timedelta(days=30)
     leg = {"from": "OPO", "to": "BHX", "date": leaving.isoformat(), "time": "12:00", "arrival_date": leaving.isoformat(),
@@ -344,7 +384,8 @@ def test_a_way_to_the_airport_of_three_vehicles_is_three_parts_on_the_maps_line(
     flight = {**leg, "segments": [dict(leg)], "price_eur": 10, "carrier": "FR", "source": "Ryanair", "back": None,
               "ground_eur": 17.0, "total_eur": 27.0, "access": [way, into]}
     found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
-                         Days(leaving.isoformat(), leaving.isoformat()), [], [flight], [], [])
+                         Days(leaving.isoformat(), leaving.isoformat()), [], [flight], [], [],
+                         centres={"BHX": Place("Birmingham", "Birmingham", "Birmingham", "United Kingdom", 52.48, -1.9)})
     app.post("/discover", f"token={app.token}&city=Coimbra&dates={written(leaving)}&source=light".encode())
     made = app.started[-1]
     made.read_event("map", page.map_page(found, "Ryanair", [], planner_link=made.map_link + "plan/"))
@@ -373,7 +414,81 @@ def test_a_way_to_the_airport_of_three_vehicles_is_three_parts_on_the_maps_line(
     assert tab.js("document.querySelectorAll('#detail ol.steps ul.vehicles li.change').length") == 2
     assert tab.js("document.querySelectorAll('#detail ol.steps details.others li').length") == 2   # the published ways, closed
     assert not tab.js("document.querySelector('#detail ol.steps details.others').open")
+    # Its route on the map: home to Porto in the colour of that way, the flight, and Birmingham's airport into the city
+    colours = tab.js("[...document.querySelectorAll('.leaflet-overlay-pane path')].map(path => path.getAttribute('stroke'))")
+    grades = tab.js("data.grade_colours")
+    assert [grades["B"], "#1f6fd0", grades["C"]] == [colour for colour in colours if colour != "#fff"][-3:]
+    # ... and on each part, its vehicle where it is: the train of the way there, the plane, and a way whose vehicles are not known
+    assert tab.js("[...document.querySelectorAll('.route-icon use')].map(use => use.getAttribute('href'))") == ["#i-train", "#i-plane", "#i-route"]
+    # A way of a few kilometres has no room for its icon until the map is brought closer: it would hide its own ends
+    shown = "[...document.querySelectorAll('.route-icon')].map(icon => getComputedStyle(icon).display !== 'none')"
+    tab.wait(f"JSON.stringify({shown}) === JSON.stringify([false, true, false])")
+    tab.js("map.setView([40.7, -8.5], 9, {animate: false}); 0")
+    tab.wait(f"{shown}[0]")   # close to Coimbra, the train of the way to Porto
     assert tab.js("errors") == []
+
+def test_a_map_made_before_opens_from_the_list_with_its_own_script_and_breaks_no_rule_of_the_page(tab, app, monkeypatch, tmp_path):
+    """Leaflet comes from unpkg, as in the tests above."""
+    from app import maps
+    from app.tests.test_maps import a_saved_map
+    from discover.view import page
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    a_saved_map(tmp_path)
+    tab.call("Network.enable")
+    tab.call("Network.setBlockedURLs", urls=["*tile.openstreetmap.org*"])
+    tab.call("Page.addScriptToEvaluateOnNewDocument", source="window.violations = []; window.errors = []; addEventListener('error', event => errors.push(event.message));"
+             "document.addEventListener('securitypolicyviolation', event => violations.push(event.violatedDirective + ' ' + event.blockedURI));")
+    tab.open(app.address + "discover")
+    tab.js("document.querySelector('a[href^=\"/discover/saved/\"]').click()")
+    try:
+        tab.wait("typeof L === 'object'", seconds=15)
+    except AssertionError:
+        pytest.skip("Leaflet could not be fetched from unpkg")
+    tab.wait("document.querySelectorAll('#rows li').length === 1")
+    assert tab.js("violations") == [] and tab.js("errors") == []
+
+def test_the_route_on_the_map_is_the_way_the_filters_show_its_city(tab, app, monkeypatch):
+    """Leaflet comes from unpkg, as in the tests above."""
+    from discover import finder
+    from discover.view import page
+    from discover.flights.sources import Days
+    from trip_planner.trip.places import Place
+    airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7},
+                "OPO": {"city": "Porto", "name": "Porto Airport", "country": "PT", "latitude": 41.2, "longitude": -8.7}}
+    monkeypatch.setattr(page, "load_airports", lambda: airports)
+    leaving = date.today() + timedelta(days=30)
+    leg = {"from": "OPO", "to": "BHX", "date": leaving.isoformat(), "time": "07:00", "arrival_date": leaving.isoformat(),
+           "arrival_time": "09:45", "minutes": 165, "airline": "Ryanair", "stops": 0}
+    coach = {"stop": "Birmingham Coach Station", "stop_id": "s", "lat": 52.47, "lon": -1.88, "minutes": 1500, "from_stop": "Coimbra",
+             "from_stop_id": "c", "from_lat": 40.22, "from_lon": -8.44, "operator": "FlixBus", "site": "https://www.flixbus.pt",
+             "sold": "flixbus", "modes": "COACH", "mode": "bus", "times": ["08:00"], "weekdays": ["Mon"], "grade": "B", "km": 0}
+    flight = {**leg, "segments": [dict(leg)], "price_eur": 10, "carrier": "FR", "source": "Ryanair", "back": None,
+              "ground_eur": 5.0, "total_eur": 15.0, "ground": [coach]}
+    found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
+                         Days(leaving.isoformat(), leaving.isoformat()), [], [flight], [], [])
+    app.post("/discover", f"token={app.token}&city=Coimbra&dates={written(leaving)}&source=light".encode())
+    made = app.started[-1]
+    made.read_event("map", page.map_page(found, "Ryanair", [], planner_link=made.map_link + "plan/"))
+    made.read_event("state", page.map_state(found, []))
+    tab.call("Network.enable")
+    tab.call("Network.setBlockedURLs", urls=["*tile.openstreetmap.org*"])
+    tab.call("Page.addScriptToEvaluateOnNewDocument", source="window.errors = []; addEventListener('error', event => errors.push(event.message));")
+    tab.open(app.address + "discover/map/1/")
+    try:
+        tab.wait("typeof L === 'object'", seconds=15)
+    except AssertionError:
+        pytest.skip("Leaflet could not be fetched from unpkg")
+    tab.wait("!!document.querySelector('#rows li')")
+    icons = "[...document.querySelectorAll('.route-icon use')].map(use => use.getAttribute('href')).filter(href => href !== '#i-route').sort().join()"
+    tab.js("document.querySelector('#rows li').click()")
+    tab.wait(f"{icons} === '#i-plane'")   # both shown: the trip open is the flight's, and so is its route
+    tab.js("document.querySelector('#filters input[type=checkbox]').click()")   # flights hidden
+    tab.wait(f"{icons} === '#i-bus'")   # the trip open follows the filters at once
+    tab.js("document.querySelector('#ground-rows tr').click()")   # opened again from the trains and buses
+    tab.wait("document.querySelector('#detail h2').textContent.endsWith('Birmingham') && !!document.querySelector('#detail h4.ground-title')")
+    assert tab.js(icons) == "#i-bus" and tab.js("errors") == []
 
 def test_a_map_asked_for_opens_by_itself_once_its_page_is_ready_and_only_then(tab, app):
     leaving = date.today() + timedelta(days=30)
@@ -405,7 +520,7 @@ def test_a_city_reached_by_train_or_bus_has_a_card_beside_the_flights_by_its_pri
               "ground_eur": 5.0, "total_eur": 15.0}
     option = {"stop": "Salamanca", "stop_id": "s", "lat": 40.96, "lon": -5.66, "minutes": 269, "from_stop": "Coimbra", "from_stop_id": "c",
               "operator": "FlixBus", "site": "https://www.flixbus.pt", "sold": "flixbus", "modes": "COACH", "mode": "bus",
-              "times": ["08:00", "12:00"], "weekdays": ["Mon", "Fri"], "grade": "B", "km": 0}
+              "times": ["08:00", "12:00"], "weekdays": ["Mon", "Fri"], "grade": "B", "km": 0, "from_lat": 40.22, "from_lon": -8.44}
     salamanca = {"key": "ES|Salamanca|40.96", "name": "Salamanca", "country": "ES", "lat": 40.96, "lon": -5.66, "minutes": 269,
                  "modes": ["bus"], "ground": [option], "fare_eur": 9.0}
     found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
@@ -427,3 +542,6 @@ def test_a_city_reached_by_train_or_bus_has_a_card_beside_the_flights_by_its_pri
     tab.js("document.querySelector('#rows li').click()")
     assert tab.js("errors") == []
     tab.wait("document.querySelector('#rows li').classList.contains('picked') && !document.getElementById('detail').hidden")
+    # Its route on the map: from Coimbra's coach station to Salamanca's in the colour of its grade, with a bus on it
+    assert tab.js("data.grade_colours.B") in tab.js("[...document.querySelectorAll('.leaflet-overlay-pane path')].map(path => path.getAttribute('stroke'))")
+    assert tab.js("[...document.querySelectorAll('.route-icon use')].map(use => use.getAttribute('href'))") == ["#i-bus"]

@@ -59,8 +59,9 @@ def problem(key: str, original: str, translated) -> str:
         return "a name between backticks changed"
     if key in FIXED_LISTS and len([item for item in translated.split(",") if item.strip()]) != FIXED_LISTS[key]:
         return f"must have {FIXED_LISTS[key]} items separated by commas"
-    if "\n" in translated:
-        return "more than one line"
+    # A few English texts are a heading and a paragraph: their line breaks must stay, and no other text may gain one
+    if translated.count("\n") != original.count("\n"):
+        return "the line breaks changed" if "\n" in original else "more than one line"
     return ""
 
 def missing(code: str, languages: dict) -> dict[str, str]:
@@ -91,7 +92,7 @@ def write_language(code: str, texts: dict[str, str]) -> None:
              f'with `python main.py --add-language {code}`:\nread it once. One text per line: a text that is missing here is shown in English.\n'
              'Keep what is between {braces} and between `backticks` exactly as in en.py."""\n', "TEXTS = {"]
     for line in (FOLDER / f"{REFERENCE}.py").read_text(encoding="utf-8").splitlines():
-        entry = re.fullmatch(r'    ("[^"]+"): ".*",', line)
+        entry = re.fullmatch(r'''    ("[^"]+"): (".*"|'.*'),''', line)   # en.py quotes a text with an apostrophe in it with ' too
         if entry and json.loads(entry[1]) in texts:
             lines.append(f"    {entry[1]}: {json.dumps(texts[json.loads(entry[1])], ensure_ascii=False)},")
         elif line.startswith("    # ----"):
@@ -110,7 +111,7 @@ Rules:
 - Markdown marks (** and |), emojis, numbers, EUR, airport codes and example times stay as they are.
 - A text that is a list separated by commas stays a list separated by commas, in the same order.
 - Address the traveller informally, in the second person singular, and keep the texts as short and plain as the English.
-- Every text stays on one line.
+- Every text keeps the line breaks (\\n) of the English, in the same places, and gains none.
 {"Some texts need more than a translation:" + chr(10) + chr(10).join(f"- {key}: {note}" for key, note in notes.items()) if notes else ""}
 {"A first attempt at these was refused, mind the reason:" + chr(10) + chr(10).join(f"- {key}: {reason}" for key, reason in complaints.items()) if complaints else ""}
 

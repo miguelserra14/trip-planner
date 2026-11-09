@@ -54,7 +54,7 @@ OPERATORS = {
 }
 LONG_MODES = ("HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "COACH")   # the departures read: no local ones
 # The bus stops read. FlixBus's are also in a "gb-flixbus_" feed, under the same ids and with the same buses;
-# a "Waypoint" of FlixBus is where its buses pass, not where travellers get on.
+# a "Waypoint" of FlixBus is where its buses pass, not where travellers get on or off ("Kornwestheim Pre Waypoint").
 COACH_FEEDS = ("eu-blablacar-bus_", "eu-flixbus_", ALSA_STOP)
 GROUND = Path(__file__).parents[1] / "cache" / "ground.json"   # the way out found for each city
 GROUND_DAYS = 30           # a city's trains and buses are looked for again after this long...
@@ -153,7 +153,7 @@ class Transitous:
                          max=f"{place.latitude - degrees},{place.longitude + degrees * 1.6}")
         rail = lambda stop: set(stop.get("modes") or []) & (set(LONG_MODES) - {"COACH"})
         return [stop for stop in found if (rail(stop) or stop.get("stopId", "").startswith(COACH_FEEDS))
-                and not stop.get("name", "").startswith("Waypoint")
+                and not waypoint(stop.get("name", ""))
                 and distance_km(place.latitude, place.longitude, stop["lat"], stop["lon"]) <= STOP_KM]
 
     def departures(self, stop_id: str, start: datetime) -> list[dict[str, Any]]:
@@ -181,10 +181,15 @@ def patterns(departures: list[dict[str, Any]]) -> dict[tuple, dict[str, Any]]:
         leaves = local(stop["departure"], stop.get("tz", ""))
         entry = found.setdefault((operator[0], departure.get("headsign", "")), {
             "trip_id": departure["tripId"], "stop_id": stop["stopId"], "stop": stop["name"], "operator": operator[0], "site": operator[1],
+            "lat": stop.get("lat"), "lon": stop.get("lon"),   # where it leaves from, for its route on the map
             "sold": operator[2], "modes": departure.get("mode", ""), "times": set(), "weekdays": set()})
         entry["times"].add(leaves.strftime("%H:%M"))
         entry["weekdays"].add(WEEKDAYS[leaves.weekday()])
     return found
+
+def waypoint(name: str) -> bool:
+    """Whether a stop is one of FlixBus's waypoints: a point on the way, no station."""
+    return "waypoint" in name.lower()
 
 def reached(trip: dict[str, Any], pattern: dict[str, Any]) -> list[dict[str, Any]]:
     """The stations a train or bus calls at after the traveller's, each with the minutes from leaving it, the
@@ -199,10 +204,11 @@ def reached(trip: dict[str, Any], pattern: dict[str, Any]) -> list[dict[str, Any
                 leaves = call.get("departure") or call.get("scheduledDeparture")
                 continue
             arrives = call.get("arrival") or call.get("scheduledArrival")
-            if leaves and arrives and call.get("dropoffType") != "NOT_ALLOWED":
+            if leaves and arrives and call.get("dropoffType") != "NOT_ALLOWED" and not waypoint(call["name"]):
                 found.append({"stop": call["name"], "stop_id": call.get("stopId", ""), "lat": call["lat"], "lon": call["lon"],
                               "minutes": round((moment(arrives) - moment(leaves)).total_seconds() / 60),
                               "from_stop": pattern["stop"], "from_stop_id": pattern["stop_id"], "operator": pattern["operator"],
+                              "from_lat": pattern.get("lat"), "from_lon": pattern.get("lon"),
                               "site": site, "sold": pattern.get("sold", ""), "modes": pattern["modes"], "mode": mode_of(pattern["modes"]),
                               "times": sorted(pattern["times"]), "weekdays": sorted(pattern["weekdays"], key=WEEKDAYS.index),
                               "call": calls})
@@ -221,7 +227,8 @@ def from_city(place: Place, today: date, say: Callable = print_line, transitous:
     if (kept and date.fromisoformat(kept["checked"]) >= today - timedelta(days=GROUND_DAYS)
             and kept.get("version") == GROUND_VERSION):
         # Kept before the map said "bus" (2026-10-26): the mode as it is said now, from the timetable's own
-        return [{**stop, "mode": mode_of(stop["modes"])} for stop in kept["reached"]]
+        # and with no waypoint, kept before they were left out (2026-11-09)
+        return [{**stop, "mode": mode_of(stop["modes"])} for stop in kept["reached"] if not waypoint(stop["stop"])]
     transitous = transitous or Transitous()
     say(tr("discover_say_ground_reading", place=place.label, days=GROUND_DAYS))
     start = datetime.combine(today + timedelta(days=DAYS_AHEAD), datetime.min.time())

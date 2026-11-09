@@ -3,6 +3,8 @@ the services, a language added (job.py runs them, as a search) or removed (the a
 No network and no model: the jobs are stood in for, and a language is removed from a copy of the folder."""
 import io
 import json
+from pathlib import Path
+from urllib.parse import urlencode
 import shutil
 import sys
 
@@ -20,14 +22,33 @@ def site_with(stale=()):
     site = Site(SETTINGS, start=lambda first: started.append(StandIn(first)) or started[-1], stale=lambda: list(stale))
     return site, started
 
-def test_the_prices_can_only_be_asked_again_when_some_are_too_old():
+def old_reports(folder: Path, *names: str) -> list[Path]:
+    """Reports whose ground prices were read long ago: their .json, read when it was written (prices.read_on)."""
+    paths = []
+    for name in names:
+        path = folder / f"{name}.json"
+        path.write_text(json.dumps({"options": []}), encoding="utf-8")
+        paths.append(path)
+    return paths
+
+def test_the_prices_can_only_be_asked_again_when_some_are_too_old(tmp_path):
     site, started = site_with()
     assert '<button type="submit" class="quiet" disabled>Refresh prices</button>' in site.get("/program").html
     assert "too long ago" not in site.get("/").html
-    site, started = site_with(stale=["a.json", "b.json"])
-    assert "Refresh prices (2)" in site.get("/program").html and "2 report(s) have ground prices read too long ago" in site.get("/").html
-    assert site.post("/prices", sent(site)).location == "/search"
+    site, started = site_with(stale=old_reports(tmp_path, "trip_a", "trip_b"))
+    shown = site.get("/program").html
+    assert shown.count('type="checkbox" name="report"') == 2 and shown.count(" checked>") == 2   # every one ticked
+    assert "2 report(s) have ground prices read too long ago" in site.get("/").html
+    assert site.post("/prices", urlencode({"token": site.token, "report": ["trip_a", "trip_b"]}, doseq=True).encode()).location == "/search"
     assert started[0].first["task"] == "prices" and "Refresh prices" in site.get("/search").html
+    assert [Path(path).stem for path in started[0].first["reports"]] == ["trip_a", "trip_b"]
+
+def test_only_the_reports_ticked_have_their_prices_asked_again_and_only_ones_whose_prices_are_old(tmp_path):
+    site, started = site_with(stale=old_reports(tmp_path, "trip_a", "trip_b", "trip_c"))
+    sent_reports = lambda *names: urlencode({"token": site.token, "report": list(names)}, doseq=True).encode()
+    assert site.post("/prices", sent_reports()).location == "/program" and started == []   # nothing ticked: nothing asked
+    assert site.post("/prices", sent_reports("trip_b", "../../settings", "trip_z")).location == "/search"
+    assert [Path(path).stem for path in started[0].first["reports"]] == ["trip_b"]   # a name the page did not offer is no report
 
 def test_the_check_runs_as_a_search_does_and_not_while_one_works():
     site, started = site_with()
@@ -92,6 +113,16 @@ def test_no_text_a_model_wrote_can_become_code_in_a_language_file(languages):
     found = texts.load_languages()["xx"]
     assert found["option_word"] == sneaky + '\\"' and found["language_name"] == sneaky
 
+def test_a_translation_keeps_the_line_breaks_of_the_english_and_gains_none():
+    assert translate.problem("recommendation_none", "## {heading}\n\nNo option.", "## {heading}\n\nNessuna opzione.") == ""
+    assert translate.problem("recommendation_none", "## {heading}\n\nNo option.", "## {heading} Nessuna opzione.") != ""
+    assert translate.problem("option_word", "Option", "Opzione\n") != ""
+    assert translate.missing("pt-PT", texts.TEXTS) == {}   # the language written by hand is complete
+
+def test_a_text_quoted_with_apostrophes_in_english_is_written_to_a_language_file(languages):
+    translate.write_language("xx", {"progress_round": "Voli: {checked}, {itineraries}.", "option_word": "Opzione"})
+    assert texts.load_languages()["xx"] == {"progress_round": "Voli: {checked}, {itineraries}.", "option_word": "Opzione"}
+
 def run(monkeypatch, asked: dict) -> list[dict]:
     from trip_planner import utils
     monkeypatch.setattr(utils, "LISTENERS", {})
@@ -108,11 +139,14 @@ def test_the_process_runs_each_job_and_says_how_it_ended(monkeypatch):
         print("Kiwi        ok")
         return 1
     monkeypatch.setattr(check, "check_setup", check_setup)
-    monkeypatch.setattr(prices, "refresh", lambda: "## Ground prices asked again")
+    asked_for = []
+    monkeypatch.setattr(prices, "refresh", lambda paths=None: asked_for.append(paths) or "## Ground prices asked again")
     said = run(monkeypatch, {"task": "check", "language": "en"})
     assert [event["kind"] for event in said] == ["say", "done"] and "did not answer" in said[1]["text"]
     said = run(monkeypatch, {"task": "prices", "language": "en"})
     assert [(event["kind"], event["text"]) for event in said] == [("show", "## Ground prices asked again"), ("done", "Done.")]
+    run(monkeypatch, {"task": "prices", "reports": ["reports/trip_a/trip_a.json"], "language": "en"})
+    assert asked_for == [None, [Path("reports/trip_a/trip_a.json")]]   # every report too old, then only the ones ticked
 
 def test_a_language_the_model_does_not_know_is_said_in_the_travellers_words(monkeypatch):
     async def add(name):

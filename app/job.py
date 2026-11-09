@@ -31,6 +31,7 @@ import json
 import sys
 import threading
 import traceback
+from pathlib import Path
 from typing import Any, Iterator, TextIO
 
 from trip_planner.trip.form import named
@@ -150,7 +151,8 @@ async def run_task(asked: dict[str, Any], events: Events, answers: Iterator[str]
         events.send("done", tr("app_check_failed" if failed else "app_check_passed"))
     elif asked["task"] == "prices":
         from trip_planner.tools import prices
-        utils.show(await asyncio.to_thread(prices.refresh))
+        chosen = [Path(path) for path in asked["reports"]] if asked.get("reports") else None   # the ones ticked, or every one too old
+        utils.show(await asyncio.to_thread(prices.refresh, chosen))
         events.send("done", tr("app_task_done"))
     elif asked["task"] == "language":
         from trip_planner.texts import translate
@@ -169,6 +171,9 @@ async def run_task(asked: dict[str, Any], events: Events, answers: Iterator[str]
     elif asked["task"] == "map":
         from app.map_job import make_map
         await asyncio.to_thread(make_map, asked, events, answers)   # discover's Session runs its own event loops
+    elif asked["task"] == "price_saved":   # a city of a map made before, priced as its page asks (map_job.py)
+        from app.map_job import price_saved
+        await asyncio.to_thread(price_saved, asked, events)
     else:
         events.send("failed", tr("app_not_a_trip"))
 

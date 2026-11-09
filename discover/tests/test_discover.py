@@ -298,6 +298,15 @@ def test_a_page_opened_as_a_file_has_no_planner_to_open(monkeypatch):
     assert data["planner_link"] == "" and data["state"]["points"][0]["plan"]["out"] == {"key": "BHX-out"}
     assert "token" not in data
 
+def test_the_dot_of_a_city_is_at_its_centre_and_its_airport_stays_for_the_route(monkeypatch):
+    monkeypatch.setattr(page, "load_airports", lambda: {"BVA": {"city": "Beauvais", "name": "Beauvais-Tillé", "country": "FR",
+                                                                "latitude": 49.45, "longitude": 2.11}})
+    paris = finder.Place("Paris", "Paris", "Paris", "France", 48.86, 2.35)
+    found = finder.Found(PLACE, ONE_WAY, [], [{**flight("OPO", "BVA", 10), "ground_eur": 5.0, "total_eur": 15.0}], [], [], centres={"BVA": paris})
+    state = page.map_state(found, [])
+    [point] = state["points"]
+    assert (point["lat"], point["lon"]) == (48.86, 2.35) and state["places"]["BVA"] == [49.45, 2.11]
+
 def test_the_page_draws_the_lines_in_the_planners_colours_and_has_the_cities_with_no_flight(monkeypatch):
     from trip_planner.trip.trip_settings import LIGHT_COLOURS
     monkeypatch.setattr(page, "load_airports", lambda: {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB",

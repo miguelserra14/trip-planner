@@ -6,6 +6,14 @@ operators that sell to programs, with the planner's own code. Grade A: sold for 
   direct departures of that day in the timetables, MAX_DEPARTURES of them asked of the operator.
 The others (Deutsche Bahn, SNCF, Eurostar, BlaBlaCar Bus...) keep their timetable and no price. No model is asked.
 
+FlixBus also sells trips with a change of coach, which the timetables do not give: the map takes them up to
+TripSettings.max_coach_changes changes (0, straight only, unless the traveller chooses), each change said with its
+station and its wait. The trains are priced straight only.
+
+FlixBus's stations in the timetables are not always the ones it sells from (Antwerp to Heidelberg gives nothing
+station to station): when they give no ride at all, FlixBus is asked city to city (TOWN_KM), the two cities found by
+name and checked by position, and its own stations are shown. Still a direct ride only.
+
 A price is for the ticket from station to station: getting to the station in the traveller's city, and from the
 one reached, is not counted (the flights count the ways to and from their airports).
 
@@ -39,7 +47,7 @@ from discover.confirm import TOP
 from discover.finder import Found
 from discover.flights.sources import Days
 from trip_planner.sources import fares
-from trip_planner.sources.operators.flixbus import flixbus_price, flixbus_search
+from trip_planner.sources.operators.flixbus import flixbus_city, flixbus_price, flixbus_search
 from trip_planner.sources.timetables.client import step_of
 from trip_planner.texts import tr
 from trip_planner.trip.places import distance_km, load_airports, Place
@@ -50,6 +58,10 @@ ROUND = 6             # cities priced at once: the least of the others is worked
 MAX_DAYS = 4          # days priced each way: the first ones the traveller may leave, or come back, on
 MAX_DEPARTURES = 3    # departures of a day asked of an operator that prices one departure at a time, spread over the day
 AT_ONCE = 4           # FlixBus searches at the same time
+# TripSettings.max_coach_changes of this map, set once as it starts (session.py, app/map_job.price_saved): read here,
+# beside the timetables' lookups, which change current.SETTINGS meanwhile
+MOST_CHANGES = 0
+TOWN_KM = 25          # how far from a station the city FlixBus finds by its name may be (as flixbus.flixbus_rides)
 FAILURES = (httpx.HTTPError, ValueError, KeyError, TypeError)   # an answer that fails or cannot be read: no price, as with no sale
 RATES = Path(__file__).parents[1] / "cache" / "ground_rates.json"   # the prices per km seen, by operator: [km, EUR per km, day seen]
 RATES_DAYS = 30       # a price per km seen longer ago than this no longer chooses what is asked
@@ -71,8 +83,34 @@ def days_of(days: Days, back: bool, today: date, after: str = "") -> list[str]:
 
 def flixbus_search_day(start_id: str, end_id: str, day: str) -> dict[str, Any] | None:
     """FlixBus's cheapest direct ride between two of its stations on a day, from one search; None when it sells none."""
-    rides, _ = flixbus_search(start_id.split("_", 1)[1], end_id.split("_", 1)[1], day, "station")
-    direct = [ride for ride in rides if ride.get("transfer_type") == "Direct" and ride["departure"]["date"][:10] == day]
+    rides, stations = flixbus_search(start_id.split("_", 1)[1], end_id.split("_", 1)[1], day, "station")
+    found = cheapest_ride(rides, day, stations)
+    if found:
+        del found["station_ids"]   # the timetable's own: the map names them already
+    return found
+
+def flixbus_town_day(towns: tuple, day: str) -> dict[str, Any] | None:
+    """FlixBus's cheapest direct ride between two cities on a day, towns ((name, latitude, longitude) of each end),
+    with the names of the stations it leaves from and reaches; None when it knows either city by none of its
+    stops near there, or sells none."""
+    ids = [flixbus_city(name, latitude, longitude, TOWN_KM) for name, latitude, longitude in towns]
+    if not all(ids) or ids[0] == ids[1]:
+        return None
+    rides, stations = flixbus_search(ids[0], ids[1], day, "city")
+    found = cheapest_ride(rides, day, stations)
+    if found:
+        leaves, arrives = found.pop("station_ids")
+        found["from_stop"], found["to_stop"] = stations.get(leaves, ""), stations.get(arrives, "")
+    return found
+
+def changes_of(ride: dict[str, Any]) -> int:
+    """The changes of coach of a FlixBus ride: one fewer than its legs (a direct one has one, or none listed)."""
+    return max(len(ride.get("legs") or []) - 1, 0 if ride.get("transfer_type") == "Direct" else 1)
+
+def cheapest_ride(rides: list[dict[str, Any]], day: str, stations: dict[str, str] | None = None) -> dict[str, Any] | None:
+    """The cheapest ride of a FlixBus search that leaves on the day, with no more changes than the traveller's
+    setting, as the map shows a price: each change with its station (stations, by id) and its wait in minutes."""
+    direct = [ride for ride in rides if changes_of(ride) <= MOST_CHANGES and ride["departure"]["date"][:10] == day]
     if not direct:
         return None
     ride = min(direct, key=flixbus_price)
@@ -81,14 +119,21 @@ def flixbus_search_day(start_id: str, end_id: str, day: str) -> dict[str, Any] |
     url = (f"https://shop.flixbus.pt/search?departureCity={leaves['city_id']}&arrivalCity={arrives['city_id']}"
            f"&rideDate={day[8:10]}.{day[5:7]}.{day[0:4]}&adult=1")
     return {"price_eur": round(flixbus_price(ride), 2), "day": day, "leave": leaves["date"][11:16], "arrive": arrives["date"][11:16],
-            "arrive_day": arrives["date"][:10], "seller": "FlixBus", "grade": "A", "url": url}
+            "arrive_day": arrives["date"][:10], "seller": "FlixBus", "grade": "A", "url": url,
+            "station_ids": [leaves.get("station_id", ""), arrives.get("station_id", "")],
+            "changes": [{"at": (stations or {}).get(first["arrival"].get("station_id", ""), ""),
+                         "wait": round((datetime.fromisoformat(second["departure"]["date"]) - datetime.fromisoformat(first["arrival"]["date"])).total_seconds() / 60)}
+                        for first, second in zip(ride.get("legs") or [], (ride.get("legs") or [])[1:])]}
 
-def flixbus_day(start_id: str, end_id: str, day: str) -> dict[str, Any] | None:
-    """flixbus_search_day, or its answer when prefetch asked it already in this map."""
+def flixbus_day(start_id: str, end_id: str, day: str, towns: tuple | None = None) -> dict[str, Any] | None:
+    """flixbus_search_day, or its answer when prefetch asked it already in this map; city to city (flixbus_town_day)
+    when the stations give nothing and the towns are known."""
     with ANSWERS_LOCK:
-        if (start_id, end_id, day) in FLIXBUS_ANSWERS:
-            return FLIXBUS_ANSWERS[(start_id, end_id, day)]
-    return flixbus_search_day(start_id, end_id, day)
+        known = (start_id, end_id, day) in FLIXBUS_ANSWERS
+        found = FLIXBUS_ANSWERS.get((start_id, end_id, day))
+    if not known:
+        found = flixbus_search_day(start_id, end_id, day)
+    return found or (flixbus_town_day(towns, day) if towns else None)
 
 def spread(items: list, count: int) -> list:
     """count items spread over the list, the first and the last among them: a morning and an evening departure."""
@@ -120,14 +165,16 @@ def timetable_day(option: dict[str, Any], start_id: str, end_id: str, day: str, 
 def ends(option: dict[str, Any], back: bool) -> tuple[str, str]:
     return (option["stop_id"], option["from_stop_id"]) if back else (option["from_stop_id"], option["stop_id"])
 
-def cheapest_day(option: dict[str, Any], back: bool, chosen: list[str], transitous: ground.Transitous, after: str = "") -> dict[str, Any] | None:
+def cheapest_day(option: dict[str, Any], back: bool, chosen: list[str], transitous: ground.Transitous, after: str = "",
+                 towns: tuple | None = None) -> dict[str, Any] | None:
     """The cheapest of the days for one way of an option, or None when none of them sells one. after ("yyyy-mm-dd
-    hh:mm"): the way back leaves after the way out arrives, a ride before it is no way back."""
+    hh:mm"): the way back leaves after the way out arrives, a ride before it is no way back. towns: the cities of the
+    way out (towns_of), for FlixBus city to city."""
     start, end = ends(option, back)
     found = []
     for day in chosen:
         try:
-            price = (flixbus_day(start, end, day) if option["operator"] == "FlixBus"
+            price = (flixbus_day(start, end, day, towns=(towns[::-1] if back else towns) if towns else None) if option["operator"] == "FlixBus"
                      else timetable_day(option, start, end, day, transitous))
         except FAILURES:
             price = None
@@ -142,12 +189,22 @@ def stay(out: dict[str, Any], back: dict[str, Any]) -> dict[str, int]:
     leaves = datetime.fromisoformat(f"{back['day']}T{back['leave']}")
     return {"minutes": max(0, round((leaves - arrives).total_seconds() / 60)), "nights": max(0, (leaves.date() - arrives.date()).days)}
 
-def price_of(option: dict[str, Any], days: Days, today: date, transitous: ground.Transitous) -> dict[str, Any]:
+def towns_of(found: Found, holder: dict[str, Any], option: dict[str, Any]) -> tuple:
+    """The two cities of an option, (name, latitude, longitude) each: the traveller's, and the one of the map it
+    reaches, by its name on the map (or its airport's city) and its centre (or the station's position). The centre,
+    not the station: a station on the edge of a city is nearer other places FlixBus knows by a name of their own."""
+    centre = found.centres.get(holder.get("to"))
+    there = holder.get("name") or (centre.english_name if centre else (load_airports().get(holder.get("to")) or {}).get("city", ""))
+    latitude, longitude = ((centre.latitude, centre.longitude) if centre else (holder["lat"], holder["lon"]) if "to" not in holder
+                           else (option["lat"], option["lon"]))
+    return (found.place.english_name, found.place.latitude, found.place.longitude), (there, latitude, longitude)
+
+def price_of(option: dict[str, Any], days: Days, today: date, transitous: ground.Transitous, towns: tuple | None = None) -> dict[str, Any]:
     """An option's price: {"out", "back", "total_eur", "stay"}, each way the cheapest of its days, the way back
     leaving after the way out arrives; total_eur is None when a way is sold on none of them (a return trip needs
     both). Nothing of the option is changed here: the rounds ask several at once, and only price() writes into the map."""
-    out = cheapest_day(option, False, days_of(days, False, today), transitous)
-    back = (cheapest_day(option, True, days_of(days, True, today, out["day"]), transitous, f"{out['arrive_day']} {out['arrive']}")
+    out = cheapest_day(option, False, days_of(days, False, today), transitous, towns=towns)
+    back = (cheapest_day(option, True, days_of(days, True, today, out["day"]), transitous, f"{out['arrive_day']} {out['arrive']}", towns=towns)
             if days.round_trip and out else None)
     whole = out and (back or not days.round_trip)
     return {"out": out, "back": back, "total_eur": round(out["price_eur"] + (back["price_eur"] if back else 0), 2) if whole else None,
@@ -284,8 +341,10 @@ def price(found: Found, on_change: Callable[[Found], None] = lambda found: None,
         trains = [option for index in chosen for option in selling[index] if option["operator"] != "FlixBus"]
         with ThreadPoolExecutor(AT_ONCE + 1) as pool:
             # The trains one after the other, in one worker, as they share the timetables; FlixBus in the others
+            holders = {id(option): cities[index][0] for index in chosen for option in selling[index]}
             by_train = pool.submit(lambda: [price_of(option, found.days, today, transitous) for option in trains])
-            by_bus = list(pool.map(lambda option: price_of(option, found.days, today, transitous), buses))
+            by_bus = list(pool.map(lambda option: price_of(option, found.days, today, transitous,
+                                                           towns=towns_of(found, holders[id(option)], option)), buses))
             for option, priced in zip(trains + buses, by_train.result() + by_bus):
                 option["price"] = priced
         keep_rates(rates, trains + buses, found.place, today)
@@ -299,3 +358,56 @@ def price(found: Found, on_change: Callable[[Found], None] = lambda found: None,
     say(tr("discover_say_fares_done", count=len(found.fare_lookups) - before, stop=found.fare_stop))
     on_change(found)
     return found
+
+# ---------------------------------------------------------------- one city, asked for on the map
+# The rounds price only what can be among the cheapest: a city the traveller wants to see anyway (Paris by coach when
+# the flights are cheaper) is priced when the page asks for it, with the same price_of, grade A as any other.
+
+def asked_city(cities: list[tuple], key: str) -> int | None:
+    """The city of cities_of with this key on the page, by its index: "~" and its own key for a city no flight goes
+    to, its airport's code for one a flight goes to. None for any other key."""
+    for index, (holder, _, _, _) in enumerate(cities):
+        if ("to" in holder and holder["to"] == key) or ("to" not in holder and "~" + str(holder.get("key")) == key):
+            return index
+    return None
+
+def price_asked(found: Found, key: str, before_trains: Callable[[], Any] = lambda: None, today: date | None = None,
+                transitous: ground.Transitous | None = None) -> tuple[tuple, list[tuple[dict, dict]]] | None:
+    """The price of every option of one city that code can price and has not priced yet, whatever the rounds chose:
+    (the city as cities_of gives it, [(option, its price_of)]), for write_asked; None for a key that is no city of the
+    map. The city itself, not its place in the map: the flights' lookups may reorder them meanwhile. FlixBus AT_ONCE at a time; the operators asked departure by departure after before_trains, as they share the
+    timetables the flights may still be looked up in. Nothing of the map is changed here."""
+    today, transitous = today or date.today(), transitous or ground.Transitous()
+    cities = cities_of(found)
+    index = asked_city(cities, key)
+    if index is None:
+        return None
+    holder, options, _, countries = cities[index]
+    # Asked again for one that was sold on none of the days: the traveller asks, and FlixBus's seats come and go
+    selling = [option for option in options if sellable(option, countries) and not (option.get("price") or {}).get("out")]
+    buses = [option for option in selling if option["operator"] == "FlixBus"]
+    trains = [option for option in selling if option["operator"] != "FlixBus"]
+    with ThreadPoolExecutor(AT_ONCE) as pool:
+        priced = list(zip(buses, pool.map(lambda option: price_of(option, found.days, today, transitous,
+                                                                  towns=towns_of(found, holder, option)), buses)))
+    if trains:
+        before_trains()
+        priced += [(option, price_of(option, found.days, today, transitous)) for option in trains]
+    return cities[index], priced
+
+def write_asked(found: Found, city: tuple, priced: list[tuple[dict, dict]], today: date | None = None) -> int:
+    """The prices of price_asked written into the map, as price() writes a round's: the city's fare when no flight
+    goes there, its lookup listed, the prices per km kept. Returns how many options have a price in full."""
+    today = today or date.today()
+    holder, options, beat, _ = city
+    for option, price_found in priced:
+        option["price"] = price_found
+    if not priced:
+        return 0
+    keep_rates(read_rates(today), [option for option, _ in priced], found.place, today)
+    if beat is None:
+        holder["fare_eur"] = fare_of(options)
+    count = sum(1 for _, price_found in priced if price_found["total_eur"] is not None)
+    found.fare_lookups.append({"city": holder.get("name") or holder["to"], "operators": [option["operator"] for option, _ in priced],
+                               "priced": count, "asked": True})
+    return count

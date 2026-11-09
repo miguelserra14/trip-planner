@@ -145,7 +145,8 @@ def test_the_page_opens_the_planner_in_the_app_and_asks_for_its_destinations_whe
     assert data["planner_link"] == "/discover/map/1/plan/"
     assert '<script src="map.js"></script>' in html and "<style>" not in html   # files beside the page: no script of its own
     script = page.SCRIPT.read_text(encoding="utf-8")
-    assert 'fetch("state")' in script and 'fetch("/state")' not in script   # relative: under the map's address in the app
+    # relative: under the map's address in the app; a map made before is given its own (maps.saved_page)
+    assert 'fetch(data.state_link || "state")' in script and 'fetch("/state")' not in script
 
 def test_the_maps_process_tells_the_app_the_page_the_trips_and_each_change(monkeypatch):
     import discover.view.page as discover_page
@@ -182,8 +183,9 @@ def test_the_maps_process_tells_the_app_the_page_the_trips_and_each_change(monke
     assert job.main(iter([json.dumps(asked)]), events) == 0
     said = [json.loads(line) for line in out.getvalue().splitlines()]
     kinds = [event["kind"] for event in said]
-    assert kinds[:3] == ["trips", "map", "state"] and kinds[-1] == "done" and kinds.count("state") >= 3
-    assert said[1]["text"] == "<page link=/discover/map/1/plan/>" and said[-2]["text"] == {"version": 2, "running": True}
+    # done, then it waits for prices asked for (ready) until stdin closes, and the last state is sent as it ends
+    assert kinds[:3] == ["trips", "map", "state"] and kinds[-3:] == ["done", "ready", "state"] and kinds.count("state") >= 3
+    assert said[1]["text"] == "<page link=/discover/map/1/plan/>" and said[-1]["text"] == {"version": 2, "running": True}
 
 def test_a_map_told_to_stop_ends_its_lookups_at_the_next_step(monkeypatch):
     import discover.view.page as discover_page
@@ -216,7 +218,7 @@ def test_a_map_told_to_stop_ends_its_lookups_at_the_next_step(monkeypatch):
     events = job.Events(out)
     monkeypatch.setattr(sys, "stdout", job.Printed(events))
     assert job.main(lines(), events) == 0
-    assert json.loads(out.getvalue().splitlines()[-1])["kind"] == "done"
+    assert [json.loads(line)["kind"] for line in out.getvalue().splitlines()][-3:] == ["done", "ready", "state"]
 
 def test_days_the_map_cannot_use_are_refused_by_its_process_too(monkeypatch):
     out = io.StringIO()
@@ -242,3 +244,184 @@ def test_a_map_being_made_shows_its_steps_on_a_map_and_one_button_that_stops_it(
     assert 'action="/discover/stop"' in shown and 'action="/stop"' not in shown   # the map's own, not the planner's
     made.read_event("progress", {"step": "done"})
     assert 'class="card waiting"' not in site.get("/discover").html   # its page is ready: the map opens
+
+def a_saved_map(folder, name: str = "coimbra_2026-11-12_2026-11-14", monkeypatch=None):
+    """A map as discover/session.py saves it: its page with its script and its style inside."""
+    leg = {"from": "OPO", "to": "BCN", "date": DAY.isoformat(), "time": "07:00", "arrival_date": DAY.isoformat(),
+           "arrival_time": "09:45", "minutes": 105, "airline": "Ryanair", "stops": 0}
+    flight = {**leg, "segments": [dict(leg)], "price_eur": 20, "carrier": "FR", "source": "Ryanair", "back": None,
+              "ground_eur": 5.0, "total_eur": 25.0}
+    found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
+                         Days(DAY.isoformat(), DAY.isoformat()), [], [flight], [], [])
+    path = folder / f"{name}.html"
+    path.write_text(page.map_page(found, "Ryanair", []), encoding="utf-8")
+    return path
+
+def test_the_maps_made_before_are_listed_under_the_form_newest_first_as_the_reports_are(monkeypatch, tmp_path):
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    site, _ = site_and_jobs()
+    assert tr("discover_win_no_earlier") in site.get("/discover").html
+    a_saved_map(tmp_path)
+    (tmp_path / "not_a_map.html").write_text("<!doctype html><p>something else", encoding="utf-8")
+    shown = site.get("/discover").html
+    assert 'href="/discover/saved/coimbra_2026-11-12_2026-11-14"' in shown and "not_a_map" not in shown
+    assert tr("discover_win_destinations", count=1) in shown and tr("discover_win_from_price", price="25") in shown
+
+def test_a_map_made_before_opens_with_only_its_own_script_and_style_let_run(monkeypatch, tmp_path):
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    a_saved_map(tmp_path)
+    site, _ = site_and_jobs()
+    shown = site.get("/discover/saved/coimbra_2026-11-12_2026-11-14")
+    assert shown.status == 200 and "<script>" in shown.html and "'unsafe-inline'" not in shown.policy
+    assert shown.policy.count("'sha256-") == 2 and "default-src 'none'" in shown.policy   # its script and its style, nothing else
+    for path in ("/discover/saved/elsewhere", "/discover/saved/..%2F..%2Fsettings", "/discover/saved/"):
+        assert site.get(path).status == 404
+
+def test_a_city_the_page_asks_the_price_of_is_priced_by_the_maps_process_even_once_its_lookups_ended(monkeypatch):
+    import discover.view.page as discover_page
+    import discover.session as discover_session
+    import trip_planner.trip.places as places
+    asked = []
+
+    class Session:
+        def __init__(self, city, days, fast, light, max_stops, ground_only):
+            self.found = type("Found", (), {"kiwi_why": ""})()
+            self.live, self.lock, self.sources, self.sections, self.path = {"state": {}}, threading.Lock(), "Ryanair", [], "x.html"
+            self.stopping = threading.Event()
+
+        def make(self):
+            pass
+
+        def look_up(self, timetables):
+            pass
+
+        def price_asked(self, key):
+            asked.append(key)
+            with self.lock:
+                self.live["state"] = {"version": 5, "asked_prices": {key: "priced"}}
+
+    priced = threading.Event()
+
+    def lines():
+        yield json.dumps({"task": "map", "language": "en", "city": "Coimbra", "dates": WRITTEN, "token": "secret"})
+        yield json.dumps({"price": "~FR|Paris|48.85"})
+        assert priced.wait(5)
+        yield json.dumps({"stop": True})
+        threading.Event().wait()
+    monkeypatch.setattr(discover_session, "Session", Session)
+    monkeypatch.setattr(discover_page, "map_page", lambda *arguments, token="", **more: f"<page token={token}>")
+    monkeypatch.setattr(discover_page, "map_state", lambda *arguments, **more: {})
+    monkeypatch.setattr(discover_page, "trips", lambda found, airports: {})
+    monkeypatch.setattr(places, "load_airports", dict)
+    out = io.StringIO()
+    events = job.Events(out)
+    real_send = events.send
+    monkeypatch.setattr(events, "send", lambda kind, text="": real_send(kind, text) or (kind == "ready" and asked and priced.set()))
+    monkeypatch.setattr(sys, "stdout", job.Printed(events))
+    assert job.main(lines(), events) == 0
+    said = [json.loads(line) for line in out.getvalue().splitlines()]
+    assert asked == ["~FR|Paris|48.85"] and said[1]["text"] == "<page token=secret>"   # the served page carries the app's token
+    assert said[-1]["text"] == {"version": 5, "asked_prices": {"~FR|Paris|48.85": "priced"}}
+
+def test_the_page_asks_the_price_of_a_city_with_the_token_and_only_of_the_map_still_running():
+    site, started = site_and_jobs()
+    site.post("/discover", form(site))
+    current_map = started[-1]
+    assert current_map.first["token"] == site.token   # given to the map's process, for its page
+    current_map.told = current_map.answers   # what the process is told
+    asking = lambda **changes: site.post("/discover/map/1/price", urlencode({"token": site.token, "city": "~FR|Paris|48.85", **changes}).encode())
+    reply = asking()
+    assert reply.status == 202 and current_map.told == [{"price": "~FR|Paris|48.85"}]
+    assert asking(token="wrong").status == 403 and len(current_map.told) == 1
+    assert site.post("/discover/map/9/price", urlencode({"token": site.token, "city": "x"}).encode()).status == 404
+    current_map.stopped = True   # stopping, or ended: no process to ask
+    assert asking().status == 410 and len(current_map.told) == 1
+
+def test_the_days_of_a_map_made_before_are_read_from_its_name(tmp_path):
+    days = maps.days_of_saved(tmp_path / "antwerp_2026-12-05_2026-12-06_back_2026-12-07_2026-12-09_07-09.html")
+    assert (days.first, days.last, days.back_first, days.back_last) == ("2026-12-05", "2026-12-06", "2026-12-07", "2026-12-09")
+    assert days.out_days == () and days.back_days == ("2026-12-07", "2026-12-09")   # the days clicked, not all in a row
+    assert not maps.days_of_saved(tmp_path / "sao-paulo_2026-12-05_2026-12-05.html").round_trip
+    assert maps.days_of_saved(tmp_path / "not_a_map.html") is None
+
+def test_a_map_made_before_asks_the_app_for_a_price_and_follows_it_until_its_job_has_written_it(monkeypatch, tmp_path):
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    path = a_saved_map(tmp_path)
+    assert '"token"' not in path.read_text(encoding="utf-8")   # never saved with the page
+    site, started = site_and_jobs()
+    address = "/discover/saved/coimbra_2026-11-12_2026-11-14"
+    shown = site.get(address)
+    data = maps.page_data(shown.html)
+    assert data["token"] == site.token and data["price_link"] == address + "/price" and data["state_link"] == address + "/state"
+    assert shown.policy.count("'sha256-") == 2   # its data changed, its script and its style as they were
+    asking = lambda city, token=site.token: site.post(address + "/price", urlencode({"token": token, "city": city}).encode())
+    assert asking("~ES|Madrid|40.42", token="wrong").status == 403 and not started
+    assert asking("~ES|Madrid|40.42").status == 202 and asking("~ES|Lyon|45.76").status == 202
+    assert started[0].first == {"task": "price_saved", "language": current_language(), "name": "coimbra_2026-11-12_2026-11-14",
+                                "keys": ["~ES|Madrid|40.42"], "coach_changes": "0"}   # one job at a time: Lyon waits for it
+    state = json.loads(site.get(address + "/state").html)
+    assert state["asked_prices"] == {"~ES|Madrid|40.42": "waiting", "~ES|Lyon|45.76": "waiting"}
+    started[0].alive = False   # its job ended: the next one prices Lyon
+    site.get(address + "/state")
+    assert len(started) == 2 and started[1].first["keys"] == ["~ES|Lyon|45.76"]
+    assert site.post("/discover/saved/elsewhere/price", urlencode({"token": site.token, "city": "x"}).encode()).status == 404
+
+def current_language():
+    from trip_planner import current
+    return current.SETTINGS.language
+
+def test_the_job_of_a_map_made_before_writes_the_prices_into_its_page_and_keeps_its_place_in_the_list(monkeypatch, tmp_path):
+    from discover.overland import ground_fares
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    monkeypatch.setattr(ground_fares, "RATES", tmp_path / "rates.json")
+    path = a_saved_map(tmp_path)
+    data = maps.page_data(path.read_text(encoding="utf-8"))
+    bus = {"operator": "FlixBus", "mode": "bus", "modes": "COACH", "sold": "EU", "from_stop": "Coimbra", "from_stop_id": "eu-flixbus_a",
+           "stop": "Madrid", "stop_id": "eu-flixbus_b", "lat": 40.42, "lon": -3.70, "times": ["08:00"], "weekdays": ["Thu"], "minutes": 400, "grade": "B"}
+    data["state"]["by_ground"] = [{"key": "ES|Madrid|40.42", "name": "Madrid", "country": "ES", "lat": 40.42, "lon": -3.70,
+                                   "minutes": 400, "modes": ["bus"], "ground": [bus]}]
+    from app.map_job import price_saved
+    from trip_planner.utils import write_whole
+    write_whole(path, maps.with_data(path.read_text(encoding="utf-8"), data))
+    import os
+    os.utime(path, (1_700_000_000, 1_700_000_000))
+    monkeypatch.setattr(ground_fares, "price_of", lambda option, days, today, transitous, towns=None:
+                        {"out": {"price_eur": 30.0}, "back": None, "total_eur": 30.0, "stay": None})
+    said = []
+    price_saved({"name": path.stem, "keys": ["~ES|Madrid|40.42", "~ES|Nowhere|0.00"]}, type("Events", (), {"send": lambda self, *what: said.append(what)})())
+    state = maps.page_data(path.read_text(encoding="utf-8"))["state"]
+    assert state["by_ground"][0]["fare_eur"] == 30.0 and state["by_ground"][0]["ground"][0]["price"]["total_eur"] == 30.0
+    assert state["asked_prices"] == {"~ES|Madrid|40.42": "priced", "~ES|Nowhere|0.00": "none"} and state["version"] == 1
+    assert path.stat().st_mtime == 1_700_000_000 and said[-1][0] == "done"   # still where it was in the list
+
+def test_a_map_made_before_is_shown_with_todays_script_style_and_texts_and_its_file_keeps_its_own(monkeypatch, tmp_path):
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    path = a_saved_map(tmp_path)
+    old = path.read_text(encoding="utf-8").replace("// The map page's script", "// an older script", 1)
+    old = maps.with_data(old, {**maps.page_data(old), "texts": {"close": "an older text"}})
+    path.write_text(old, encoding="utf-8")
+    site, _ = site_and_jobs()
+    shown = site.get("/discover/saved/coimbra_2026-11-12_2026-11-14")
+    assert page.SCRIPT.read_text(encoding="utf-8") in shown.html and "// an older script" not in shown.html
+    assert maps.page_data(shown.html)["texts"] == page.page_texts() and shown.policy.count("'sha256-") == 2
+    assert path.read_text(encoding="utf-8") == old
+
+def test_the_changes_of_coach_are_a_setting_checked_as_every_other_and_offered_on_discovers_form():
+    import pytest
+    from trip_planner.trip.trip_settings import SettingError
+    assert maps.coach_settings({"coach_changes": "2"}).max_coach_changes == 2
+    with pytest.raises(SettingError):
+        maps.coach_settings({"coach_changes": "7"})
+    assert maps.refusal_of({"city": "Antwerp", "dates": "12/11/2030", "return_dates": "", "coach_changes": "x"})
+    shown = maps.form("t", maps.values_of("Antwerp", coach_changes=1))
+    assert shown.count('name="coach_changes"') == len(maps.COACH_CHANGES) and 'value="1" checked' in shown

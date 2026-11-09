@@ -11,7 +11,8 @@ from trip_planner.texts import REFERENCE, TEXTS, tr
 
 MAIN_SETTINGS = ("origin", "destination", "departure_scale", "arrival_scale", "max_stopovers", "ground_only")
 CHANGES = ("max_changes_to_airport", "max_changes_from_airport")   # shown with how to travel on each side
-NOT_IN_TABS = ("dates", "return_dates", "language")   # the two calendars and the list of languages hold these
+# the two calendars and the list of languages hold these; Discover's form (app/maps.py) the changes of coach
+NOT_IN_TABS = ("dates", "return_dates", "language", "max_coach_changes")
 TABS = (
     ("ui_tab_times", ("earliest_leave", "latest_leave", "earliest_arrival", "latest_arrival", "next_day_arrivals",
                       "min_stay_hours", "max_stopovers", "min_airport_minutes", "ideal_airport_minutes", "min_landing_minutes")),

@@ -129,30 +129,41 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
     planned = trips(found, airports)
     plan = lambda key: {"key": key} if key in planned else None
     name = lambda code: found.centres[code].english_name if code in found.centres else city_name(airports[code]) or airports[code]["name"]
+    # The dot of a city is at its centre once located: an airport such as Beauvais or Schwechat is far enough from
+    # Paris or Vienna to put the dot in another place. Its airports stay in places, for the route
+    where = lambda code: ((found.centres[code].latitude, found.centres[code].longitude) if code in found.centres
+                          else (airports[code]["latitude"], airports[code]["longitude"]))
     points = [{**flight, "name": name(flight["to"]), "country": airports[flight["to"]]["country"],
-               "lat": airports[flight["to"]]["latitude"], "lon": airports[flight["to"]]["longitude"], "links": links(flight, found, airports),
+               "lat": where(flight["to"])[0], "lon": where(flight["to"])[1], "links": links(flight, found, airports),
                "plan": {"out": plan(f"{flight['to']}-out"), "back": plan(f"{flight['to']}-back")},
                "confirmed": all(leg["looked_up"] for leg in flight.get("access") or [{"looked_up": False}]),
+               # the centre of each city the trip reaches, for its route on the map: the one flown to, and the one flown back from
+               "centres": {code: [found.centres[code].latitude, found.centres[code].longitude]
+                           for code in {flight["to"], (flight.get("back") or {}).get("from")} if code in found.centres},
                "stay": stay(flight, airport_minutes, landing_minutes)}
               for flight in found.destinations if flight["to"] in airports]
     codes = {code for flight in points for leg in (flight, flight.get("back")) if leg
              for segment in [leg, *leg.get("segments", [])] for code in (segment["from"], segment["to"])}
     codes |= {other["to"] for flight in points for other in flight.get("also", [])} | {gone["to"] for gone in found.discarded}
     return {"version": version, "running": running, "points": points, "names": {code: airports[code]["name"] for code in codes if code in airports},
+            "places": {code: [airports[code]["latitude"], airports[code]["longitude"]] for code in codes if code in airports},   # for the routes
             "discarded": found.discarded, "lookups": found.lookups, "confirm_stop": found.confirm_stop, "sections": sections,
-            "coverage": found.coverage, "by_ground": found.by_ground, "fare_lookups": found.fare_lookups, "fare_stop": found.fare_stop, "phase": found.phase}
+            "coverage": found.coverage, "by_ground": found.by_ground, "fare_lookups": found.fare_lookups, "fare_stop": found.fare_stop, "phase": found.phase,
+            "asked_prices": found.asked_prices}
 
 def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120,
              running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes,
-             planner_link: str = "") -> str:
+             planner_link: str = "", token: str = "") -> str:
     """airport_minutes is how long before a flight the traveller is at the airport (the planner's setting).
     planner_link is the page in the app (app/) that the planner's form opens at, filled in with a trip, followed by
     its key: with it each trip has a link there, and the page asks for the destinations again while running, which
-    says the timetables are still being looked up. Without it, as a file, the page shows what it holds."""
+    says the timetables are still being looked up. Without it, as a file, the page shows what it holds. token is
+    the app's, for the page to ask it for the price of a city (app/site.py, post_map_price): given only to the page
+    the app serves, never to the file saved."""
     data = {"origin": {"name": found.place.label, "short": found.place.english_name, "lat": found.place.latitude, "lon": found.place.longitude},
             "days": str(found.days), "round_trip": found.days.round_trip, "sources": sources, "airport_minutes": airport_minutes,
             "long_wait": LONG_WAIT_MINUTES, "early_hour": EARLY_AIRPORT_HOUR, "late_hour": LATE_LANDING_HOUR,
-            "planner_link": planner_link,
+            "planner_link": planner_link, **({"token": token} if token else {}),
             "max_lookups": max_lookups, "kiwi_why": found.kiwi_why, "texts": page_texts(), "locale": current.SETTINGS.language, "landing_minutes": landing_minutes, "grade_colours": LIGHT_COLOURS, "state": map_state(found, sections, running, 0, airport_minutes, landing_minutes)}
     title = tr("discover_page_tab_title", origin=found.place.english_name)
     # In the app the style and the script are files beside the page, so that it may run no script of its own

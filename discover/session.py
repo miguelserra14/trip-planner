@@ -4,6 +4,8 @@
     session.make()        the flights, the ways to and from the airports, the page saved to discover/maps
     session.look_up()     the cheapest destinations in the real timetables, then the trains and buses priced
                           (ground_fares.py), session.live["state"] following them (blocks)
+    session.price_asked(key) the trains and buses of one city priced, as the traveller asks on the map, during
+                          look_up or after it (from another thread)
     session.stopping.set()   look_up ends at the next city or phase, keeping what it found (another map is wanted)
 
 Each step blocks, and runs in this process: the planner's own code reads the trip of the moment from globals
@@ -59,10 +61,15 @@ class Session:
         self.lock = threading.Lock()
         # Set when another map is wanted: two maps cannot look up at once, they change the same globals (current.TRIP)
         self.stopping = threading.Event()
+        self.looking = False   # look_up is running: the page goes on asking for the state
+        # Clear while the flights are looked up in the timetables: a price asked for on the map that needs them waits
+        self.timetables_free = threading.Event()
+        self.timetables_free.set()
 
     def make(self) -> Path:
         """Find the flights and the ways to and from the airports, and save the map. Returns its file."""
         current.SETTINGS = SETTINGS   # the planner's code reads its language and its rules from here: settings.py's
+        ground_fares.MOST_CHANGES = SETTINGS.max_coach_changes   # once: the lookups change current.SETTINGS later
         started = time.time()
         place = geocode(self.city)
         # For the page that waits until the map opens (app/waiting.py): the city, then each step of finder.discover
@@ -85,13 +92,15 @@ class Session:
         return self.path
 
     def save(self) -> None:
-        """The map as a file, and every request, what it answered or why it failed, and how long it took."""
+        """The map as a file, and every request, what it answered or why it failed, and how long it took. Under the
+        lock: a price asked for on the map (price_asked) may be written into it from another thread."""
         found = self.found
-        self.sections = breakdown(found)
-        self.path.write_text(map_page(found, self.sources, self.sections, max_lookups=confirm.MAX_LOOKUPS, **times()), encoding="utf-8")
-        self.path.with_suffix(".json").write_text(json.dumps({"days": str(self.days), "departures": found.departures, "searches": found.searches,
-                                                              "lookups": found.lookups, "discarded": found.discarded, "log": utils.REQUESTS},
-                                                             ensure_ascii=False, indent=1), encoding="utf-8")
+        with self.lock:
+            self.sections = breakdown(found)
+            self.path.write_text(map_page(found, self.sources, self.sections, max_lookups=confirm.MAX_LOOKUPS, **times()), encoding="utf-8")
+            self.path.with_suffix(".json").write_text(json.dumps({"days": str(self.days), "departures": found.departures, "searches": found.searches,
+                                                                  "lookups": found.lookups, "discarded": found.discarded, "log": list(utils.REQUESTS)},
+                                                                 ensure_ascii=False, indent=1), encoding="utf-8")
 
     def report(self) -> str:
         """The cheapest destinations and what was searched, as text."""
@@ -123,6 +132,7 @@ class Session:
                 self.save()
             self.found.phase = name
             changed(self.found)
+        self.looking = True
         try:
             phase("prices")
             ground_fares.price(self.found, changed)
@@ -134,12 +144,14 @@ class Session:
                 stop = threading.Event()
                 prefetching = threading.Thread(target=ground_fares.prefetch, args=(self.found, stop), daemon=True)
                 prefetching.start()
+                self.timetables_free.clear()
                 try:
                     phase("timetables")
                     asyncio.run(confirm.confirm(self.found, changed))
                 finally:
                     stop.set()
                     prefetching.join()
+                    self.timetables_free.set()
                 phase("prices")
                 ground_fares.price(self.found, changed)
             phase("ways back")
@@ -147,7 +159,35 @@ class Session:
         except Stopped:
             pass
         finally:
+            self.looking = False
             self.found.phase = ""
             self.save()
             with self.lock:
                 self.live["state"] = snapshot(map_state(self.found, self.sections, running=False, version=self.live["state"].get("version", 0) + 1, **times()))
+
+    def tell_page(self) -> None:
+        """The state the page is sent, made again after a change look_up does not make itself."""
+        with self.lock:
+            self.live["state"] = snapshot(map_state(self.found, breakdown(self.found), running=self.looking,
+                                                    version=self.live["state"].get("version", 0) + 1, **times()))
+
+    def price_asked(self, key: str) -> None:
+        """The trains and buses of one city priced because the traveller asked on the map (ground_fares.price_asked),
+        whether the rounds would have or not. The page follows found.asked_prices[key]: "waiting", then "priced" when
+        one option has a price in full, or "none". Asked again while waiting, nothing more is asked. The file is
+        saved here once look_up has ended; before, look_up saves it."""
+        with self.lock:
+            if self.found.asked_prices.get(key) == "waiting":
+                return
+            self.found.asked_prices[key] = "waiting"
+        self.tell_page()
+        try:
+            answer = ground_fares.price_asked(self.found, key, before_trains=self.timetables_free.wait)
+        except Exception:   # whatever failed, the page must not wait for this city for ever
+            answer = None
+        with self.lock:
+            count = ground_fares.write_asked(self.found, *answer) if answer else 0
+            self.found.asked_prices[key] = "priced" if count else "none"
+        self.tell_page()
+        if not self.looking:
+            self.save()

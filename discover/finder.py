@@ -85,6 +85,7 @@ class Found:
     by_ground: list[dict[str, Any]] = field(default_factory=list)  # cities no flight goes to, by train or bus only (ground.py)
     fare_lookups: list[dict[str, Any]] = field(default_factory=list)  # every city whose trains and buses were priced (ground_fares.py)
     fare_stop: str = ""                              # why the pricing stopped, in words; empty while it runs or before
+    asked_prices: dict[str, str] = field(default_factory=dict)   # the cities priced because the traveller asked on the map, by their key there: "waiting", "priced" or "none"
     phase: str = ""                                  # what is being searched once the map is open (session.py): "" when nothing
     regions: list[dict[str, Any]] = field(default_factory=list)   # each region within reach: cities found before and after its own requests (regions.py)
 

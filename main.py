@@ -7,6 +7,7 @@ Remove a language:                                python main.py --remove-langua
 Locate the terminal of every airport again:       python main.py --terminals all   (once a year is plenty)
 Check whether the connections shown really ran:   python main.py --verify          (see trip_planner/tools/verify.py)
 Ask again the ground prices over a day old:        python main.py --prices          (see trip_planner/tools/prices.py)
+The numbers of every report kept, added up:       python main.py --funnel          (see trip_planner/tools/funnel.py)
 
 In the browser (app/) the trip is typed in a form that starts with what is in settings.py, and Discover's map is
 there too; the program runs until its Quit button or until its terminal window is closed. In the terminal each trip
@@ -93,6 +94,9 @@ if __name__ == "__main__":
         from trip_planner.trip.trip_settings import settings_file
         current.SETTINGS = settings_file().SETTINGS   # the operators read the limits of a trip, and the texts its language
         sys.exit(prices.main())
+    if "--funnel" in arguments:
+        from trip_planner.tools import funnel
+        sys.exit(funnel.main())
     if "--terminals" in arguments:
         from trip_planner.sources import timetables
         sys.exit(1 if timetables.fill_terminals(again="all" in arguments) else 0)

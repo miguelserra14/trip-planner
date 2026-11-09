@@ -1,5 +1,7 @@
 # Trip Planner
 
+[![tests](https://github.com/miguelserra14/trip-planner/actions/workflows/tests.yml/badge.svg)](https://github.com/miguelserra14/trip-planner/actions/workflows/tests.yml)
+
 **From any city to any city in Europe, the cheapest trip that really works, door to door. And, when you have a few
 free days, where you could go.**
 
@@ -22,6 +24,17 @@ Two tools share the same code:
 - **Discover** (a draft): from your city, on the free days you give, a map of every place you can reach cheaply, by
   plane, train or bus, with the way to and from the airports counted in the price. A click on a destination opens
   the planner on that trip, to check it in the real timetables.
+
+![One option of a trip from Coimbra to Antwerp: train and coach to Porto airport, the flight, then bus and train to
+Antwerp, each part with where its times and price come from](docs/images/planner-option.png)
+
+*The planner: one option from door to door. Each part says where its times and its price come from, and how far to
+trust them.*
+
+![Discover from Antwerp: a list of destinations by price beside a map of Europe, coloured from cheapest to dearest,
+with filters for flights, trains, buses, price and hours](docs/images/discover-map.png)
+
+*Discover: every place reachable from Antwerp on the chosen days, by plane, train or bus, coloured by total price.*
 
 Both open in your browser, served by the program on your own computer only (`TripPlanner.bat`).
 
@@ -131,6 +144,7 @@ env\.venv\Scripts\python main.py --terminal   the trip in settings.py, in the te
 env\.venv\Scripts\python main.py --check      check the services
 env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/tools/verify.py)
 env\.venv\Scripts\python main.py --prices     ask again the ground prices of the reports read over a day ago (trip_planner/tools/prices.py)
+env\.venv\Scripts\python main.py --funnel     the reports kept, added up: cheap flights that could not be connected, what code corrected in the models' text, plan B (trip_planner/tools/funnel.py)
 
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map as a file (discover/maps/), leaving between the two days
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back

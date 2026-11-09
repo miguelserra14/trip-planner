@@ -10,6 +10,7 @@ A text that a language does not have is shown in English."""
 import re
 import runpy
 from pathlib import Path
+from typing import Any
 
 from trip_planner import current
 from trip_planner.utils import plain
@@ -50,6 +51,49 @@ def text_in(language: str, key: str, **values) -> str:
 def tr(key: str, **values) -> str:
     """A text in the language of the trip being planned."""
     return text_in(current.SETTINGS.language, key, **values)
+
+class Said(str):
+    """A text in the trip's language that remembers how it was made, so that a page can say it again in the language
+    it is read in (kept, say_again): the warnings of a report, read later under another language than the search's."""
+    key: str
+    values: dict
+
+class Listed(str):
+    """Items in a sentence ("LIS and OPO"), remembering the items, for the same reason."""
+    items: list
+
+def said(key: str, **values) -> Said:
+    """tr, remembering the key and the values. A value may itself be Said or Listed: it is said again too."""
+    text = Said(tr(key, **values))
+    text.key, text.values = key, values
+    return text
+
+def listed(items: list[str]) -> Listed:
+    """Items in a sentence: "LIS", "LIS and OPO", "LIS, OPO and FAO", in the language of the trip."""
+    text = Listed(items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {tr('list_and')} {items[-1]}")
+    text.items = list(items)
+    return text
+
+def kept(text: str) -> Any:
+    """A text as data, to be said again: {"key", "values"} for one made by said, {"list"} for one made by listed,
+    the text itself for any other."""
+    if isinstance(text, Said):
+        return {"key": text.key, "values": {name: kept(value) if isinstance(value, str) else value for name, value in text.values.items()}}
+    if isinstance(text, Listed):
+        return {"list": [kept(item) for item in text.items]}
+    return str(text)
+
+def say_again(text: Any, language: str) -> str:
+    """A text kept as data said in a language. A text kept as it was (an older report) is said as it was."""
+    if isinstance(text, dict) and "list" in text:
+        items = [say_again(item, language) for item in text["list"]]
+        return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {text_in(language, 'list_and')} {items[-1]}"
+    if isinstance(text, dict) and "key" in text:
+        try:
+            return text_in(language, text["key"], **{name: say_again(value, language) for name, value in text["values"].items()})
+        except KeyError:
+            return ""   # a key no language has any more
+    return text if isinstance(text, str) else str(text)
 
 def words(key: str) -> list[str]:
     """Every word of a list text ("and,or") in every language, without accents or capitals: a traveller may write

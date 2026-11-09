@@ -4,7 +4,7 @@ from datetime import date
 from typing import Any
 
 from trip_planner.trip.trip_settings import GRADES, LIGHTS
-from trip_planner.texts import tr
+from trip_planner.texts import listed, tr   # listed lives in texts/, where a text can be said again in another language
 
 TIMELINE_SQUARES = 24   # how many squares the line of an option takes in the Markdown; the app draws it to scale
 # The colour of each part of that line: the grade of its schedule, or None for a wait
@@ -37,10 +37,6 @@ def arriving(itinerary: dict[str, Any]) -> str:
     """When the traveller arrives. With the date when that is a later day than the flight leaves on: a flight that
     lands the next day, or a connection that reaches the destination after midnight."""
     return with_day(itinerary["arrival_time"], itinerary["arrival_date"], itinerary["flight"]["date"])
-
-def listed(items: list[str]) -> str:
-    """Items in a sentence: "LIS", "LIS and OPO", "LIS, OPO and FAO", in the traveller's language."""
-    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} {tr('list_and')} {items[-1]}"
 
 def day_text(day: str) -> str:
     return date.fromisoformat(day).strftime("%d/%m/%Y")

@@ -65,9 +65,9 @@ def check_itinerary(flight: dict[str, Any], ground: dict[str, Any], transfer: di
     Returns the itinerary, or raises Rejected with the reason it is rejected.
     closest=True lets the requirements of REQUIREMENTS give way and lists the ones that did under "breaches"."""
     if flight["stops"] > current.SETTINGS.max_stopovers and not closest:
-        raise Rejected(tr("reject_stopovers", stops=flight["stops"], maximum=current.SETTINGS.max_stopovers))
+        raise Rejected(tr("reject_stopovers", stops=flight["stops"], maximum=current.SETTINGS.max_stopovers), "flight")
     if flight["arrival_airport"] not in {airport["code"] for airport in current.TRIP.arrival}:
-        raise Rejected(tr("reject_arrival_airport", airport=flight["arrival_airport"]))
+        raise Rejected(tr("reject_arrival_airport", airport=flight["arrival_airport"]), "flight")
     to_leg = to_airport_leg(flight, ground, transfer, closest, priced=True)
     from_leg = from_airport_leg(flight, ground, route, closest, priced=True)
     # Where each leg runs, for the vehicles no operator prices (price_with_tickets)

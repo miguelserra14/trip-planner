@@ -24,7 +24,7 @@ from trip_planner.report.full import keep_report, remember_duration, save_report
 from trip_planner.report.summary import render_ground_round_trip, render_round_trip
 from trip_planner.sources import airlines, web
 from trip_planner.texts import any_of, tr
-from trip_planner.utils import plain, progress, say, show, TIMINGS
+from trip_planner.utils import COUNTS, plain, progress, say, show, TIMINGS
 
 def build_request(settings: TripSettings, places: TripPlaces) -> str:
     """The traveller's request to the coordinator, written from the settings and the confirmed airports."""
@@ -159,6 +159,7 @@ def start_trip(settings: TripSettings, places: TripPlaces) -> None:
     current.SETTINGS = settings
     current.TRIP = places
     TIMINGS.clear()
+    COUNTS.clear()
     steps.FAULTS.clear()
     airlines.CHECKED.clear()
     web.SEEN_DOMAINS.clear()   # a link of this trip's models is kept only if its site came up in this trip's searches

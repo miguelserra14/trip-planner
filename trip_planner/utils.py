@@ -5,6 +5,7 @@ import re
 import threading
 import time
 import unicodedata
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -120,6 +121,14 @@ def logged(service: str, what: str):
 
 def failed(entry: dict) -> bool:
     return not entry["result"].startswith("ok")
+
+# What the checks of the current trip did to what the models wrote, counted where it happens: the claims corrected or
+# pointed out (agents/claims.py), the links left out (sources/web.py). Saved with the report (report/metrics.py).
+COUNTS: Counter = Counter()
+
+def count(what: str, times: int = 1) -> None:
+    if times:
+        COUNTS[what] += times
 
 def message_text(message) -> str:
     """Return the text of a message, whether its content is a string or a list of content blocks."""

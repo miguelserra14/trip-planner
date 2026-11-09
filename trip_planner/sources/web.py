@@ -9,7 +9,7 @@ from langchain.tools import tool, ToolRuntime
 from langgraph.types import Command
 from tavily import TavilyClient
 
-from trip_planner.utils import logged
+from trip_planner.utils import count, logged
 
 tavily_client: TavilyClient | None = None   # made at the first search: without its key the program still starts
 
@@ -56,6 +56,7 @@ def safe_url(url: str) -> str:
     """A link written by a model, kept only if it is https and its site appeared in a search result."""
     url = (url or "").strip()
     if not url.lower().startswith("https://") or domain_of(url) not in SEEN_DOMAINS:
+        count("links_dropped", bool(url))
         return ""
     return url.split()[0]
 
@@ -72,6 +73,7 @@ def only_known_links(text: str, known: str) -> str:
     """Text written by a model, without the links to sites that do not appear in known (the report computed
     by code). A model may have been told by a web page to send the traveller somewhere else."""
     sites = {domain_of(url) for url in re.findall(LINK, known)}
+    count("links_dropped", sum(domain_of(url) not in sites for url in re.findall(LINK, text or "")))
     return re.sub(LINK, lambda link: link[0] if domain_of(link[0]) in sites else "", text or "")
 
 @tool

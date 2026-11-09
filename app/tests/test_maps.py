@@ -303,13 +303,19 @@ def test_a_city_the_page_asks_the_price_of_is_priced_by_the_maps_process_even_on
             asked.append(key)
             with self.lock:
                 self.live["state"] = {"version": 5, "asked_prices": {key: "priced"}}
+            priced.set()
 
-    priced = threading.Event()
+    ready, priced = threading.Event(), threading.Event()
+    never = []   # what the app's side waited for in vain: said here, since an assert in the reading thread is lost
 
     def lines():
+        # As the app does: the price is asked once the lookups ended and the process said it is ready, then stop
         yield json.dumps({"task": "map", "language": "en", "city": "Coimbra", "dates": WRITTEN, "token": "secret"})
+        if not ready.wait(5):
+            never.append("ready")
         yield json.dumps({"price": "~FR|Paris|48.85"})
-        assert priced.wait(5)
+        if not priced.wait(5):
+            never.append("priced")
         yield json.dumps({"stop": True})
         threading.Event().wait()
     monkeypatch.setattr(discover_session, "Session", Session)
@@ -320,9 +326,10 @@ def test_a_city_the_page_asks_the_price_of_is_priced_by_the_maps_process_even_on
     out = io.StringIO()
     events = job.Events(out)
     real_send = events.send
-    monkeypatch.setattr(events, "send", lambda kind, text="": real_send(kind, text) or (kind == "ready" and asked and priced.set()))
+    monkeypatch.setattr(events, "send", lambda kind, text="": real_send(kind, text) or (kind == "ready" and ready.set()))
     monkeypatch.setattr(sys, "stdout", job.Printed(events))
     assert job.main(lines(), events) == 0
+    assert never == []
     said = [json.loads(line) for line in out.getvalue().splitlines()]
     assert asked == ["~FR|Paris|48.85"] and said[1]["text"] == "<page token=secret>"   # the served page carries the app's token
     assert said[-1]["text"] == {"version": 5, "asked_prices": {"~FR|Paris|48.85": "priced"}}

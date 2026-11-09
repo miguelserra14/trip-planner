@@ -9,6 +9,7 @@ from langchain.agents.middleware import ModelFallbackMiddleware, wrap_model_call
 from langchain.chat_models import init_chat_model
 
 from trip_planner.trip import trip_settings   # reads env/.env, where the keys are
+from trip_planner.utils import logged
 
 SUBAGENT_MODEL = "google_genai:gemini-3.1-flash-lite"
 # Coordinator models, best first. The free tier gives the better models very few requests per day
@@ -35,10 +36,22 @@ def coordinator_models() -> list[str]:
     """The models the coordinator tries, in order."""
     return [*GEMINI_COORDINATOR_MODELS, *backup_models()]
 
+CALL_SERVICE = "model call"   # each call of a subagent to a model, in the log of the run: plan B shows there by its name
+
+def model_name(model) -> str:
+    """The name of a chat model as its provider calls it ("gemini-3.1-flash-lite", "ministral-14b-latest")."""
+    return str(getattr(model, "model", None) or getattr(model, "model_name", None) or type(model).__name__).removeprefix("models/")
+
 @wrap_model_call
 async def give_up_slow_calls(request, handler):
-    """A call to the model that has not answered in MODEL_CALL_SECONDS fails, as if the model had answered with an error."""
-    return await asyncio.wait_for(handler(request), MODEL_CALL_SECONDS)
+    """A call to the model that has not answered in MODEL_CALL_SECONDS fails, as if the model had answered with an error.
+    Each call is kept in the log of the run with the model it went to: inside the plan B, it sees each model tried."""
+    with logged(CALL_SERVICE, model_name(request.model)):
+        return await asyncio.wait_for(handler(request), MODEL_CALL_SECONDS)
+
+def is_backup(name: str) -> bool:
+    """Whether a model named in the log of the run is plan B."""
+    return BACKUP_MODEL.split(":", 1)[1] in name
 
 def subagent_guards() -> list:
     """The middlewares around a subagent's calls to its model: plan B when its own model fails, when it has a key, and

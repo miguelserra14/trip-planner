@@ -18,7 +18,7 @@ from trip_planner.report.formatting import listed
 from trip_planner.report.summary import part_grades
 from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.texts import any_of, tr, words
-from trip_planner.utils import plain
+from trip_planner.utils import count, plain
 
 GRADE_OF = {light: grade for grade, light in LIGHTS.items()}
 LIGHT = re.compile("|".join(map(re.escape, LIGHTS.values())))
@@ -65,6 +65,7 @@ def options_named(line: str, count: int, recommended: int) -> list[int]:
 def check_lights(text: str, shown: list[dict[str, Any]], recommended: int) -> tuple[str, list[str]]:
     """The text with the colours said of one part corrected, and what else in it the options contradict."""
     problems: list[str] = []
+    corrections: set[str] = set()   # the notes of the colours put right, counted apart from those only pointed out
     corrected = list(text)
     position = 0
     for line in text.split("\n"):
@@ -105,13 +106,17 @@ def check_lights(text: str, shown: list[dict[str, Any]], recommended: int) -> tu
             if len(grades) == 1 and not negated and not every:   # one part of one option: its colour is known
                 (option, part), right = next(iter(grades.items()))
                 corrected[start + light.start()] = LIGHTS[right]
+                count("claims_corrected")
                 problems.append(tr("claim_light_corrected", said=light[0], part=tr(part), option=option, right=LIGHTS[right]))
+                corrections.add(problems[-1])
             else:
                 report = "; ".join(f"{tr(part)} {LIGHTS[grade]}" + (f" ({tr('option')} {option})" if len(options) > 1 else "")
                                    for (option, part), grade in grades.items())
                 problems.append(tr("claim_light_none" if negated else "claim_light_every" if every else "claim_light", said=light[0],
                                    options=listed([str(option) for option in options]), report=report))
-    return "".join(corrected), list(dict.fromkeys(problems))
+    problems = list(dict.fromkeys(problems))
+    count("claims_contradicted", sum(problem not in corrections for problem in problems))
+    return "".join(corrected), problems
 
 def durations(text: str) -> list[tuple[str, int, bool]]:
     """The durations written in a text: (as written, minutes, whether in whole hours only)."""
@@ -141,6 +146,7 @@ def check_numbers(text: str, known: str, shown: list[dict[str, Any]]) -> list[st
     clock |= {f"{int(time.split(':')[0]):02d}:{time.split(':')[1]}" for time in clock}
     times = [time for time in re.findall(r"(?<!\d)(\d{1,2}:\d{2})(?!\d)", text)
              if time not in clock and f"{int(time.split(':')[0]):02d}:{time.split(':')[1]}" not in clock]
+    count("numbers_unknown", len(set(unknown)) + len(set(times)))
     problems = []
     if unknown:
         problems.append(tr("claim_unknown_durations", values=listed(list(dict.fromkeys(unknown)))))

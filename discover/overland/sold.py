@@ -27,7 +27,7 @@ from trip_planner.sources.operators.rede_expressos import (REDE_EXPRESSOS_CITY_K
                                                            rede_expressos_stops, town_of)
 from trip_planner.texts import tr
 from trip_planner.trip.places import distance_km, Place
-from trip_planner.utils import plain, say as print_line, write_whole
+from trip_planner.utils import logged, plain, say as print_line, write_whole
 
 SOLD = Path(__file__).parents[1] / "cache" / "sold.json"   # the cities each operator was seen selling to, by traveller's city
 SOLD_VERSION = 1           # what is kept changes: read again
@@ -147,7 +147,14 @@ def asked(operator: Any, home: dict[str, Any], day: str, say: Callable) -> list[
 
     def one(end: dict[str, Any]) -> list[dict[str, Any]]:
         try:
-            return reached(operator, start, end, operator.rides(start["id"], end["id"], day))
+            with logged(operator.name, f"coaches {start['name']} -> {end['name']} on {day}") as entry:
+                try:
+                    rides = operator.rides(start["id"], end["id"], day)
+                except NotOnSale:
+                    entry["result"] = "ok: not on sale yet"   # an answer, not a failure of the operator
+                    return []
+                entry["result"] = f"ok: {len(rides)} rides"
+            return reached(operator, start, end, rides)
         except FAILURES:
             return []   # that city only: the others are still asked
     with ThreadPoolExecutor(AT_ONCE) as pool:

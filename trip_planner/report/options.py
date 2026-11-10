@@ -14,6 +14,7 @@ from trip_planner.itineraries.ranking import price_range
 from trip_planner.report import metrics
 from trip_planner.report.formatting import price_source, ticket_operators
 from trip_planner.report.summary import part_grades
+from trip_planner.texts import kept
 from trip_planner.utils import to_time
 
 VERSION = 1   # a page reads only the version it knows: with another, the report is shown as Markdown
@@ -107,7 +108,8 @@ def trip_data(response: dict[str, Any]) -> dict[str, Any]:
                      "total_eur": itinerary["total_cost"], "minutes": itinerary["total_minutes"]} if itinerary else
                     {"date": day, "option": None, "route": None, "total_eur": None, "minutes": None}
                     for day, itinerary in response.get("by_date") or []],
-        "warnings": list(response.get("warnings") or []),
+        # Kept as data (texts.kept) where they can be: the page says them in the language it is read in
+        "warnings": [kept(warning) for warning in response.get("warnings") or []],
         # What the search did, as numbers (report/metrics.py), for tools/funnel.py: not shown on the page
         "metrics": metrics.of(response),
         "recommendation": response.get("recommendation") or "",   # written by a model: never shown as confirmed

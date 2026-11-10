@@ -58,11 +58,11 @@ document.getElementById("by-ground-note").textContent = t("by_ground_note");
 document.getElementById("searched-title").textContent = t("searched_title");
 const legend = document.getElementById("legend");
 colours.forEach((colour, i) => { const dot = document.createElement("span"); dot.style.background = colour; legend.append(dot, i === 0 ? t("legend_cheapest") : i === colours.length - 1 ? t("legend_dearest") : ""); });
-legend.append(" · " + t("legend_ring"));
+legend.append(" · " + t("legend_ring_short"));   // the long ones are under the status's "more details"
 const GROUND_COLOUR = "#7a4fd6";   // a city reached by train or bus only: no price, so none of the price colours
 if ((state.by_ground || []).length) {
   const ring = document.createElement("span"); ring.style.border = "2px solid " + GROUND_COLOUR; ring.style.width = ring.style.height = "6px";
-  legend.append(ring, t("legend_ground"));
+  legend.append(" · ", ring, t("legend_ground_short"));
 }
 const map = L.map("map").setView([data.origin.lat, data.origin.lon], 4);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 12, attribution: "© OpenStreetMap"}).addTo(map)
@@ -404,6 +404,8 @@ function groundTimetable(panel, option) {
   add(step(clock(leaves)), "p", t("step_leave", {place: option.from_stop}));
   const ride = step("", option.mode, option.grade);
   add(ride, "p", t("ground_ride", {what: operatorText(option), hours: hours(option.minutes)}));
+  // A trip by train with changes (ground.with_changes): where, and how long the wait, as a trip sold with changes says it
+  for (const change of option.changes || []) add(ride, "p", t("ground_change", {place: change.at || "?", wait: hours(change.wait)}), "warn");
   if (option.times.length > 1)
     add(ride, "p", t("ground_also_at", {times: option.times.slice(1, 6).join(", ")
                                                + (option.times.length > 6 ? " " + t("and_more_count", {count: option.times.length - 6}) : "")}), "muted");
@@ -475,26 +477,40 @@ function showRoute(make, fit) {
   fitIcons();
 }
 function closeTrip(panel) {
-  panel.hidden = true; picked = null; routeMaker = null;
+  panel.hidden = true; picked = null; routeMaker = null; chosenView = {};
   if (line) line.remove();
   map.invalidateSize();
 }
-// A city a flight goes to: its flight's route while the filters show the flight, even when they show its trains and
-// buses too (the trip open is the flight's); its trains and buses' route once the flight is hidden
-const tripRoute = p => (shownFlight(p) || !shownByGround(p.ground, p.country) ? routeOf(p) : groundRouteOf(p));
+// The view of a city a flight goes to that has trains or buses too, chosen with the button of its trip (viewButton):
+// {key: its airport, view: AIR or GROUND}. It holds for that trip only, until it is closed or another opens, and
+// overrides what the filters would show; with none chosen, the filters decide (tripView).
+let chosenView = {};
+const AIR = "air", GROUND = "ground";   // the two views of a trip
+// A city a flight goes to: its flight while the filters show the flight, even when they show its trains and buses too
+// (the trip open is the flight's); its trains and buses once the flight is hidden; or the view chosen for it
+const tripView = p => (chosenView.key === p.to && (chosenView.view === AIR || (p.ground || []).length) ? chosenView.view
+                       : !shownFlight(p) && shownByGround(p.ground, p.country) ? GROUND : AIR);
+const tripRoute = p => (tripView(p) === AIR ? routeOf(p) : groundRouteOf(p));
+// The button that turns the open trip of a city with both to its other view, and draws that view's route
+function viewButton(panel, p, view) {
+  const button = add(panel, "button", t(view === AIR ? "view_by_air" : "view_by_ground"), "switch-view");
+  button.onclick = () => { chosenView = {key: p.to, view: view}; explain(p, false); };
+}
 
-// key is the city's in the lists: "~" and its own for a city no flight goes to, its airport for one whose flight
-// the filters hide
-function explainGround(g, scroll, key) {
+// key is the city's in the lists: "~" and its own for a city no flight goes to, its airport for one a flight goes to
+// shown by its trains and buses; flown is that city's destination, whose flight its button brings back
+function explainGround(g, scroll, key, flown) {
   picked = key || "~" + g.key;
   const panel = document.getElementById("detail");
   panel.replaceChildren();
   panel.hidden = false;
   const close = add(panel, "button", t("close"), "close");
   close.onclick = () => closeTrip(panel);
+  if (flown) viewButton(panel, flown, AIR);
   priceButton(panel, g.ground, picked);
   add(panel, "h2", data.origin.name + " → " + g.name);
-  add(panel, "p", t("no_flight_here", {modes: g.modes.map(modeName).join(t("and")), origin: data.origin.name, hours: hours(g.minutes)}) + " "
+  const by = {modes: g.modes.map(modeName).join(t("and")), origin: data.origin.name, hours: hours(g.minutes)};
+  add(panel, "p", (flown ? t("flown_by_ground", {...by, price: eur(flown.total_eur)}) : t("no_flight_here", by)) + " "
       + (fareOf(g) !== null ? t("ground_ranked", {price: eur(fareOf(g)) + (data.round_trip ? " " + t("there_and_back") : "")}) : t("ground_not_ranked")), "muted");
   colourLegend(panel);
   describeGround(panel, g.ground, picked);
@@ -600,11 +616,12 @@ function groundRouteOf(g) {
 }
 
 function explain(p, scroll) {
-  if (!shownFlight(p) && shownByGround(p.ground, p.country)) {   // its flight hidden: the trip is its trains and buses
+  if (chosenView.key !== p.to) chosenView = {};   // another trip: the filters decide again
+  if (tripView(p) === GROUND) {   // its flight hidden, or its trains and buses chosen: the trip is those
     const best = cheapestGround(p.ground);
     explainGround({key: p.to, name: p.name, lat: p.lat, lon: p.lon, ground: p.ground, fare_eur: best ? totalOf(best) : undefined,
                    modes: [...new Set(p.ground.map(option => option.mode))].sort(),
-                   minutes: Math.min(...p.ground.map(option => option.minutes))}, scroll, p.to);
+                   minutes: Math.min(...p.ground.map(option => option.minutes))}, scroll, p.to, p);
     return;
   }
   picked = p.to;
@@ -613,6 +630,7 @@ function explain(p, scroll) {
   panel.hidden = false;
   const close = add(panel, "button", t("close"), "close");
   close.onclick = () => closeTrip(panel);
+  if ((p.ground || []).length) viewButton(panel, p, GROUND);
   priceButton(panel, p.ground, p.to);
   add(panel, "h2", data.origin.name + " → " + p.name + " (" + p.to + ", " + p.country + ")");
   describeLines(panel, p);
@@ -682,44 +700,83 @@ if (data.planner_link) {
   back.textContent = t("back_link"); back.href = "/discover"; back.hidden = false;
 }
 
-// Whether the program is still searching or has seen everything. The flights of every destination were all
-// searched before the page opened: what can still change while running is the ways to and from the airports, and
-// so the prices and their order. lost: the map's server stopped answering, so what is shown is its last state.
+// Whether the program is still searching or has seen everything, in two short lines: what the map holds, and which
+// sources answered. The why of each number is under "more details", kept open across updates. The flights of every
+// destination were all searched before the page opened: what can still change while running is the ways to and
+// from the airports, and so the prices and their order. lost: the map's server stopped answering, so what is shown
+// is its last state.
 let lost = false;
 function describeStatus() {
   const status = document.getElementById("status");
+  const wasOpen = Boolean((status.querySelector("details") || {}).open);
   const looked = state.lookups.length, count = state.points.length;
   const missing = (state.coverage || {}).missing || [];
+  const running = state.running && !lost;
+  const ground = groundCount();
   status.replaceChildren();
-  status.className = lost ? "lost" : state.running ? "running" : "done";
+  status.className = lost ? "lost" : running ? "running" : "done";
+  document.title = (running ? "⏳ " : "") + data.title;
   if (data.kiwi_why)   // only Ryanair's flights: the first thing to know about this map
     add(status, "p", t("only_ryanair", {why: data.kiwi_why}), "kiwi");
-  document.title = (state.running && !lost ? "⏳ " : "") + data.title;
-  const ground = groundCount();
-  if (state.running && !lost) {
-    add(status, "span", undefined, "pulse");
-    add(status, "strong", t("still_searching"));
-    add(status, "span", t("flights_all_searched", {count: count}) + " "
-        + (state.phase === "timetables" ? t("timetables_running", {looked: looked, most: data.max_lookups}) + " " : ""));
+  const line = add(status, "p", "", "summary");
+  if (running) add(line, "span", undefined, "pulse");
+  add(line, "strong", running ? t("still_searching") : lost ? t("stopped") : t("finished"));
+  line.append(t("summary", {count: count, looked: looked})
+              + (ground.reached ? " · " + t("summary_ground", {reached: ground.reached, priced: ground.priced}) : ""));
+  if (lost) add(status, "p", t("lost_server"), "lost-note");
+  const failing = describeSources(add(status, "p", "", "sources"));
+  const more = add(status, "details");
+  more.open = wasOpen;
+  add(more, "summary", t("more_details"));
+  const say = text => add(more, "p", text);
+  if (running) {
+    say(t("flights_all_searched", {count: count})
+        + (state.phase === "timetables" ? " " + t("timetables_running", {looked: looked, most: data.max_lookups}) : ""));
     // The trains and buses, as the flights: what was seen, and what is still being asked
-    const train = add(status, "p", "", "ground-status");
-    if (ground.reached) train.append(t("ground_reached", {reached: ground.reached, origin: data.origin.short, flown: ground.flown}) + " "
+    if (ground.reached) say(t("ground_reached", {reached: ground.reached, origin: data.origin.short, flown: ground.flown}) + " "
         + (state.phase === "prices" ? t("phase_prices", {priced: ground.priced})
            : state.phase === "timetables" ? t("phase_timetables", {priced: ground.priced})
            : state.phase === "ways back" ? t("phase_ways_back", {priced: ground.priced})
+           : state.phase === "trains with changes" ? t("phase_changes", {priced: ground.priced})
            : t("phase_other", {priced: ground.priced})));
-    add(status, "p", t("updates_itself"), "ground-status");
-    return;
+    say(t("updates_itself"));
+  } else {
+    say(t("all_on_map", {count: count}) + " "
+        + (looked ? t("looked_up_count", {count: looked}) + (state.confirm_stop ? "; " + t("lookups_stop", {stop: state.confirm_stop}) : "") + "."
+                  : t("none_looked_up"))
+        + (missing.length ? " " + t("missing_flown", {count: missing.length}) : ""));
+    if (ground.reached)
+      say(t("ground_reached", {reached: ground.reached, origin: data.origin.short, flown: ground.flown}) + " "
+          + t("ground_priced_end", {priced: ground.priced, stop: state.fare_stop ? ": " + t("pricing_stop", {stop: state.fare_stop}) : ""}));
   }
-  add(status, "strong", lost ? t("stopped") : t("finished"));
-  add(status, "span", (lost ? t("lost_server") + " " : "")
-      + t("all_on_map", {count: count}) + " "
-      + (looked ? t("looked_up_count", {count: looked}) + (state.confirm_stop ? "; " + t("lookups_stop", {stop: state.confirm_stop}) : "") + ". "
-                : t("none_looked_up") + " ")
-      + (missing.length ? t("missing_flown", {count: missing.length}) : ""));
-  if (ground.reached)
-    add(status, "p", t("ground_reached", {reached: ground.reached, origin: data.origin.short, flown: ground.flown}) + " "
-        + t("ground_priced_end", {priced: ground.priced, stop: state.fare_stop ? ": " + t("pricing_stop", {stop: state.fare_stop}) : ""}), "ground-status");
+  // What each source that failed answered, in full: the line above only names them
+  for (const source of failing) say(t("source_detail", {name: source.name, why: source.why || source.error}));
+  const seen = state.coverage || {};
+  if (seen.flown)   // how much of what is flown from here the map found: the honest measure of what it may miss
+    say(t("coverage_line", {found: seen.found, flown: seen.flown, airports: seen.airports.join(", ")})
+        + (seen.ryanair_no_fare ? t("coverage_ryanair", {count: seen.ryanair_no_fare}) : "")
+        + (seen.missing.length ? t("coverage_missing", {count: seen.missing.length}) : "."));
+  say(t("about_more"));
+  const sentence = text => text.charAt(0).toUpperCase() + text.slice(1) + ".";   // the legend's texts are parts of a line
+  say(sentence(t("legend_ring")) + " " + sentence(t("legend_ground")));
+}
+
+// The sources the map asked (breakdown.source_health), in one line: the ones that failed or were not asked named
+// first, each with how, then the others together. Returns the ones that failed, for their details.
+function describeSources(line) {
+  const sources = state.sources || [];
+  if (!sources.length) { line.remove(); return []; }
+  add(line, "strong", t("sources"));
+  const failing = sources.filter(source => source.failed || source.why);
+  for (const source of failing) {
+    const down = Boolean(source.why) || source.failed === source.asked;
+    add(line, "span", (down ? "✗ " : "⚠ ") + source.name + ": "
+        + (source.why ? t("source_not_asked") : down ? t("source_no_answer", {asked: source.asked})
+           : t("source_failed", {failed: source.failed, asked: source.asked})), down ? "source down" : "source partly");
+  }
+  const answered = sources.filter(source => !source.failed && !source.why);
+  if (answered.length) add(line, "span", "✓ " + answered.map(source => source.name).join(", "), "source ok");
+  return failing;
 }
 
 // The cities reached by train or bus: with no flight, and with a flight too (flown); priced, those with a price
@@ -972,12 +1029,8 @@ for (const [title, number] of [[t("col_city")], [t(data.round_trip ? "col_there_
   add(groundHead, "th", title, number ? "n" : "");
 
 function render() {
-  document.getElementById("about").textContent = t("about_line", {days: data.days, count: state.points.length, sources: data.sources});
-  const seen = state.coverage || {};
-  if (seen.flown)   // how much of what is flown from here the map found: the honest measure of what it may miss
-    document.getElementById("about").textContent += " " + t("coverage_line", {found: seen.found, flown: seen.flown, airports: seen.airports.join(", ")})
-      + (seen.ryanair_no_fare ? t("coverage_ryanair", {count: seen.ryanair_no_fare}) : "")
-      + (seen.missing.length ? t("coverage_missing", {count: seen.missing.length}) : ".");
+  // One line; how to read the prices and how much the map found are under the status's "more details"
+  document.getElementById("about").textContent = t("about_short", {days: data.days, count: state.points.length, sources: data.sources});
   describeStatus();
   // The filters are made again with the new destinations, but not under the traveller's hand: a slider being dragged
   // or a value being typed would be lost. They follow at the next change after the traveller is done.

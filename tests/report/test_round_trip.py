@@ -147,7 +147,7 @@ def no_search(monkeypatch):
     """plan_trip with each way made up: what was planned, and what was shown."""
     record = {"planned": [], "shown": [], "fail": None}
 
-    async def plan_one_way(settings, places, after=None, beside=None):
+    async def plan_one_way(settings, places, after=None, beside=None, from_map=None):
         if record["fail"] == settings.origin:
             raise RuntimeError("the search failed")
         when = 30 if settings.origin == "Coimbra" else 34

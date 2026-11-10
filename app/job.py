@@ -85,7 +85,8 @@ def airports_shown(places) -> dict[str, Any]:
                                                       for airport in airports]} for title, airports in airport_groups(places)],
             "notes": notes}
 
-async def converse(settings: TripSettings, answers: Iterator[str], events: Events) -> None:
+async def converse(settings: TripSettings, answers: Iterator[str], events: Events, from_map: dict[str, Any] | None = None) -> None:
+    """A search, then the questions about it. from_map is what a Discover map said of this trip (maps.estimate_of)."""
     from trip_planner import planner
     from trip_planner.sources import flight_search
     from trip_planner.texts import tr
@@ -128,7 +129,7 @@ async def converse(settings: TripSettings, answers: Iterator[str], events: Event
         where.show_airports(found)
     if not settings.ground_only:
         await flight_search.connect()
-    await planner.plan_trip(settings, found)
+    await planner.plan_trip(settings, found, from_map=from_map)
     for trip in planner.PLANNED:
         if trip.get("report") is not None:
             events.send("report", str(trip["report"]))
@@ -217,7 +218,8 @@ def main(answers: Iterator[str], events: Events) -> int:
         return 1
     current.SETTINGS = settings
     try:
-        asyncio.run(converse(settings, answers, events))
+        from_map = asked.get("from_map") if isinstance(asked, dict) else None
+        asyncio.run(converse(settings, answers, events, from_map if isinstance(from_map, dict) else None))
     except Exception as error:
         failed(error, events)
         return 1

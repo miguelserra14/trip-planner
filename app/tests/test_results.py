@@ -2,6 +2,7 @@
 cards, the trip searched again, the full report kept, the pages' own style and their dark or light look. Made-up
 options, no network."""
 import dataclasses
+import html
 import re
 
 import pytest
@@ -15,7 +16,7 @@ from settings import SETTINGS
 from tests.report.test_options import DAY as TRAVEL_DAY, NEXT_DAY, itinerary
 from trip_planner import current
 from trip_planner.report import full
-from trip_planner.texts import tr
+from trip_planner.texts import listed, said, text_in, tr
 from trip_planner.trip.places import Place, TripPlaces
 
 @pytest.fixture
@@ -48,6 +49,19 @@ def test_what_a_model_or_a_service_wrote_stays_text_and_the_models_words_are_sai
     page = Site(SETTINGS).get(address(report)).html
     assert "<script>x" not in page and "&lt;b&gt;this&lt;/b&gt;" in page
     assert "Written by a model" in page and "<strong>option 2</strong>" in page
+
+def test_a_warning_is_shown_in_the_language_the_report_is_read_in_not_the_one_it_was_searched_in(report, monkeypatch):
+    english = current.SETTINGS
+    monkeypatch.setattr(current, "SETTINGS", dataclasses.replace(english, language="pt-PT"))   # the search, in Portuguese
+    values = dict(source="Rede Expressos", days=71, day=listed(["23/03/2027"]), from_day=listed(["11/01/2027"]))
+    warning = said("warn_not_on_sale", side=said("sale_side_to", airport=listed(["OPO", "LIS"])), **values)
+    assert warning == text_in("pt-PT", "warn_not_on_sale", side=text_in("pt-PT", "sale_side_to", airport="OPO e LIS"), **values)
+    searched = full.save_report({"shown": [itinerary(120, 600)], "recommended": 1, "ground_only": [],
+                                 "warnings": [warning, "Kept as an older report wrote it"]}, "")
+    monkeypatch.setattr(current, "SETTINGS", english)   # read later, in English
+    page = Site(SETTINGS).get(address(searched)).html
+    shown = text_in("en", "warn_not_on_sale", side=text_in("en", "sale_side_to", airport="OPO and LIS"), **values)
+    assert html.escape(shown, quote=False) in page and "Kept as an older report wrote it" in page
 
 def test_each_day_searched_says_what_it_would_cost(report):
     page = Site(SETTINGS).get(address(report)).html

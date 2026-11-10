@@ -27,7 +27,7 @@ from trip_planner.trip.trip_settings import USER_AGENT
 from trip_planner.itineraries.estimates import estimated_minutes, estimated_price
 from trip_planner.texts import tr
 from trip_planner.trip.places import airport_from, ask_nominatim, distance_km, load_airports, move_to_centre, place_of, Place, settlement
-from trip_planner.utils import plain, write_whole
+from trip_planner.utils import logged, plain, write_whole
 
 CACHE = Path(__file__).parents[1] / "cache"
 CENTRES = CACHE / "city_centres.json"     # the city each destination airport serves, found once
@@ -98,9 +98,10 @@ def ask_wikidata(codes: list) -> list[dict[str, str]]:
 
 def sparql(query: str) -> list[dict[str, str]]:
     """The rows of a Wikidata query, each {variable: value}."""
-    response = httpx.post(WIKIDATA, data={"query": query, "format": "json"}, timeout=90,
-                          headers={"User-Agent": wikimedia_agent(), "Accept": "application/sparql-results+json"})
-    response.raise_for_status()
+    with logged("Wikidata", " ".join(query.split())[:200]):
+        response = httpx.post(WIKIDATA, data={"query": query, "format": "json"}, timeout=90,
+                              headers={"User-Agent": wikimedia_agent(), "Accept": "application/sparql-results+json"})
+        response.raise_for_status()
     return [{key: value["value"] for key, value in row.items()} for row in response.json()["results"]["bindings"]]
 
 def served(rows: list[dict[str, str]], airport: dict[str, Any]) -> dict[str, Any] | None:

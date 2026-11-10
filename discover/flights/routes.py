@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from trip_planner.trip.trip_settings import USER_AGENT
+from trip_planner.utils import logged
 
 OPENFLIGHTS = "https://raw.githubusercontent.com/jpatokal/openflights/master/data/"
 CACHE = Path(__file__).parents[1] / "cache"   # the two files of OpenFlights, downloaded once
@@ -31,8 +32,9 @@ def openflights(name: str) -> list[list[str]] | None:
         if rows is not None:
             return rows
     try:
-        response = httpx.get(OPENFLIGHTS + name, headers={"User-Agent": USER_AGENT}, timeout=60, follow_redirects=True)
-        response.raise_for_status()
+        with logged("OpenFlights", name):
+            response = httpx.get(OPENFLIGHTS + name, headers={"User-Agent": USER_AGENT}, timeout=60, follow_redirects=True)
+            response.raise_for_status()
     except Exception:
         return None
     rows = rows_of(response.content.decode("utf-8", errors="replace"))

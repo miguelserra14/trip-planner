@@ -3,6 +3,8 @@
 :root { color-scheme: dark; --bg: #0f1115; --surface: #171a21; --fg: #e6e8eb; --muted: #9aa3af; --line: #2c323d; --panel: #1c2029;
         --link: #6b9bff; --pick: #1c2741; --warn: #f97066; --running: #3d3519; --done: #1e3325; --lost: #3d1f1f; }
 * { box-sizing: border-box; }
+/* The browser hides only HTML elements by their hidden attribute: the icons' sprite is an <svg>, and took 150px above the title */
+[hidden] { display: none !important; }
 body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--fg); }
 a { color: var(--link); }
 header { padding: 14px 20px 6px; } h1 { font-size: 20px; margin: 0 0 4px; } header p { margin: 0; color: var(--muted); }
@@ -14,7 +16,13 @@ h2 { font-size: 16px; margin: 28px 20px 4px; } h3 { font-size: 14px; margin: 20p
 #status.running { background: var(--running); border-color: #e0a100; } #status.done { background: var(--done); border-color: #1e8e3e; }
 #status.lost { background: var(--lost); border-color: #b3261e; }
 #status p.kiwi { margin: 0 0 4px; font-weight: 600; color: var(--warn); }
-#status p.ground-status { margin: 4px 0 0; } #status strong { margin-right: 6px; } #status .pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e0a100;
+#status p { color: var(--fg); } #status strong { margin-right: 6px; }
+/* Which sources answered: the ones that failed named first, in the colour of how badly */
+#status p.sources { margin: 4px 0 0; } #status .source { margin-right: 12px; } #status .source.ok { color: var(--muted); }
+#status .source.partly { color: #e0a100; } #status .source.down { color: var(--warn); font-weight: 600; }
+#status p.lost-note { margin: 4px 0 0; }
+#status details { margin-top: 4px; } #status details summary { cursor: pointer; color: var(--muted); }
+#status details p { margin: 4px 0 0; color: var(--muted); max-width: 70em; } #status .pulse { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #e0a100;
   margin-right: 8px; animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: 0.25; } }
 @media (prefers-reduced-motion: reduce) { #status .pulse { animation: none; } }
 
@@ -65,10 +73,10 @@ ol.cards p.foot { display: flex; flex-wrap: wrap; justify-content: space-between
 /* The trip of a destination */
 #detail h2 { margin: 0 0 2px; } #detail h4 { margin: 14px 0 4px; font-size: 14px; } #detail p { margin: 2px 0; }
 #detail .muted { color: var(--muted); } #detail ol { margin: 4px 0; padding-left: 20px; } #detail li { margin: 2px 0; }
-#detail ul.links { margin: 6px 0 0; padding-left: 20px; } #detail .close, #detail .ask-price { float: right; font: inherit; padding: 2px 12px; border-radius: 8px;
+#detail ul.links { margin: 6px 0 0; padding-left: 20px; } #detail .close, #detail .ask-price, #detail .switch-view { float: right; font: inherit; padding: 2px 12px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
 #detail .warn { color: var(--warn); }
-#detail .ask-price { margin-right: 6px; } #detail .ask-price:disabled { cursor: progress; color: var(--muted); }
+#detail .ask-price, #detail .switch-view { margin-right: 6px; } #detail .ask-price:disabled { cursor: progress; color: var(--muted); }
 #detail h5 { margin: 10px 0 0; font-size: 13px; color: var(--muted); }
 /* A train or bus of the trip: its price at the right of its title, and in its ride */
 #detail h4.ground-title { display: flex; align-items: baseline; gap: 12px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }

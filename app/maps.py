@@ -247,6 +247,32 @@ def part_of(path: str) -> tuple[str, str]:
     number, slash, what = path[len(MAPS):].partition("/") if path.startswith(MAPS) else ("", "", "")
     return (address_of(int(number)), what) if number.isdigit() and slash else ("", "")
 
+def estimate_of(state: dict[str, Any], key: str, trip: list[str], address: str) -> dict[str, Any] | None:
+    """What a map says of one of its trips, by its key ("DUB-out", "DUB-back"), when it opens the planner on it: the
+    flight, by the planner's own id for it (sources/flight_search.py), and the ways to and from its airports with
+    their prices and grades, to be compared with what the planner then finds (report/metrics.py, tools/funnel.py).
+    The flight's price is the round trip's on a map there and back: only the ways to and from the airports can be
+    compared one way at a time. None when the map has no such trip."""
+    code, _, way = key.rpartition("-")
+    point = next((point for point in state.get("points") or [] if point.get("to") == code), None)
+    flight = (point if way == "out" else (point or {}).get("back")) if way in ("out", "back") else None
+    if not point or not flight or not flight.get("time"):
+        return None
+    ends = ((flight["from"], True), (flight["to"], False))   # the way to its first airport, and from its last
+    legs = [leg for end in ends for leg in point.get("access") or [] if (leg.get("airport"), leg.get("to_airport")) == end]
+    return {"map": address, "key": key, "trip": trip, "clicked": datetime.now().isoformat(timespec="minutes"),
+            "flight_id": f"{flight['from']}-{flight['to']}-{flight['date'][8:10]}{flight['date'][5:7]}-{flight['time'].replace(':', '')}",
+            "round_trip": bool(point.get("back")), "flight_eur": point.get("price_eur"), "total_eur": point.get("total_eur"),
+            "ground_eur": round(sum(leg.get("price_eur") or 0 for leg in legs), 2), "looked_up": bool(legs) and all(leg.get("looked_up") for leg in legs),
+            "legs": [{key: leg.get(key) for key in ("airport", "to_airport", "price_eur", "grade", "price_grade", "looked_up")} for leg in legs]}
+
+def same_trip(estimate: dict[str, Any], settings) -> bool:
+    """Whether the planner's form, as sent, still asks for the trip a map opened it on: the same places, that one
+    day, one way. Changed in between, the map's estimate is not for this search."""
+    origin, destination, day = estimate["trip"]
+    return (settings.origin == origin and settings.destination == destination and not settings.return_dates
+            and not settings.ground_only and settings.iso_dates == [datetime.strptime(day, "%d/%m/%Y").date().isoformat()])
+
 def planner_values(trip: list[str], values: dict[str, Any]) -> dict[str, Any]:
     """The planner's form filled in with a trip of the map, [origin, destination, day]: one way, on that day. Its
     other settings stay as they are."""

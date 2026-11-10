@@ -12,16 +12,39 @@ from discover.flights import flown, regions
 from discover.finder import COUNTRIES_KM, Found, KIWI_ANSWER_HOURS
 from discover.flights.routes import airline_names, known_routes
 from trip_planner.trip.places import distance_km, load_airports
+from trip_planner.agents.models import CALL_SERVICE
 from trip_planner.sources import kiwi
 from trip_planner.texts import tr
+from trip_planner.utils import failed
 
 NEARBY_KM = 100  # an airport this close to one on the map serves the same city: Stansted and Gatwick are 75 km apart
+# What the log of a run holds that is not a source of the map: a mistake of the program, an agent as a whole
+NOT_SOURCES = ("program", "model")
 
 def section(title: str, header: list[str], rows: list[list[Any]], note: str = "") -> dict[str, Any]:
     return {"title": title, "note": note, "header": header, "rows": [[str(cell) for cell in row] for row in rows]}
 
 def country_of(code: str, airports: dict[str, Any]) -> str:
     return (airports.get(code) or {}).get("country", "?")
+
+def source_health(found: Found, requests: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Each source the map asked, for the line of sources above it: {"name", "asked", "failed", "error", "why"}.
+    error is the last failure, why says a source was not asked at all, or no more after it refused; a source with
+    neither answered every request. Read from the log of the run (utils.REQUESTS), which every request of a map goes
+    into; the sources that failed come first."""
+    rows: dict[str, dict[str, Any]] = {}
+    row = lambda name: rows.setdefault(name, {"name": name, "asked": 0, "failed": 0, "error": "", "why": ""})
+    for entry in requests:
+        if entry["service"] in NOT_SOURCES:
+            continue
+        kept = row(tr("discover_source_model") if entry["service"] == CALL_SERVICE else entry["service"])
+        kept["asked"] += 1
+        if failed(entry):
+            kept["failed"] += 1
+            kept["error"] = entry["result"][:160]
+    if found.kiwi_why or found.kiwi_refused:
+        row("Kiwi")["why"] = found.kiwi_why or tr("discover_source_refused", error=found.kiwi_refused)
+    return sorted(rows.values(), key=lambda kept: (not (kept["failed"] or kept["why"]), kept["name"].lower()))
 
 def requests_section(found: Found) -> dict[str, Any]:
     rows = []

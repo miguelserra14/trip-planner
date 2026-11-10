@@ -43,12 +43,51 @@ def test_the_search_keeps_its_funnel_with_the_cheapest_ticket(monkeypatch):
     failing_with(monkeypatch, {"CHEAP": Rejected("the coach does not run that day", "not_running")})
     found = steps.build_itineraries({"flights": [DEAR, CHEAP], "checked": ["CHEAP"], "ground": {}, "transfers": [], "trains": []})
     assert found["funnel"] == {"found": 2, "checked": 1, "cheapest_flight": "CHEAP", "cheapest_ticket_eur": 20.0,
-                               "left_out": [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "not_running"}]}
+                               "left_out": [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "not_running"}], "itineraries": {}}
     assert tool.cheapest_was_impossible(found["funnel"])
 
 def test_a_rejection_by_the_travellers_limits_is_not_proven_impossible():
     funnel = metrics.funnel([CHEAP, DEAR], {"CHEAP", "DEAR"}, {"CHEAP": "ground_choice"})
     assert "ground_choice" not in PROVEN and not tool.cheapest_was_impossible(funnel)
+
+# ---------------------------------------------------------------- a map against the planner
+ESTIMATE = {"map": "/discover/map/1/", "key": "BRU-out", "clicked": "2026-11-10T10:00", "flight_id": "CHEAP", "round_trip": False,
+            "flight_eur": 20.0, "total_eur": 35.0, "ground_eur": 15.0, "looked_up": True, "legs": []}
+
+def searched(itineraries: dict, left_out: list, checked=("CHEAP", "DEAR")) -> dict:
+    """A search's response as metrics.of reads it, with the cheapest option it showed at 40 EUR."""
+    return {"flights": [CHEAP, DEAR], "checked": list(checked), "shown": [{"total_cost": 40.0}, {"total_cost": 95.0}],
+            "funnel": {"left_out": left_out, "itineraries": itineraries}}
+
+def test_the_planner_says_what_it_made_of_the_flight_a_map_opened_it_on():
+    made = metrics.watched(ESTIMATE, searched({"CHEAP": {"total_eur": 38.0, "flight_eur": 21.0}}, []))
+    assert made == {"found": True, "cheapest_eur": 40.0, "ticket_eur": 20.0, "checked": True, "total_eur": 38.0, "flight_eur": 21.0, "left_out": None}
+    gone = metrics.watched(ESTIMATE, searched({}, [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "timetable"}]))
+    assert gone["left_out"] == "timetable" and "total_eur" not in gone
+    assert metrics.watched({**ESTIMATE, "flight_id": "SOLD-OUT"}, searched({}, [])) == {"found": False, "cheapest_eur": 40.0}
+    assert metrics.of({"from_map": ESTIMATE, **searched({}, [])})["from_map"]["planner"]["found"]
+
+def opened(planner: dict, written: str = "2026-11-10T10:20", **estimate) -> dict:
+    return {"from_map": {**ESTIMATE, **estimate, "planner": planner}, "written": written}
+
+def test_the_map_is_measured_against_the_planner_only_for_searches_run_soon_after_the_click():
+    reports = [opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0}),                        # 3 EUR dearer: within 10%
+               opened({"found": True, "total_eur": 50.0, "flight_eur": 20.0}, looked_up=False),       # 15 EUR dearer
+               opened({"found": True, "left_out": "timetable"}),                                       # the map's flight cannot be made
+               opened({"found": False}, looked_up=False),
+               opened({"found": True, "total_eur": 90.0, "flight_eur": 70.0}, written="2026-11-12T10:00")]   # two days later: not the map's fault
+    lines = tool.map_part(reports)
+    assert "4 searches opened from a map within 24 hours (1 later ones left out)" in lines[0]
+    assert "every dot (4): flight not found by the planner 1, proven impossible 1 (25%), itinerary made 2" in lines[1]
+    assert "To and from the airports: median +8 EUR, 50% within 5 EUR, 50% within 10 EUR" in lines[1]
+    assert "dark ring: looked up in the timetables (2)" in lines[2] and "proven impossible 1 (50%)" in lines[2]
+    assert "estimated ways (2)" in lines[3]
+    assert tool.map_part([]) == ["Discover against the planner: no search opened from a map yet."]
+
+def test_a_map_there_and_back_is_compared_on_its_ways_to_the_airports_only():
+    lines = tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0}, round_trip=True)])
+    assert "To and from the airports" in lines[1] and "Door to door" not in lines[1]
+    assert "Door to door, one-way maps: median +8%" in tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0})])[1]
 
 # ---------------------------------------------------------------- the models
 def test_plan_b_and_the_failed_calls_are_counted_from_the_log():

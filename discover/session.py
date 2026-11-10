@@ -26,7 +26,7 @@ from discover.flights.sources import Days
 from trip_planner import current, utils
 from trip_planner.report.full import remember_duration
 from trip_planner.texts import tr
-from trip_planner.trip.places import geocode
+from trip_planner.trip.places import geocode, load_airports
 from trip_planner.trip.trip_settings import settings_file
 from trip_planner.utils import plain, progress
 
@@ -117,8 +117,9 @@ class Session:
         """What is searched once the map is open, the served page following it (found.phase), the file saved again
         at the end: the trains and buses priced, in seconds when they are FlixBus's, against the flights' totals as
         estimated; with timetables, the cheapest destinations in the real timetables, a city at a time, and the trains
-        and buses priced again for the cities that can now be among the cheapest; then the way back in the
-        timetables of the trains and buses with no price for it. When stopping is set it ends at the next city or
+        and buses priced again for the cities that can now be among the cheapest, and the trains with changes to the
+        cities no train or bus reaches straight (ground.with_changes); then the way back in the timetables of the
+        trains and buses with no price for it. When stopping is set it ends at the next city or
         phase, the page and the file keeping what was found up to then."""
         def changed(found: Found) -> None:
             if self.stopping.is_set():
@@ -154,6 +155,11 @@ class Session:
                     self.timetables_free.set()
                 phase("prices")
                 ground_fares.price(self.found, changed)
+                # Trains with changes to the cities no train or bus reaches straight: timetables too, so only when
+                # the traveller asked for them, and before the ways back, which then leave these out (they have theirs)
+                phase("trains with changes")
+                ground.with_changes(self.found.place, self.found.destinations, self.found.centres, load_airports(), self.days,
+                                    after_each=lambda: changed(self.found))
             phase("ways back")
             ground.ways_back([options for _, options, _, _ in ground_fares.cities_of(self.found)], self.days)
         except Stopped:

@@ -51,6 +51,7 @@ class Site:
         self.map_values = maps.values_of(defaults.origin, coach_changes=defaults.max_coach_changes)   # what Discover's form shows
         self.maps_made = 0                            # how many maps were asked for: each one's address is its number
         self.map_next: dict[str, Any] | None = None   # a map asked for while the last one stops: it starts once that one ended
+        self.from_map: dict[str, Any] | None = None   # what a map said of the trip it filled the form with (maps.estimate_of)
         self.stop_asked = 0.0                         # when the last map was asked to stop (time.monotonic), or 0
         self.maps_lock = threading.Lock()             # the pages are answered in threads of their own: one map starts at a time
         # The prices asked for on the maps made before, by map: the job pricing some of its cities, and the cities
@@ -242,7 +243,11 @@ class Site:
             return Reply(400, self.home(named(str(error))))
         self.values = fields.values_of(settings)   # as the settings read them: "sexta" becomes its day
         current.SETTINGS = dataclasses.replace(current.SETTINGS, language=settings.language)   # the pages follow the trip's language
-        return self.begin({"settings": values}, f"{settings.origin} → {settings.destination}")
+        first = {"settings": values}
+        if self.from_map and maps.same_trip(self.from_map, settings):   # the trip a map opened the form on: its estimate goes too
+            first["from_map"] = self.from_map
+        self.from_map = None
+        return self.begin(first, f"{settings.origin} → {settings.destination}")
 
     def form_values(self, one: dict[str, str]) -> dict[str, Any]:
         """What the form showed when it was sent, to show it again with the reason it was refused."""
@@ -370,9 +375,11 @@ class Site:
             file, kind = maps.FILES[what]
             return Reply(200, job.map_files.get(what) or file.read_text(encoding="utf-8"), kind=kind)
         if what.startswith("plan/"):
-            trip = job.trips.get(unquote(what[len("plan/"):]))
+            key = unquote(what[len("plan/"):])
+            trip = job.trips.get(key)
             if trip:
                 self.values = maps.planner_values(trip, self.values)
+                self.from_map = maps.estimate_of(job.map_state, key, trip, address)   # sent with the search if the form keeps this trip
                 return Reply(303, location="/")
         return self.not_found()
 

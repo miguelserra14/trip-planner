@@ -8,6 +8,8 @@ A flight search site stops at the airport. Each report keeps, with its options a
 - how much of the recommended trip's price was confirmed for the travel date (grade A);
 - what code did to what the models wrote: colours put right, claims pointed out, times no step gave, links left out;
 - the models: calls, failures, calls answered by plan B, which model wrote the recommendation;
+- Discover against the planner: of the searches a map opened, how often the planner proved the map's flight
+  impossible, and how far the map's prices were, for the dots looked up in the timetables and the estimated ones;
 - what python main.py --verify found so far: of the vehicles shown, how many ran, by the light they were given.
 
 Reports made before the numbers were kept have the funnel only in words, in the Markdown report: it is read from
@@ -17,12 +19,14 @@ import json
 import re
 import statistics
 from collections import Counter
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from trip_planner.itineraries.legs import PROVEN
 from trip_planner.report.full import options_of, report_files
 from trip_planner.texts import TEXTS
+from trip_planner.tools.prices import PRICE_VALID_HOURS
 from trip_planner.tools.verify import answers, OUTCOMES
 from trip_planner.trip.trip_settings import LIGHTS
 
@@ -83,8 +87,46 @@ def read_all() -> list[dict[str, Any]]:
         funnel = numbers.get("funnel") or from_markdown(report)
         if funnel:
             found.append({"report": report.stem, "funnel": funnel, "checks": numbers.get("checks"), "models": numbers.get("models"),
-                          "option": recommended(data)})
+                          "option": recommended(data), "from_map": numbers.get("from_map"), "written": (data or {}).get("written")})
     return found
+
+def spread(differences: list[float], unit: str, near: tuple[float, ...]) -> str:
+    """The median of differences and the share of them within each of near, in words."""
+    within = ", ".join(f"{sum(abs(difference) <= limit for difference in differences) / len(differences):.0%} within {limit:g}{unit}"
+                       for limit in near)
+    return f"median {statistics.median(differences):+.0f}{unit}, {within}"
+
+def map_part(reports: list[dict[str, Any]]) -> list[str]:
+    """Discover against the planner: for each search a map opened (report/metrics.py, from_map), whether the planner
+    could make the map's very flight, and how far the map's prices were from the planner's (the planner's less the
+    map's: positive when the map promised too little). Only searches run within PRICE_VALID_HOURS of the click count:
+    later, prices change for reasons that are not the map's. A map there and back gives the flight's price for the
+    round trip: only its ways to and from the airports are compared; a one-way map's whole trip is compared too."""
+    late = lambda report: (datetime.fromisoformat(report["written"]) - datetime.fromisoformat(report["from_map"]["clicked"])
+                           > timedelta(hours=PRICE_VALID_HOURS))
+    opened = [report for report in reports if report.get("from_map") and report.get("written")]
+    pairs = [report["from_map"] for report in opened if not late(report)]
+    if not pairs:
+        return ["Discover against the planner: no search opened from a map yet" + (f" within {PRICE_VALID_HOURS} hours of the click." if opened else ".")]
+    lines = [f"Discover against the planner: {len(pairs)} searches opened from a map within {PRICE_VALID_HOURS} hours"
+             + (f" ({len(opened) - len(pairs)} later ones left out)" if len(opened) > len(pairs) else "") + "."]
+    for name, group in (("every dot", pairs), ("dark ring: looked up in the timetables", [pair for pair in pairs if pair["looked_up"]]),
+                        ("estimated ways", [pair for pair in pairs if not pair["looked_up"]])):
+        if not group:
+            continue
+        made = [pair for pair in group if "total_eur" in pair["planner"]]
+        proven = sum(pair["planner"].get("left_out") in PROVEN for pair in group)
+        line = (f"  {name} ({len(group)}): flight not found by the planner {sum(not pair['planner']['found'] for pair in group)}, "
+                f"proven impossible {proven} ({proven / len(group):.0%}), itinerary made {len(made)}")
+        ground = [pair["planner"]["total_eur"] - pair["planner"]["flight_eur"] - pair["ground_eur"] for pair in made]
+        whole = [(pair["planner"]["total_eur"] - pair["total_eur"]) / pair["planner"]["total_eur"] * 100
+                 for pair in made if not pair["round_trip"] and pair.get("total_eur") and pair["planner"]["total_eur"]]
+        if ground:
+            line += f". To and from the airports: {spread(ground, ' EUR', (5, 10))}"
+        if whole:
+            line += f". Door to door, one-way maps: {spread(whole, '%', (10, 20))}"
+        lines.append(line + ".")
+    return lines
 
 def cheapest_was_impossible(funnel: dict[str, Any]) -> bool:
     """Whether the cheapest ticket found could not be connected. An older report does not name its cheapest flight:
@@ -165,7 +207,7 @@ def verify_part() -> list[str]:
         for grade, counts in sorted(by_light.items())]
 
 def summary(reports: list[dict[str, Any]]) -> str:
-    return "\n".join([*funnel_part(reports), *confirmed_part(reports), "", *checks_part(reports), "", *verify_part()])
+    return "\n".join([*funnel_part(reports), *confirmed_part(reports), "", *checks_part(reports), "", *map_part(reports), "", *verify_part()])
 
 def main() -> int:
     reports = read_all()

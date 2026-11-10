@@ -97,10 +97,12 @@ async def recommend(state: dict[str, Any], messages: list[Any]) -> str:
     messages.append(AIMessage(content=text))   # what the traveller was shown is what the follow-up questions build on
     return web.only_known_links(text, report)
 
-async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) -> dict[str, Any]:
+async def plan_trip(settings: TripSettings, places: TripPlaces | None = None, from_map: dict[str, Any] | None = None) -> dict[str, Any]:
     """Plan a trip, show the result and save the report. places are the airports already chosen for it;
     without them the airports are chosen here and, if the settings ask for it, confirmed as text. With return
-    dates the way back follows, on the same airports, and the summary of the round trip comes last."""
+    dates the way back follows, on the same airports, and the summary of the round trip comes last. from_map is what
+    a Discover map said of this one-way trip when it opened the planner (app/maps.estimate_of): kept with the report,
+    to measure the map against what the planner finds (report/metrics.py), never used to plan."""
     current.SETTINGS = settings   # the tools, the checks and the texts read the trip from here
     if places is None:
         if settings.confirm_airports:
@@ -114,7 +116,7 @@ async def plan_trip(settings: TripSettings, places: TripPlaces | None = None) ->
             else:
                 show_airports(places)
     if not settings.return_dates:
-        return await plan_one_way(settings, places)
+        return await plan_one_way(settings, places, from_map=from_map)
     show(f"# {tr('way_there', origin=settings.origin, destination=settings.destination)}")
     going = await plan_one_way(settings, places)
     there = PLANNED[-1]
@@ -165,10 +167,11 @@ def start_trip(settings: TripSettings, places: TripPlaces) -> None:
     web.SEEN_DOMAINS.clear()   # a link of this trip's models is kept only if its site came up in this trip's searches
 
 async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callable[[dict], str] | None = None,
-                       beside: Path | None = None) -> dict[str, Any]:
+                       beside: Path | None = None, from_map: dict[str, Any] | None = None) -> dict[str, Any]:
     """Plan one way: search, show the result, write the recommendation and save the report. after, if given, writes
     from the result what is shown once the recommendation is (the summary of a round trip), saved at the end of the
-    report; beside is the report of the way there, which saving this one must not delete to make room."""
+    report; beside is the report of the way there, which saving this one must not delete to make room. from_map: see
+    plan_trip."""
     start_trip(settings, places)
     started = time.time()
     for advice in settings.advice():
@@ -191,6 +194,8 @@ async def plan_one_way(settings: TripSettings, places: TripPlaces, after: Callab
         "arrival_airports": codes(current.TRIP.arrival),
         "travel_dates": ",".join(settings.dates),
     })
+    if from_map:
+        response["from_map"] = from_map   # only kept with the report's numbers (report/metrics.py)
     # The result is the traveller's as soon as the code has it. What the model adds comes after, if it comes.
     show(response.get("report") or "")
     messages = [HumanMessage(content=results_for_model(build_request(settings, current.TRIP), response))]

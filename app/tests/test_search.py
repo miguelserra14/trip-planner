@@ -282,8 +282,8 @@ def test_the_process_asks_plans_reports_and_answers(monkeypatch, tmp_path):
             raise ValueError(refusals.pop())
         return places
 
-    async def plan_trip(settings, places):
-        assert places is found and settings.confirm_airports
+    async def plan_trip(settings, places, from_map=None):
+        assert places is found and settings.confirm_airports and from_map is None   # typed in, not opened from a map
         utils.say("Looking up the flights")
         utils.show("# Final result")
         print("printed by a library")

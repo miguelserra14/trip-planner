@@ -15,7 +15,8 @@ from trip_planner.report.icons import icon, mode_of
 from app.report_page import inline, lights, timeline, to_html
 from trip_planner.report.formatting import grade_text, leg_source, price_grade_text, price_source, with_day
 from trip_planner.report.summary import booking_checks
-from trip_planner.texts import tr
+from trip_planner import current
+from trip_planner.texts import say_again, tr
 from trip_planner.trip.trip_settings import LIGHTS
 from trip_planner.utils import as_duration, to_minutes
 
@@ -297,7 +298,8 @@ def results_page(data: dict[str, Any], sort: str, keep: str, address: str) -> st
                f'<p class="muted">{esc(days)} · {esc(tr("app_planned", when=planned(data["written"])))}</p></div>'
                f'<div class="links"><a class="button quiet" href="{esc(address)}?edit=1">{esc(tr("app_change_search"))}</a>{keep}</div></section>')
     warnings = (f'<details class="warnings card" open><summary>{esc(tr("app_warnings", count=len(data["warnings"])))}</summary>'
-                f'<ul>{"".join(f"<li>{inline(warning)}</li>" for warning in data["warnings"])}</ul></details>' if data["warnings"] else "")
+                f'<ul>{"".join(f"<li>{inline(say_again(warning, current.SETTINGS.language))}</li>" for warning in data["warnings"])}</ul></details>'
+                if data["warnings"] else "")
     parts = [f'<p class="back"><a href="/">{esc(tr("app_all_reports"))}</a></p>', summary, warnings]
     if data["options"]:
         if data["closest"]:

@@ -20,7 +20,8 @@ from urllib.parse import quote, urlencode
 
 from discover.airports.access import city_name
 from discover.finder import Found
-from trip_planner import current
+from discover.view.breakdown import source_health
+from trip_planner import current, utils
 from trip_planner.report.icons import sprite
 from trip_planner.texts import TEXTS, REFERENCE, text_in, tr
 from trip_planner.trip.trip_settings import LIGHT_COLOURS, TripSettings
@@ -149,7 +150,7 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
             "places": {code: [airports[code]["latitude"], airports[code]["longitude"]] for code in codes if code in airports},   # for the routes
             "discarded": found.discarded, "lookups": found.lookups, "confirm_stop": found.confirm_stop, "sections": sections,
             "coverage": found.coverage, "by_ground": found.by_ground, "fare_lookups": found.fare_lookups, "fare_stop": found.fare_stop, "phase": found.phase,
-            "asked_prices": found.asked_prices}
+            "asked_prices": found.asked_prices, "sources": source_health(found, utils.REQUESTS)}
 
 def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120,
              running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes,
@@ -183,7 +184,7 @@ PAGE = """<!doctype html>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 __STYLE__</head><body>__ICONS__
-<header><a id="back" hidden></a><h1 id="title"></h1><p id="about"></p><p id="status"></p><p class="legend" id="legend"></p></header>
+<header><a id="back" hidden></a><h1 id="title"></h1><p id="about"></p><div id="status"></div><p class="legend" id="legend"></p></header>
 <div id="filters"></div>
 <div class="split"><ol id="rows" class="cards"></ol>
 <div class="side"><div id="map"></div><p id="tiles" hidden></p><section id="detail" hidden></section></div></div>

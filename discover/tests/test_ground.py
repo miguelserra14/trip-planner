@@ -182,3 +182,64 @@ def test_a_city_is_named_after_its_station_without_the_words_for_a_station():
     name = lambda stop: ground.station_name({"stop": stop})
     assert [name("Liège, Guillemins Bf"), name("Praha hl.n."), name("Köln Hbf"), name("Rotterdam Centraal"), name("Hbf")] == [
         "Liège", "Praha", "Köln", "Rotterdam", "Hbf"]
+
+# ---------------------------------------------------------------- trains with changes
+ANTWERP = Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40)
+MUNICH = Place("Munich", "München", "Munich", "Germany", 48.14, 11.56)
+
+def station(name: str, latitude: float, longitude: float, tz: str = "Europe/Brussels") -> dict:
+    return {"name": name, "stopId": name.lower(), "lat": latitude, "lon": longitude, "tz": tz}
+
+def by_train(leaves: str, *calls: tuple, agencies: tuple = ("NMBS/SNCB", "DB Fernverkehr AG", "DB Fernverkehr AG")) -> dict:
+    """A trip of the timetables by train: calls are (station, leaves, arrives) for each train, in UTC."""
+    legs = [{"mode": "HIGHSPEED_RAIL", "agencyName": agency, "agencyUrl": "https://www.belgiantrain.be", "from": start, "to": end,
+             "startTime": f"2026-11-20T{left}:00Z", "endTime": f"2026-11-20T{reached}:00Z"}
+            for agency, (start, end, left, reached) in zip(agencies, calls)]
+    first, last = legs[0]["startTime"], legs[-1]["endTime"]
+    minutes = (int(last[11:13]) * 60 + int(last[14:16])) - (int(first[11:13]) * 60 + int(first[14:16]))
+    return {"duration": minutes * 60, "legs": [{"mode": "WALK"}, *legs]}
+
+CENTRAAL, MIDI = station("Antwerpen-Centraal", 51.22, 4.42), station("Bruxelles-Midi", 50.84, 4.34)
+FRANKFURT, MUNCHEN = station("Frankfurt (Main) Hbf", 50.11, 8.66, "Europe/Berlin"), station("München Hbf", 48.14, 11.56, "Europe/Berlin")
+TWO_CHANGES = by_train("05:54", (CENTRAAL, MIDI, "05:54", "06:29"), (MIDI, FRANKFURT, "06:34", "09:27"), (FRANKFURT, MUNCHEN, "09:50", "13:14"))
+ONE_CHANGE = by_train("07:37", (CENTRAAL, MIDI, "07:37", "08:11"), (MIDI, MUNCHEN, "08:25", "14:40"), agencies=("NS International", "Eurostar"))
+FOUR_CHANGES = by_train("09:00", *[(CENTRAAL, MIDI, "09:00", "09:30")] * 5, agencies=("NMBS/SNCB",) * 5)
+
+def test_a_trip_by_train_with_changes_is_kept_with_each_change_and_its_wait():
+    option = ground.changes_option([FOUR_CHANGES, ONE_CHANGE, TWO_CHANGES], "2026-11-20")
+    assert option["stop"] == "München Hbf" and option["from_stop"] == "Antwerpen-Centraal" and option["minutes"] == 423   # the quickest
+    assert option["changes"] == [{"at": "Bruxelles-Midi", "wait": 14}] and option["operator"] == "NS International + Eurostar"
+    assert option["times"] == ["06:54", "08:37"]   # every one that day, in local time; four changes are too many
+    two = ground.changes_option([TWO_CHANGES], "2026-11-20")
+    assert two["changes"] == [{"at": "Bruxelles-Midi", "wait": 5}, {"at": "Frankfurt (Main) Hbf", "wait": 23}]
+    assert two["operator"] == "SNCB + Deutsche Bahn"   # each train by the name OPERATORS gives it
+    assert option["grade"] == "B" and not option["sold"] and option["mode"] == "train"   # a timetable: never priced
+    assert ground.changes_option([FOUR_CHANGES], "2026-11-20") is None and ground.changes_option([ONE_CHANGE], "2026-11-21") is None
+
+class Plans:
+    """A Transitous that answers every trip with the same trains, and counts what it is asked."""
+
+    def __init__(self, answer):
+        self.answer, self.asked = answer, []
+
+    def direct(self, start, end, day, modes, days, walk_minutes=0):
+        self.asked.append((start, end, day, modes))
+        assert walk_minutes == ground.CHANGE_WALK_MINUTES   # from a city's centre, not a station
+        return self.answer
+
+def test_only_the_cities_no_train_reaches_straight_are_asked_the_nearest_first_with_the_way_back():
+    straight = {"to": "AMS", "ground": [{"operator": "NS International"}]}
+    munich, faraway, nearby = {"to": "MUC"}, {"to": "TFS"}, {"to": "BRU"}
+    airports = {"MUC": {"latitude": 48.35, "longitude": 11.79}, "TFS": {"latitude": 28.04, "longitude": -16.57},
+                "BRU": {"latitude": 50.90, "longitude": 4.48}, "AMS": {"latitude": 52.31, "longitude": 4.76}}
+    plans, followed = Plans([ONE_CHANGE]), []
+    days = Days("2026-11-20", "2026-11-20", "2026-11-23", "2026-11-23")
+    asked = ground.with_changes(ANTWERP, [straight, munich, faraway, nearby], {"MUC": MUNICH}, airports, days,
+                                after_each=lambda: followed.append(1), say=lambda text: None, transitous=plans)
+    assert asked == 2 and len(followed) == 2   # Brussels then Munich; Amsterdam has its train, Tenerife is too far
+    outs = [(end, day) for start, end, day, _ in plans.asked if start == "51.22,4.4"]
+    backs = [(start, day) for start, end, day, _ in plans.asked if end == "51.22,4.4"]
+    assert outs == [("50.9,4.48", "2026-11-20"), ("48.14,11.56", "2026-11-20")]   # the airport of Brussels; Munich's centre
+    assert backs == [("50.9,4.48", "2026-11-23"), ("48.14,11.56", "2026-11-23")] and {modes for *_, modes in plans.asked} == {"RAIL"}
+    assert munich["ground"][0]["back"] == {"day": "2026-11-23", "days": 1, "times": [], "minutes": 0}   # no train that day: said so
+    assert straight["ground"] == [{"operator": "NS International"}] and "ground" not in faraway

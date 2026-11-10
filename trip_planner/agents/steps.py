@@ -25,7 +25,7 @@ from trip_planner.report.metrics import funnel
 from trip_planner.report.summary import ground_lines, render_closest, render_report
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web
 from trip_planner.sources.timetables.all_the_way import all_the_way
-from trip_planner.texts import tr
+from trip_planner.texts import said, tr
 from trip_planner.utils import as_duration, logged, progress, REQUESTS, say, timed
 
 # What each step found, as one number for the page that waits (utils.progress)
@@ -311,16 +311,16 @@ def not_on_sale_warnings(shown: list[dict[str, Any]], ground: dict[str, Any]) ->
     for (source, days, to_airport), group in groups.items():
         travel_days = sorted(group["days"])
         from_days = [day_text(max(date.today(), date.fromisoformat(day) - timedelta(days=days)).isoformat()) for day in travel_days]
-        side = tr("sale_side_to" if to_airport else "sale_side_from", airport=listed(list(group["airports"])))
-        warnings.append(tr("warn_not_on_sale" if len(travel_days) == 1 else "warn_not_on_sale_days", source=source, days=days, side=side,
-                           day=listed([day_text(day) for day in travel_days]), from_day=listed(from_days)))
+        side = said("sale_side_to" if to_airport else "sale_side_from", airport=listed(list(group["airports"])))
+        warnings.append(said("warn_not_on_sale" if len(travel_days) == 1 else "warn_not_on_sale_days", source=source, days=days, side=side,
+                             day=listed([day_text(day) for day in travel_days]), from_day=listed(from_days)))
     return warnings
 
 def without_a_plane_part(state: dict[str, Any], recommended: dict[str, Any] | None) -> tuple:
     """The trips without a plane for the report (itineraries/ground_only.py), compared with the recommended option:
     (the trips, the warnings when one is better than it, what the coordinator reads about them)."""
     options = ground_options(state.get("all_the_way"), recommended)
-    warnings = [tr("warn_ground_beats", title=tr("ground_title"))] if any(option.get("beats") for option in options) else []
+    warnings = [said("warn_ground_beats", title=said("ground_title"))] if any(option.get("beats") for option in options) else []
     if not options:
         return options, warnings, "\n\nWithout a plane: no trip by train or coach all the way was found within the traveller's limits."
     found = "; ".join(f"{tr('ground_option')} {number}: " + (f"{option['price_eur']:.0f} EUR" if option["price_eur"] is not None else "no price")
@@ -352,6 +352,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                      for itinerary in itineraries if itinerary["not_running"]]
         kinds.update({itinerary["flight"]["id"]: "not_running" for itinerary in itineraries if itinerary["not_running"]})
         itineraries = [itinerary for itinerary in itineraries if not itinerary["not_running"]]
+        built = list(itineraries)   # every itinerary that can be made, for the funnel: a map's estimate is compared with it
 
         # Reliability comes before price: an itinerary below the minimum grade is only shown when nothing better exists
         reliable = [itinerary for itinerary in itineraries if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
@@ -362,16 +363,16 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
             kinds.update({itinerary["flight"]["id"]: "below_minimum" for itinerary in itineraries if itinerary not in reliable})
             itineraries = reliable
         elif itineraries:
-            warnings.append(tr("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
+            warnings.append(said("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
         skipped = len(state["flights"]) - len(checked)
         if skipped and state.get("stopped") == "beaten":
-            warnings.append(tr("note_flights_beaten", skipped=skipped, checked=len(checked)))
+            warnings.append(said("note_flights_beaten", skipped=skipped, checked=len(checked)))
         elif skipped:
-            warnings.append(tr("warn_flights_not_checked", skipped=skipped, checked=len(checked)))
+            warnings.append(said("warn_flights_not_checked", skipped=skipped, checked=len(checked)))
         if state.get("flight_gaps"):
-            warnings.append(tr("warn_flight_gaps", count=len(state["flight_gaps"])))
+            warnings.append(said("warn_flight_gaps", count=len(state["flight_gaps"])))
         if FAULTS:
-            warnings.append(tr("warn_program_errors", count=len(FAULTS)))
+            warnings.append(said("warn_program_errors", count=len(FAULTS)))
 
         if not itineraries:
             # Nothing respects every requirement. The same flights again, letting give way the requirements that
@@ -389,7 +390,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                             near.append(itinerary)
             reliable = [itinerary for itinerary in near if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
             if near and not reliable:
-                warnings.append(tr("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
+                warnings.append(said("warn_below_minimum", minimum=LIGHTS[current.SETTINGS.min_reliability]))
             shown = sorted(reliable or near, key=closeness)[:current.SETTINGS.options_shown]
             warnings += not_on_sale_warnings(shown, ground)
             if shown:
@@ -401,7 +402,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                 report = "\n\n".join(part for part in (no_flight_fits, render_closest(shown, warnings, by_ground)) if part)
                 return {
                     "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 1, "verify": verify.record(shown),
-                    "shown": shown, "ground_only": by_ground, "funnel": funnel(state["flights"], checked, kinds),
+                    "shown": shown, "ground_only": by_ground, "funnel": funnel(state["flights"], checked, kinds, built),
                     "message": f"{report}\n\nNo itinerary respects every requirement. The options above are the closest ones, each "
                         "breaking at least one requirement. By the order of requirements, option 1 is the closest." + ground_note}
             # No flight at all: the trips without a plane are what is left to offer
@@ -413,7 +414,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                                + ground_lines(by_ground, 0))
             return {
                 "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 0, "ground_only": by_ground,
-                "funnel": funnel(state["flights"], checked, kinds), "message": message}
+                "funnel": funnel(state["flights"], checked, kinds, built), "message": message}
 
         kept, recommended, not_worth_it = rank_itineraries(itineraries)
         kinds.update({itinerary["flight"]["id"]: "not_worth_it" for itinerary in itineraries if itinerary not in kept})
@@ -439,7 +440,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
         "ground_only": by_ground,         # the trips without a plane shown after them
         "by_date": cheapest_by_date(kept, current.SETTINGS.iso_dates),   # what each travel date would cost (report/options.py)
         "verify": verify.record(shown),   # the vehicles of the options shown, kept next to the report for --verify
-        "funnel": funnel(state["flights"], checked, kinds),
+        "funnel": funnel(state["flights"], checked, kinds, built),
         "message": f"{report}\n\nThe rules recommend option {number}." + ground_note}
 
 async def search_by_ground_only(state: dict[str, Any]) -> dict[str, Any]:

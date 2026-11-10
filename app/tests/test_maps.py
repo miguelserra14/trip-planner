@@ -125,6 +125,40 @@ def test_a_trip_of_the_map_fills_the_planners_form_by_its_key_and_searches_nothi
                  "/discover/map/2/plan/BCN-out", "/discover/map/x/plan/BCN-out", "/discover/map/1/elsewhere"):
         assert site.get(path).status == 404
 
+# A destination of a map there and back: the flight's price is the round trip's, each way has its two ways to and from the airports
+BACK = DAY + timedelta(days=3)
+DUBLIN = {"to": "DUB", "from": "BRU", "date": DAY.isoformat(), "time": "09:35", "price_eur": 59.98, "total_eur": 91.98,
+          "back": {"from": "DUB", "to": "CRL", "date": BACK.isoformat(), "time": "06:35"},
+          "access": [{"airport": "BRU", "to_airport": True, "price_eur": 7.0, "grade": "B", "price_grade": "C", "looked_up": True},
+                     {"airport": "DUB", "to_airport": False, "price_eur": 8.0, "grade": "B", "price_grade": "B", "looked_up": True},
+                     {"airport": "DUB", "to_airport": True, "price_eur": 8.0, "grade": "C", "price_grade": "B", "looked_up": False},
+                     {"airport": "CRL", "to_airport": False, "price_eur": 9.0, "grade": "B", "price_grade": "A", "looked_up": True}]}
+
+def test_what_the_map_says_of_each_way_of_a_trip_is_taken_with_the_planners_own_name_for_its_flight():
+    there = maps.estimate_of({"points": [DUBLIN]}, "DUB-out", ["Antwerp", "Dublin", WRITTEN], "/discover/map/1/")
+    assert there["flight_id"] == f"BRU-DUB-{DAY:%d%m}-0935" and there["ground_eur"] == 15.0 and there["looked_up"] and there["round_trip"]
+    assert [(leg["airport"], leg["to_airport"]) for leg in there["legs"]] == [("BRU", True), ("DUB", False)]
+    back = maps.estimate_of({"points": [DUBLIN]}, "DUB-back", ["Dublin", "Antwerp", f"{BACK:%d/%m/%Y}"], "/discover/map/1/")
+    assert back["flight_id"] == f"DUB-CRL-{BACK:%d%m}-0635" and back["ground_eur"] == 17.0 and not back["looked_up"]   # one way was estimated
+    assert maps.estimate_of({"points": [DUBLIN]}, "MAD-out", [], "") is None and maps.estimate_of({"points": [DUBLIN]}, "DUB-x", [], "") is None
+
+def test_a_search_opened_from_a_map_carries_its_estimate_only_while_the_form_keeps_that_trip():
+    site, started = site_and_jobs()
+    site.post("/discover", form(site))
+    started[0].read_event("trips", {"DUB-out": ["Antwerp", "Dublin", WRITTEN]})
+    started[0].read_event("state", {"version": 1, "running": False, "points": [DUBLIN]})
+    search = lambda **changes: urlencode({"token": site.token, "origin": "Antwerp", "destination": "Dublin", "dates": WRITTEN, **changes}).encode()
+    site.get("/discover/map/1/plan/DUB-out")
+    site.post("/search", search())
+    assert started[-1].first["from_map"]["flight_id"] == f"BRU-DUB-{DAY:%d%m}-0935" and started[-1].first["from_map"]["map"] == "/discover/map/1/"
+    site.get("/discover/map/1/plan/DUB-out")
+    started[-1].alive = False
+    site.post("/search", search(dates=f"{DAY + timedelta(days=1):%d/%m/%Y}"))   # another day: the map said nothing of it
+    assert "from_map" not in started[-1].first
+    started[-1].alive = False
+    site.post("/search", search())   # used once: a search typed in later is not the map's
+    assert "from_map" not in started[-1].first
+
 def test_the_page_of_a_map_another_one_replaced_keeps_its_own_destinations_and_trips_never_the_others():
     site, started = site_and_jobs()
     for number, city in enumerate(["Coimbra", "Porto"] + ["Faro"] * (maps.MAPS_KEPT - 1)):

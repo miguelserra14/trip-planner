@@ -144,6 +144,27 @@ def test_the_radar_gives_each_known_route_not_found_its_reason(known, monkeypatc
     assert "left out" in reasons["ORY"] and "not among the ones asked" in reasons["KEF"]
     assert "TO" in radar["note"] and "FI" in radar["note"]   # airlines known there that no answer mentions
 
+def test_the_sources_that_failed_come_first_each_with_what_it_answered():
+    log = [{"service": "Ryanair", "what": "every destination from OPO", "result": "ok"},
+           {"service": "Transitous", "what": "plan", "result": "ok"},
+           {"service": "Transitous", "what": "plan", "result": "HTTPStatusError: 503 Service Unavailable"},
+           {"service": "Rede Expressos", "what": "coaches", "result": "ok: not on sale yet"},   # an answer, not a failure
+           {"service": "Obilet", "what": "rides to OPO", "result": "RuntimeError: Cloudflare challenge"},
+           {"service": "model call", "what": "gemini-3.1-flash-lite", "result": "ok"},
+           {"service": "program", "what": "itinerary of F1", "result": "KeyError: 'to'"}]   # a mistake, not a source
+    found = found_with([], kiwi_refused="429 Too Many Requests")
+    health = {row["name"]: row for row in breakdown.source_health(found, log)}
+    assert [row["name"] for row in breakdown.source_health(found, log)][:3] == ["Kiwi", "Obilet", "Transitous"]
+    assert health["Transitous"] == {"name": "Transitous", "asked": 2, "failed": 1, "error": "HTTPStatusError: 503 Service Unavailable", "why": ""}
+    assert health["Obilet"]["failed"] == health["Obilet"]["asked"] == 1 and "Cloudflare" in health["Obilet"]["error"]
+    assert "429" in health["Kiwi"]["why"] and health["Kiwi"]["asked"] == 0   # refused: the requests after it were never sent
+    assert health["Rede Expressos"]["failed"] == 0 and "AI model" in health and "program" not in health
+
+def test_a_map_says_why_kiwi_was_not_asked_at_all():
+    found = found_with([], kiwi=False, kiwi_why="Kiwi did not answer when the map was made")
+    assert breakdown.source_health(found, []) == [{"name": "Kiwi", "asked": 0, "failed": 0, "error": "",
+                                                   "why": "Kiwi did not answer when the map was made"}]
+
 # ---------------------------------------------------------------- the page and the arguments
 def test_a_name_cannot_break_the_page(monkeypatch):
     monkeypatch.setattr(page, "load_airports", lambda: {"XXX": {"city": "</script><b>x", "name": "", "country": "PT", "latitude": 1.0, "longitude": 2.0}})

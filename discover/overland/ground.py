@@ -38,7 +38,7 @@ from trip_planner.texts import tr
 from trip_planner.trip.ground_choice import is_rail
 from trip_planner.trip.places import distance_km, Place
 from trip_planner.trip.trip_settings import USER_AGENT
-from trip_planner.utils import plain, say as print_line, write_whole
+from trip_planner.utils import logged, plain, say as print_line, write_whole
 
 # The operators shown, by the start of their name in Transitous (lower case): the name shown and where to buy
 OPERATORS = {
@@ -108,6 +108,17 @@ SAME_VEHICLE_MINUTES = 15  # two operators leaving at the same time and arriving
 MAX_BACK_REQUESTS = 60     # ways back asked for per map, once it is open: a minute and a half of timetables
 BACK_WINDOW_DAYS = 3       # the way back is looked for over the first days to come back on, at most this many
 SPACING_SECONDS = 1.5      # between two requests: Transitous is a free community service
+# Trains with changes (with_changes): the cities of the map that no train or bus reaches straight, asked of the
+# timetables as a whole trip by rail from the traveller's city, the nearest first. One request a city, two for a
+# return trip: MAX_CHANGE_CITIES of them take a minute or two of Transitous, once the map is open.
+MAX_CHANGE_CITIES = 15
+MAX_TRAIN_CHANGES = 2      # more changes than this is not a trip to offer next to a flight
+MAX_CHANGE_KM = 1500       # nor farther than this, nor longer on board than MAX_CHANGE_HOURS
+MAX_CHANGE_HOURS = 14
+CHANGE_MODES = "RAIL"      # every train, regional ones included: the way to the first long-distance one is often one
+# The trip is asked from the city's centre to the other's: Transitous walks only a few minutes to a station by default,
+# and found no train from Antwerp's centre, 1.2 km from its station (2026-11-10). As the planner's city_walk_minutes
+CHANGE_WALK_MINUTES = 30
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]   # by datetime.weekday(), whatever the language of the computer
 
 def read() -> dict[str, Any]:
@@ -165,7 +176,8 @@ class Transitous:
     def get(self, path: str, **params) -> Any:
         time.sleep(max(0.0, self.last + SPACING_SECONDS - time.time()))
         try:
-            return self.http.get(f"{TRANSITOUS_API}/{path}", params=params).raise_for_status().json()
+            with logged("Transitous", f"{path} " + ", ".join(f"{name}={value}" for name, value in params.items())[:200]):
+                return self.http.get(f"{TRANSITOUS_API}/{path}", params=params).raise_for_status().json()
         finally:
             self.last = time.time()
 
@@ -186,11 +198,13 @@ class Transitous:
     def trip(self, trip_id: str) -> dict[str, Any]:
         return self.get("trip", tripId=trip_id)
 
-    def direct(self, start: str, end: str, day: str, modes: str, days: int) -> list[dict[str, Any]]:
+    def direct(self, start: str, end: str, day: str, modes: str, days: int, walk_minutes: int = 0) -> list[dict[str, Any]]:
         """The connections between two stations over days from a day, by these modes. Transitous refuses to be
-        asked for no change at all (it then answers nothing), so the direct ones are kept by the caller."""
+        asked for no change at all (it then answers nothing), so the direct ones are kept by the caller. Between two
+        places that are not stations, walk_minutes is how far each may be from its first or last one."""
+        walk = {"maxPreTransitTime": walk_minutes * 60, "maxPostTransitTime": walk_minutes * 60} if walk_minutes else {}
         return self.get("plan", fromPlace=start, toPlace=end, time=f"{day}T00:00:00Z", transitModes=modes,
-                        searchWindow=days * 24 * 3600, numItineraries=40).get("itineraries") or []
+                        searchWindow=days * 24 * 3600, numItineraries=40, **walk).get("itineraries") or []
 
 def patterns(departures: list[dict[str, Any]]) -> dict[tuple, dict[str, Any]]:
     """One train or bus of each pattern, (operator, where it goes): the same one runs at several times and on
@@ -312,8 +326,9 @@ def cities() -> list[dict[str, Any]]:
         return CITY_LIST
     try:
         if not CITIES.exists():
-            response = httpx.get(CITIES_URL, headers={"User-Agent": USER_AGENT}, timeout=120, follow_redirects=True)
-            response.raise_for_status()
+            with logged("GeoNames", "the cities of more than 15000 people"):
+                response = httpx.get(CITIES_URL, headers={"User-Agent": USER_AGENT}, timeout=120, follow_redirects=True)
+                response.raise_for_status()
             with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
                 rows = archive.read("cities15000.txt").decode("utf-8").splitlines()
             kept = [f"{c[1]}\t{c[8]}\t{c[4]}\t{c[5]}\t{c[14]}" for c in (row.split("\t") for row in rows) if len(c) > 14 and c[7] != "PPLX"]
@@ -418,6 +433,92 @@ def way_back(option: dict[str, Any], days: Days, transitous: Transitous) -> dict
             times.append(leaves.strftime("%d/%m %H:%M"))
             minutes.append(round(itinerary["duration"] / 60))
     return {"day": first.isoformat(), "days": span, "times": sorted(set(times)), "minutes": min(minutes, default=0)}
+
+def by_rail(itinerary: dict[str, Any], day: str) -> dict[str, Any] | None:
+    """One trip of the timetables by train with at most MAX_TRAIN_CHANGES changes and MAX_CHANGE_HOURS on board,
+    leaving on day where it leaves: its trains, when it leaves, how long it takes and each change with its wait, in
+    minutes. None for any other."""
+    trains = [leg for leg in itinerary.get("legs") or [] if leg["mode"] != "WALK"]
+    if not trains or len(trains) - 1 > MAX_TRAIN_CHANGES or itinerary.get("duration", 0) > MAX_CHANGE_HOURS * 3600:
+        return None
+    leaves = local(trains[0]["startTime"], trains[0]["from"].get("tz", ""))
+    if leaves.date().isoformat() != day:
+        return None
+    return {"trains": trains, "leaves": leaves, "minutes": round(itinerary["duration"] / 60),
+            "changes": [{"at": first["to"]["name"], "wait": round((moment(second["startTime"]) - moment(first["endTime"])).total_seconds() / 60)}
+                        for first, second in zip(trains, trains[1:])]}
+
+def operator_name(leg: dict[str, Any]) -> str:
+    """The name a train is shown under: the one of OPERATORS or RAIL_OPERATORS, else its timetable's, without the
+    kind of company it is."""
+    known = operator_of(leg.get("agencyName", ""), leg.get("mode", ""), leg["from"].get("stopId", ""))
+    return known[0] if known else COMPANY.sub("", (leg.get("agencyName") or "").strip()) or "?"
+
+def changes_option(found: list[dict[str, Any]], day: str) -> dict[str, Any] | None:
+    """The trips by train with changes of one day (by_rail) as one option of a city, as to_city gives the straight
+    ones: the quickest one's stations, trains and changes, and the times every one of them leaves at. Timetable only
+    (grade B), no price: no operator sells the whole of a trip of several to a program. None when there is none."""
+    rides = sorted((ride for ride in (by_rail(itinerary, day) for itinerary in found) if ride), key=lambda ride: ride["minutes"])
+    if not rides:
+        return None
+    quickest = rides[0]
+    first, last = quickest["trains"][0], quickest["trains"][-1]
+    return {"stop": last["to"]["name"], "stop_id": last["to"].get("stopId", ""), "lat": last["to"]["lat"], "lon": last["to"]["lon"],
+            "from_stop": first["from"]["name"], "from_stop_id": first["from"].get("stopId", ""),
+            "from_lat": first["from"]["lat"], "from_lon": first["from"]["lon"],
+            "operator": " + ".join(dict.fromkeys(operator_name(leg) for leg in quickest["trains"])),
+            "site": secure_url(first.get("agencyUrl")) or "", "sold": "", "modes": CHANGE_MODES, "mode": "train",
+            "minutes": quickest["minutes"], "times": sorted({ride["leaves"].strftime("%H:%M") for ride in rides}),
+            "weekdays": [WEEKDAYS[date.fromisoformat(day).weekday()]], "grade": "B", "changes": quickest["changes"], "day": day}
+
+def changes_back(home: tuple[float, float], there: tuple[float, float], days: Days, transitous: Transitous) -> dict[str, Any] | None:
+    """The way back of a trip by train with changes, as way_back gives a straight one: on the first day to come back
+    on, the times its trips leave at and the quickest; None when the timetables could not be asked."""
+    day = days.back_days[0] if days.back_days else days.back_first
+    try:
+        found = transitous.direct(f"{there[0]},{there[1]}", f"{home[0]},{home[1]}", day, CHANGE_MODES, 1, CHANGE_WALK_MINUTES)
+    except (httpx.HTTPError, ValueError):
+        return None
+    rides = [ride for ride in (by_rail(itinerary, day) for itinerary in found) if ride]
+    return {"day": day, "days": 1, "times": sorted({ride["leaves"].strftime("%d/%m %H:%M") for ride in rides}),
+            "minutes": min((ride["minutes"] for ride in rides), default=0)}
+
+def with_changes(place: Place, destinations: list[dict[str, Any]], centres: dict[str, Place], airports: dict[str, Any], days: Days,
+                 after_each: Callable[[], None] = lambda: None, say: Callable = print_line, transitous: Transitous | None = None) -> int:
+    """Trains with changes to the cities of the map that no train or bus reaches straight (look_up found none), the
+    nearest MAX_CHANGE_CITIES between MATCH_KM and MAX_CHANGE_KM, on the first day of the trip: one option each under
+    "ground" when there is one, with its way back on a return trip. after_each is called after each city (the page
+    follows, a map being stopped stops there). Returns how many cities were asked."""
+    wanted = []
+    for flight in destinations:
+        if flight.get("ground"):
+            continue
+        centre, airport = centres.get(flight["to"]), airports.get(flight["to"]) or {}
+        there = (centre.latitude, centre.longitude) if centre else (airport.get("latitude"), airport.get("longitude"))
+        if there[0] is None:
+            continue
+        km = distance_km(place.latitude, place.longitude, *there)
+        if MATCH_KM < km <= MAX_CHANGE_KM:
+            wanted.append((km, flight, there))
+    wanted = sorted(wanted, key=lambda entry: entry[0])[:MAX_CHANGE_CITIES]
+    if not wanted:
+        return 0
+    transitous = transitous or Transitous()
+    say(tr("discover_say_ground_changes", count=len(wanted), place=place.label))
+    day = days.out_days[0] if days.out_days else days.first
+    home = (place.latitude, place.longitude)
+    for _, flight, there in wanted:
+        try:
+            option = changes_option(transitous.direct(f"{home[0]},{home[1]}", f"{there[0]},{there[1]}", day, CHANGE_MODES, 1, CHANGE_WALK_MINUTES), day)
+        except (httpx.HTTPError, ValueError):
+            option = None   # this city only: the others are still asked
+        if option is not None:
+            if days.round_trip:
+                option["back"] = changes_back(home, there, days, transitous)
+            for each in [flight, *flight.get("also", [])]:
+                each["ground"] = [option]
+        after_each()
+    return len(wanted)
 
 def stations_reached(place: Place, today: date, say: Callable = print_line, transitous: Transitous | None = None) -> list[dict[str, Any]] | None:
     """from_city, or None when Transitous fails: the map then shows no train or bus. It needs only the place, so

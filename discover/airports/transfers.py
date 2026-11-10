@@ -25,7 +25,7 @@ from trip_planner.itineraries.estimates import ROAD_FACTOR
 from trip_planner.itineraries.legs import MAX_PLAUSIBLE_EUR_PER_KM
 from trip_planner.trip.places import airport_from, Place
 from trip_planner.texts import tr
-from trip_planner.utils import message_text, plain, write_whole
+from trip_planner.utils import logged, message_text, plain, write_whole
 
 CACHE = Path(__file__).parents[1] / "cache"
 TRANSFERS = CACHE / "airport_transfers.json"   # what was found for each airport
@@ -211,7 +211,8 @@ def tavily_extract(url: str) -> str:
     from trip_planner.sources import web
     if web.tavily_client is None:
         web.tavily_client = TavilyClient()
-    found = web.tavily_client.extract(urls=[url])
+    with logged("Tavily", f"read {url}"):
+        found = web.tavily_client.extract(urls=[url])
     return next((page.get("raw_content") or "" for page in found.get("results") or []), "")
 
 def tavily_search(query: str) -> list[dict[str, str]]:
@@ -229,7 +230,8 @@ def ask_model(airport: dict[str, Any], city: str, sources: list[dict[str, str]])
     last = None
     for name in [models.SUBAGENT_MODEL, *models.backup_models()]:
         try:
-            answer = message_text(init_chat_model(name, max_retries=2, temperature=0).invoke(asked))
+            with logged(models.CALL_SERVICE, name.split(":", 1)[-1]):   # as the planner's calls: plan B shows by its name
+                answer = message_text(init_chat_model(name, max_retries=2, temperature=0).invoke(asked))
             found = json.loads(re.sub(r"^```(?:json)?|```$", "", answer.strip(), flags=re.MULTILINE))
             return [option for option in found.get("options") or [] if isinstance(option, dict)]
         except Exception as error:

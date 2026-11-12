@@ -43,8 +43,10 @@ class Stopped(Exception):
     """Raised by look_up's own callbacks when the session is asked to stop, to leave the lookups between two cities."""
 
 def times() -> dict[str, int]:
-    """The planner's times at the airports (settings.py), for the time in the city of each trip (page.stay)."""
-    return {"airport_minutes": SETTINGS.min_airport_minutes, "landing_minutes": SETTINGS.min_landing_minutes}
+    """The planner's times at the airports (settings.py), for the time in the city of each trip (page.stay), and
+    the least grade of the times it shows a trip with when it has a better one (page.map_state, below_minimum)."""
+    return {"airport_minutes": SETTINGS.min_airport_minutes, "landing_minutes": SETTINGS.min_landing_minutes,
+            "min_reliability": SETTINGS.min_reliability}
 
 class Session:
     def __init__(self, city: str, days: Days, fast: bool = False, light: bool = False, max_stops: int = finder.MAX_STOPS,

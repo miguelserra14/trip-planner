@@ -144,7 +144,9 @@ env\.venv\Scripts\python main.py --terminal   the trip in settings.py, in the te
 env\.venv\Scripts\python main.py --check      check the services
 env\.venv\Scripts\python main.py --verify     whether the connections of the reports kept really ran (trip_planner/tools/verify.py)
 env\.venv\Scripts\python main.py --prices     ask again the ground prices of the reports read over a day ago (trip_planner/tools/prices.py)
-env\.venv\Scripts\python main.py --funnel     the reports kept, added up: cheap flights that could not be connected, what code corrected in the models' text, plan B (trip_planner/tools/funnel.py)
+env\.venv\Scripts\python main.py --funnel     the reports kept, added up: cheap flights that could not be connected, what code corrected in the models' text, plan B, Discover against the planner (trip_planner/tools/funnel.py)
+env\.venv\Scripts\python -m app.sample Coimbra 03/12/2026   a Discover map, then the planner on six of its trips, to measure the map (app/sample.py)
+env\.venv\Scripts\python main.py --funnel reports/sample   those batches added up
 
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map as a file (discover/maps/), leaving between the two days
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back

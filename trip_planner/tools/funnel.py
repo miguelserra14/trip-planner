@@ -1,4 +1,5 @@
-"""What the reports kept say, added up: python main.py --funnel
+"""What the reports kept say, added up: python main.py --funnel, or --funnel <folder> for another one's
+(python main.py --funnel reports/sample, the batches of app/sample.py).
 
 A flight search site stops at the airport. Each report keeps, with its options as data, the numbers of its search
 (report/metrics.py). This adds them up over every report kept, recent and saved, and prints:
@@ -9,7 +10,9 @@ A flight search site stops at the airport. Each report keeps, with its options a
 - what code did to what the models wrote: colours put right, claims pointed out, times no step gave, links left out;
 - the models: calls, failures, calls answered by plan B, which model wrote the recommendation;
 - Discover against the planner: of the searches a map opened, how often the planner proved the map's flight
-  impossible, and how far the map's prices were, for the dots looked up in the timetables and the estimated ones;
+  impossible or left the map's trip out by its own rules, how far the map's prices were from the planner's for the
+  same flight and from the cheapest option it showed, for the dots looked up in the timetables and the estimated
+  ones, and apart where the planner itself had only a guess for its ways to and from the airports;
 - what python main.py --verify found so far: of the vehicles shown, how many ran, by the light they were given.
 
 Reports made before the numbers were kept have the funnel only in words, in the Markdown report: it is read from
@@ -24,17 +27,20 @@ from pathlib import Path
 from typing import Any
 
 from trip_planner.itineraries.legs import PROVEN
+from trip_planner.report import full
 from trip_planner.report.full import options_of, report_files
 from trip_planner.texts import TEXTS
 from trip_planner.tools.prices import PRICE_VALID_HOURS
 from trip_planner.tools.verify import answers, OUTCOMES
-from trip_planner.trip.trip_settings import LIGHTS
+from trip_planner.trip.trip_settings import LIGHTS, TripSettings
 
 # The texts of a rejection a real timetable or an operator proves, to read it in an older report, with its kind
 PROVEN_KEYS = {"reject_not_running": "not_running", "reject_no_real_connection": "timetable",
                "reject_no_connection_after_landing": "timetable"}
 # The kinds of the ranking an older report can tell by their text; any other reason is "other"
 OTHER_KEYS = {"reject_below_minimum": "below_minimum", "reject_not_worth_it": "not_worth_it", "reject_program_error": "program"}
+# A guess this small in the planner's ways to and from the airports (a metro ticket) still counts as priced from fares
+GUESS_EUR = TripSettings.small_estimate_eur
 
 def pattern(key: str) -> re.Pattern:
     """A text of every language as a regular expression, each {value} matching anything."""
@@ -96,12 +102,31 @@ def spread(differences: list[float], unit: str, near: tuple[float, ...]) -> str:
                        for limit in near)
     return f"median {statistics.median(differences):+.0f}{unit}, {within}"
 
+def shown(pair: dict[str, Any]) -> bool:
+    """Whether the planner showed the map's very trip among its options."""
+    return "total_eur" in pair["planner"] and not pair["planner"].get("left_out")
+
+def pair_row(pair: dict[str, Any]) -> str:
+    """One search a map opened: the map's price, the planner's for the same flight, whether it showed it (or the kind
+    of reason it left it out), and the cheapest option it showed."""
+    planner, (origin, destination, _) = pair["planner"], pair["trip"]
+    same = planner.get("total_eur")
+    outcome = "shown" if shown(pair) else planner.get("left_out") or ("no itinerary" if planner["found"] else "flight not found")
+    money = lambda value: f"{value:.0f}" if value is not None else "-"
+    difference = f"{(same - pair['total_eur']) / pair['total_eur']:+.0%}" if same and pair.get("total_eur") and not pair["round_trip"] else "-"
+    return (f"  {origin[:12]:<12} {destination[:18]:<18} {'ring' if pair['looked_up'] else 'est.':<4} {money(pair.get('total_eur')):>5} "
+            f"{money(same):>7} {difference:>5}  {outcome:<16} {money(planner.get('cheapest_eur')):>8}")
+
 def map_part(reports: list[dict[str, Any]]) -> list[str]:
     """Discover against the planner: for each search a map opened (report/metrics.py, from_map), whether the planner
-    could make the map's very flight, and how far the map's prices were from the planner's (the planner's less the
-    map's: positive when the map promised too little). Only searches run within PRICE_VALID_HOURS of the click count:
-    later, prices change for reasons that are not the map's. A map there and back gives the flight's price for the
-    round trip: only its ways to and from the airports are compared; a one-way map's whole trip is compared too."""
+    could make the map's very flight, whether it showed that trip or left it out by its own rules, how far the map's
+    prices were from the planner's for the same flight (the planner's less the map's: positive when the map promised
+    too little), and how far the cheapest option the planner showed was from the map's price: what someone who
+    clicked on the map then found. Only searches run within PRICE_VALID_HOURS of the click count: later, prices
+    change for reasons that are not the map's. A map there and back gives the flight's price for the round trip:
+    only its ways to and from the airports are compared; a one-way map's whole trip is compared too.
+    The pairs are also split by how the planner priced its own ways to and from the airports: where it has only a
+    guess for more than GUESS_EUR of them, two estimates are compared, not the map against a real fare."""
     late = lambda report: (datetime.fromisoformat(report["written"]) - datetime.fromisoformat(report["from_map"]["clicked"])
                            > timedelta(hours=PRICE_VALID_HOURS))
     opened = [report for report in reports if report.get("from_map") and report.get("written")]
@@ -109,22 +134,38 @@ def map_part(reports: list[dict[str, Any]]) -> list[str]:
     if not pairs:
         return ["Discover against the planner: no search opened from a map yet" + (f" within {PRICE_VALID_HOURS} hours of the click." if opened else ".")]
     lines = [f"Discover against the planner: {len(pairs)} searches opened from a map within {PRICE_VALID_HOURS} hours"
-             + (f" ({len(opened) - len(pairs)} later ones left out)" if len(opened) > len(pairs) else "") + "."]
-    for name, group in (("every dot", pairs), ("dark ring: looked up in the timetables", [pair for pair in pairs if pair["looked_up"]]),
-                        ("estimated ways", [pair for pair in pairs if not pair["looked_up"]])):
+             + (f" ({len(opened) - len(pairs)} later ones left out)" if len(opened) > len(pairs) else "") + ".",
+             f"  {'from':<12} {'to':<18} {'dot':<4} {'map':>5} {'planner':>7} {'diff':>5}  {'the map trip':<16} {'cheapest':>8}",
+             *map(pair_row, pairs)]
+    guess = lambda pair: pair["planner"].get("guessed_eur")
+    groups = (("every dot", pairs), ("dark ring: looked up in the timetables", [pair for pair in pairs if pair["looked_up"]]),
+              ("estimated ways", [pair for pair in pairs if not pair["looked_up"]]),
+              (f"planner's ways priced from fares (a guess of at most {GUESS_EUR:g} EUR)",
+               [pair for pair in pairs if guess(pair) is not None and guess(pair) <= GUESS_EUR]),
+              (f"planner's ways partly a guess (over {GUESS_EUR:g} EUR)", [pair for pair in pairs if guess(pair) is not None and guess(pair) > GUESS_EUR]))
+    for name, group in groups:
         if not group:
             continue
         made = [pair for pair in group if "total_eur" in pair["planner"]]
         proven = sum(pair["planner"].get("left_out") in PROVEN for pair in group)
+        ruled = Counter(pair["planner"]["left_out"] for pair in made if pair["planner"].get("left_out"))
         line = (f"  {name} ({len(group)}): flight not found by the planner {sum(not pair['planner']['found'] for pair in group)}, "
-                f"proven impossible {proven} ({proven / len(group):.0%}), itinerary made {len(made)}")
+                f"proven impossible {proven} ({proven / len(group):.0%}), itinerary made {len(made)}, "
+                f"shown by the planner {sum(map(shown, group))}"
+                + (" (left out by its rules: " + ", ".join(f"{kind} {number}" for kind, number in sorted(ruled.items())) + ")" if ruled else ""))
         ground = [pair["planner"]["total_eur"] - pair["planner"]["flight_eur"] - pair["ground_eur"] for pair in made]
+        one_way = [pair for pair in group if not pair["round_trip"] and pair.get("total_eur")]
         whole = [(pair["planner"]["total_eur"] - pair["total_eur"]) / pair["planner"]["total_eur"] * 100
-                 for pair in made if not pair["round_trip"] and pair.get("total_eur") and pair["planner"]["total_eur"]]
+                 for pair in made if pair in one_way and pair["planner"]["total_eur"]]
+        found = [(pair["planner"]["cheapest_eur"] - pair["total_eur"]) / pair["total_eur"] * 100
+                 for pair in one_way if pair["planner"].get("cheapest_eur")]
         if ground:
             line += f". To and from the airports: {spread(ground, ' EUR', (5, 10))}"
         if whole:
             line += f". Door to door, one-way maps: {spread(whole, '%', (10, 20))}"
+        if found:
+            line += (f". The planner's cheapest option against the map's price: median {statistics.median(found):+.0f}%, "
+                     f"{sum(difference <= 20 for difference in found) / len(found):.0%} at most 20% dearer")
         lines.append(line + ".")
     return lines
 
@@ -209,7 +250,13 @@ def verify_part() -> list[str]:
 def summary(reports: list[dict[str, Any]]) -> str:
     return "\n".join([*funnel_part(reports), *confirmed_part(reports), "", *checks_part(reports), "", *map_part(reports), "", *verify_part()])
 
-def main() -> int:
+def main(folder: Path | None = None) -> int:
+    """Every report kept, or those of another folder, such as reports/sample (app/sample.py)."""
+    if folder is not None:
+        if not folder.is_dir():
+            print(f"{folder} is not a folder.")
+            return 1
+        full.REPORTS, full.SAVED_REPORTS = folder, folder / "saved"
     reports = read_all()
     if not reports:
         print("No report keeps its flights yet: plan a trip first.")

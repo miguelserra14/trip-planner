@@ -14,6 +14,7 @@ over every report kept by tools/funnel.py (python main.py --funnel). Nothing her
 from typing import Any
 
 from trip_planner.agents.models import CALL_SERVICE, is_backup
+from trip_planner.report.formatting import price_source
 from trip_planner.utils import COUNTS, failed, REQUESTS
 
 COORDINATOR = "coordinator, "   # how the coordinator's calls are named in the log (agents/coordinator.py)
@@ -21,14 +22,22 @@ COORDINATOR = "coordinator, "   # how the coordinator's calls are named in the l
 def funnel(flights: list[dict[str, Any]], checked: set[str], kinds: dict[str, str],
            built: list[dict[str, Any]] = ()) -> dict[str, Any]:
     """The funnel of a search: flights is every flight found, checked the ids looked up, kinds the kind of reason of
-    each flight left out, by id, built every itinerary that could be made, shown or not (steps.build_itineraries)."""
+    each flight left out, by id, built every itinerary that could be made, shown or not (steps.build_itineraries).
+    Each itinerary keeps its total, its ticket and how much of its ways to and from the airports is priced by a
+    guess (guessed_eur: a price of grade C, a model's or one from the distance)."""
     price = {flight["id"]: flight["price_eur"] for flight in flights}
     cheapest = min(price, key=price.get, default=None)
     return {"found": len(flights), "checked": len(checked),
             "cheapest_flight": cheapest, "cheapest_ticket_eur": price.get(cheapest),
             "left_out": [{"flight": flight, "ticket_eur": price.get(flight), "why": why} for flight, why in kinds.items()],
             "itineraries": {itinerary["flight"]["id"]: {"total_eur": round(itinerary["total_cost"], 2),
-                                                        "flight_eur": round(itinerary["flight_price"], 2)} for itinerary in built}}
+                                                        "flight_eur": round(itinerary["flight_price"], 2),
+                                                        "guessed_eur": guessed(itinerary)} for itinerary in built}}
+
+def guessed(itinerary: dict[str, Any]) -> float:
+    """How much of an itinerary's ways to and from its airports is priced by a guess (grade C)."""
+    legs = [itinerary.get(end) or {} for end in ("to", "from")]
+    return round(sum(leg.get("price_eur") or 0 for leg in legs if leg.get("price_kind") and price_source(leg["price_kind"])[1] == "C"), 2)
 
 def watched(estimate: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
     """What the planner made of the flight a Discover map opened it on (app/maps.estimate_of): whether it found that

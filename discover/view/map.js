@@ -50,6 +50,9 @@ const before = (date, time, minutes) => { const moment = new Date(new Date(date 
   return [moment.getFullYear() + "-" + two(moment.getMonth() + 1) + "-" + two(moment.getDate()), two(moment.getHours()) + ":" + two(moment.getMinutes())]; };
 const worst = legs => legs.reduce((grade, leg) => [grade, leg.grade, leg.price_grade].sort().pop(), "A");
 const fromTo = (start, end) => t("from_to", {from: start, to: end});
+// The least grade of the times the planner shows a trip with when it has a better one, in words (page.map_state below_minimum)
+const leastGrade = () => t({A: "grade_a", B: "grade_b"}[data.min_reliability] || "grade_c");
+const DASHED = "3 3";   // the border of a dot whose trip has times below that grade
 
 document.documentElement.lang = data.locale;
 document.getElementById("title").textContent = t(data.round_trip ? "title_return" : "title_one_way", {origin: data.origin.name});
@@ -59,6 +62,7 @@ document.getElementById("searched-title").textContent = t("searched_title");
 const legend = document.getElementById("legend");
 colours.forEach((colour, i) => { const dot = document.createElement("span"); dot.style.background = colour; legend.append(dot, i === 0 ? t("legend_cheapest") : i === colours.length - 1 ? t("legend_dearest") : ""); });
 legend.append(" · " + t("legend_ring_short"));   // the long ones are under the status's "more details"
+if (state.points.some(p => p.below_minimum)) legend.append(" · " + t("legend_below_short"));
 const GROUND_COLOUR = "#7a4fd6";   // a city reached by train or bus only: no price, so none of the price colours
 if ((state.by_ground || []).length) {
   const ring = document.createElement("span"); ring.style.border = "2px solid " + GROUND_COLOUR; ring.style.width = ring.style.height = "6px";
@@ -637,6 +641,7 @@ function explain(p, scroll) {
   add(panel, "p", t("total_line", {total: eur(p.total_eur), stay: p.stay ? ", " + t("in_the_city", {stay: stayText(p.stay)}) : "",
                                    flights: t(p.back ? "flights_there_back" : "flight_one"), price: eur(p.price_eur), source: p.source, ground: eur(p.ground_eur)})
       + " " + (p.confirmed ? t("all_looked_up") : t("not_all_looked_up")), "muted");
+  if (p.below_minimum) add(panel, "p", t("below_minimum_note", {grade: leastGrade()}), "warn");
   if (p.also && p.also.length)
     add(panel, "p", t("also_to", {city: p.name, others: p.also.map(other => place(other.to) + " " + t("from_airport", {airport: other.from}) + ", " + eur(other.total_eur)
         + " (" + (other.access && other.access.every(leg => leg.looked_up) ? t("looked_up") : t("estimated")) + ")").join("; ")}), "muted");
@@ -792,7 +797,8 @@ function groundCount() {
 // hidden. A train or bus with no price yet is not hidden by the price. leave is the earliest hour the outward
 // flight, or the train or bus, may leave at, arrive the latest it may arrive at, null for any: a way arriving the
 // next day is let through by no limit.
-const filter = {flights: true, train: true, bus: true, price: null, hours: null, leave: null, arrive: null, country: "", looked: false, direct: false};
+const filter = {flights: true, train: true, bus: true, price: null, hours: null, leave: null, arrive: null, country: "", looked: false, direct: false,
+                reliable: false};
 const SHOW_ALL = {...filter};   // what "show all" brings the filters back to
 const regions = (() => { try { return new Intl.DisplayNames([data.locale, "en"], {type: "region"}); } catch (error) { return null; } })();
 const countryName = code => { try { return (regions && regions.of(code)) || code; } catch (error) { return code; } };
@@ -810,7 +816,7 @@ const groundInHours = option => {
 };
 const shownFlight = p => filter.flights && (filter.price === null || p.total_eur <= filter.price)
   && (filter.hours === null || !p.minutes || p.minutes <= filter.hours * 60) && flightInHours(p)
-  && (!filter.country || p.country === filter.country) && (!filter.looked || p.confirmed)
+  && (!filter.country || p.country === filter.country) && (!filter.looked || p.confirmed) && (!filter.reliable || !p.below_minimum)
   && (!filter.direct || (!p.stops && (!p.back || !p.back.stops)));   // direct both ways
 // The trains and buses of a city, with a flight or not, let through by the boxes of their modes, the hours on board,
 // the country, and the price when they have one
@@ -887,6 +893,7 @@ function describeFilters() {
   select.value = filter.country;
   select.onchange = () => { filter.country = select.value; draw(); };
   check("looked", t("filter_looked"));
+  if (state.points.some(p => p.below_minimum)) check("reliable", t("filter_reliable", {grade: leastGrade()}));
   const reset = add(box, "button", t("show_all"));
   reset.onclick = () => { Object.assign(filter, SHOW_ALL); describeFilters(); draw(); };
   add(box, "span", "", "count").id = "count";
@@ -942,8 +949,10 @@ function draw() {
     const both = byLand.has(p), colour = colours[band(both ? cityPrice(p) : p.total_eur)];
     if (both)
       L.circleMarker([p.lat, p.lon], {radius: 10, color: GROUND_COLOUR, weight: 2, fill: false, interactive: false}).addTo(markers);
-    L.circleMarker([p.lat, p.lon], {radius: 7, fillColor: colour, color: p.confirmed ? "#1d1d1f" : colour, fillOpacity: 0.85, weight: p.confirmed ? 2 : 1})
-      .addTo(markers).bindTooltip(tip(p.name + " · " + eur(p.total_eur) + (p.stay ? " · " + stayText(p.stay) : "") + (both ? groundText(p) : "") + (p.confirmed ? " · " + t("looked_up") : ""))).on("click", () => explain(p));
+    L.circleMarker([p.lat, p.lon], {radius: 7, fillColor: colour, color: p.confirmed ? "#1d1d1f" : colour, fillOpacity: 0.85,
+                                    weight: p.confirmed || p.below_minimum ? 2 : 1, dashArray: p.below_minimum ? DASHED : null})
+      .addTo(markers).bindTooltip(tip(p.name + " · " + eur(p.total_eur) + (p.stay ? " · " + stayText(p.stay) : "") + (both ? groundText(p) : "")
+                                      + (p.confirmed ? " · " + t("looked_up") : "") + (p.below_minimum ? " · " + t("below_minimum_tip") : ""))).on("click", () => explain(p));
     // Its card: the city and the total in the colour of its dot, the way there and back, what the total is made of
     // and how far the ways to and from the airports were looked up
     const card = add(rows, "li", undefined, "city");
@@ -966,6 +975,7 @@ function draw() {
         + eur(p.ground_eur) + " (" + worst(p.access || []) + ")" + (data.round_trip && p.stay ? " · " + t("col_in_city") + " " + stayText(p.stay) : ""));
     const how = p.confirmed ? "looked_up" : (p.access || []).some(way => way.looked_up || way.checked) ? "partly" : "estimated";
     add(foot, "span", t(how), "badge " + how);
+    if (p.below_minimum) add(card, "p", t("below_minimum_card"), "way warn");
   }
   const byGround = state.by_ground || [];
   const ground = byGround.filter(shownGround);

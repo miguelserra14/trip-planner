@@ -121,11 +121,20 @@ def as_script(value: Any) -> str:
     """A value as JavaScript in the page: JSON without any "<", so that nothing in it can end or open a tag."""
     return json.dumps(value, ensure_ascii=False).replace("<", "\\u003c")
 
+def times_grade(flight: dict[str, Any]) -> str:
+    """The worst grade of the times of a trip's ways to and from its airports, there and back: the grade the
+    planner gives the whole itinerary (the flights' own times are the airline's). A way not known counts as C, as
+    the page draws it."""
+    return max((leg.get("grade") or "C" for leg in flight.get("access") or []), default="C")
+
 def map_state(found: Found, sections: list[dict[str, Any]], running: bool = False, version: int = 0,
-              airport_minutes: int = TripSettings.min_airport_minutes, landing_minutes: int = TripSettings.min_landing_minutes) -> dict[str, Any]:
+              airport_minutes: int = TripSettings.min_airport_minutes, landing_minutes: int = TripSettings.min_landing_minutes,
+              min_reliability: str = TripSettings.min_reliability) -> dict[str, Any]:
     """What the page shows that changes while the timetables are looked up (confirm.py): the destinations, the
     flights left out, the cities looked up and the sections. The served page asks for it again while running.
-    airport_minutes and landing_minutes are the planner's, for the time in the city (stay)."""
+    airport_minutes and landing_minutes are the planner's, for the time in the city (stay). min_reliability is the
+    planner's too: a trip whose times are graded below it is marked (below_minimum), because the planner shows such
+    an itinerary only when it finds nothing better, and may open on another one, dearer."""
     airports = load_airports()
     planned = trips(found, airports)
     plan = lambda key: {"key": key} if key in planned else None
@@ -141,7 +150,8 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
                # the centre of each city the trip reaches, for its route on the map: the one flown to, and the one flown back from
                "centres": {code: [found.centres[code].latitude, found.centres[code].longitude]
                            for code in {flight["to"], (flight.get("back") or {}).get("from")} if code in found.centres},
-               "stay": stay(flight, airport_minutes, landing_minutes)}
+               "stay": stay(flight, airport_minutes, landing_minutes),
+               "times_grade": times_grade(flight), "below_minimum": times_grade(flight) > min_reliability}
               for flight in found.destinations if flight["to"] in airports]
     codes = {code for flight in points for leg in (flight, flight.get("back")) if leg
              for segment in [leg, *leg.get("segments", [])] for code in (segment["from"], segment["to"])}
@@ -154,7 +164,7 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
 
 def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120,
              running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes,
-             planner_link: str = "", token: str = "") -> str:
+             planner_link: str = "", token: str = "", min_reliability: str = TripSettings.min_reliability) -> str:
     """airport_minutes is how long before a flight the traveller is at the airport (the planner's setting).
     planner_link is the page in the app (app/) that the planner's form opens at, filled in with a trip, followed by
     its key: with it each trip has a link there, and the page asks for the destinations again while running, which
@@ -165,7 +175,8 @@ def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport
             "days": str(found.days), "round_trip": found.days.round_trip, "sources": sources, "airport_minutes": airport_minutes,
             "long_wait": LONG_WAIT_MINUTES, "early_hour": EARLY_AIRPORT_HOUR, "late_hour": LATE_LANDING_HOUR,
             "planner_link": planner_link, **({"token": token} if token else {}),
-            "max_lookups": max_lookups, "kiwi_why": found.kiwi_why, "texts": page_texts(), "locale": current.SETTINGS.language, "landing_minutes": landing_minutes, "grade_colours": LIGHT_COLOURS, "state": map_state(found, sections, running, 0, airport_minutes, landing_minutes)}
+            "max_lookups": max_lookups, "kiwi_why": found.kiwi_why, "texts": page_texts(), "locale": current.SETTINGS.language, "landing_minutes": landing_minutes, "grade_colours": LIGHT_COLOURS,
+            "min_reliability": min_reliability, "state": map_state(found, sections, running, 0, airport_minutes, landing_minutes, min_reliability)}
     title = tr("discover_page_tab_title", origin=found.place.english_name)
     # In the app the style and the script are files beside the page, so that it may run no script of its own
     # (app/maps.py, MAP_POLICY); a page saved as a file carries them, to open with nothing else

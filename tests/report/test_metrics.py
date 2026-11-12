@@ -52,6 +52,7 @@ def test_a_rejection_by_the_travellers_limits_is_not_proven_impossible():
 
 # ---------------------------------------------------------------- a map against the planner
 ESTIMATE = {"map": "/discover/map/1/", "key": "BRU-out", "clicked": "2026-11-10T10:00", "flight_id": "CHEAP", "round_trip": False,
+            "trip": ["Porto", "Brussels", "10/12/2026"],
             "flight_eur": 20.0, "total_eur": 35.0, "ground_eur": 15.0, "looked_up": True, "legs": []}
 
 def searched(itineraries: dict, left_out: list, checked=("CHEAP", "DEAR")) -> dict:
@@ -78,16 +79,45 @@ def test_the_map_is_measured_against_the_planner_only_for_searches_run_soon_afte
                opened({"found": True, "total_eur": 90.0, "flight_eur": 70.0}, written="2026-11-12T10:00")]   # two days later: not the map's fault
     lines = tool.map_part(reports)
     assert "4 searches opened from a map within 24 hours (1 later ones left out)" in lines[0]
-    assert "every dot (4): flight not found by the planner 1, proven impossible 1 (25%), itinerary made 2" in lines[1]
-    assert "To and from the airports: median +8 EUR, 50% within 5 EUR, 50% within 10 EUR" in lines[1]
-    assert "dark ring: looked up in the timetables (2)" in lines[2] and "proven impossible 1 (50%)" in lines[2]
-    assert "estimated ways (2)" in lines[3]
+    groups = lines[6:]   # after the heading, the names of the columns and a line for each pair
+    assert "every dot (4): flight not found by the planner 1, proven impossible 1 (25%), itinerary made 2, shown by the planner 2" in groups[0]
+    assert "To and from the airports: median +8 EUR, 50% within 5 EUR, 50% within 10 EUR" in groups[0]
+    assert "dark ring: looked up in the timetables (2)" in groups[1] and "proven impossible 1 (50%)" in groups[1]
+    assert "estimated ways (2)" in groups[2]
     assert tool.map_part([]) == ["Discover against the planner: no search opened from a map yet."]
 
+def test_each_search_a_map_opened_has_a_line_with_what_the_planner_made_of_it():
+    lines = tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0, "cheapest_eur": 40.0}),
+                           opened({"found": True, "left_out": "timetable", "cheapest_eur": 70.0}),
+                           opened({"found": False, "cheapest_eur": 70.0})])
+    assert lines[2].split() == ["Porto", "Brussels", "ring", "35", "38", "+9%", "shown", "40"]
+    assert lines[3].split()[-2:] == ["timetable", "70"] and "flight not found" in lines[4]
+
+def test_a_map_trip_the_planner_hides_by_its_own_rules_is_counted_with_what_it_showed_instead():
+    hidden = {"found": True, "total_eur": 35.0, "flight_eur": 20.0, "left_out": "below_minimum", "cheapest_eur": 70.0}
+    lines = tool.map_part([opened(hidden), opened({"found": True, "total_eur": 36.0, "flight_eur": 20.0, "cheapest_eur": 36.0})])
+    every = lines[4]
+    assert "itinerary made 2, shown by the planner 1 (left out by its rules: below_minimum 1)" in every
+    # The map said 35 EUR: the planner showed 70 (+100%) in one search and 36 (+3%) in the other
+    assert "The planner's cheapest option against the map's price: median +51%, 50% at most 20% dearer" in every
+
+def test_the_pairs_where_the_planner_only_guessed_its_ground_prices_are_told_apart():
+    fares = opened({"found": True, "total_eur": 36.0, "flight_eur": 20.0, "guessed_eur": 2.0})
+    guess = opened({"found": True, "total_eur": 50.0, "flight_eur": 20.0, "guessed_eur": 18.0})
+    older = opened({"found": True, "total_eur": 40.0, "flight_eur": 20.0})   # made before guessed_eur was kept: in neither
+    groups = tool.map_part([fares, guess, older])[5:]
+    assert any(line.startswith("  planner's ways priced from fares (a guess of at most 5 EUR) (1)") for line in groups)
+    assert any(line.startswith("  planner's ways partly a guess (over 5 EUR) (1)") for line in groups)
+
+def test_an_itinerary_keeps_how_much_of_its_ground_price_is_a_guess():
+    built = {"flight": CHEAP, "total_cost": 41.0, "flight_price": 20.0,
+             "to": {"price_eur": 18.0, "price_kind": "model"}, "from": {"price_eur": 3.0, "price_kind": "operator"}}
+    assert metrics.funnel([CHEAP], {"CHEAP"}, {}, [built])["itineraries"]["CHEAP"] == {"total_eur": 41.0, "flight_eur": 20.0, "guessed_eur": 18.0}
+
 def test_a_map_there_and_back_is_compared_on_its_ways_to_the_airports_only():
-    lines = tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0}, round_trip=True)])
-    assert "To and from the airports" in lines[1] and "Door to door" not in lines[1]
-    assert "Door to door, one-way maps: median +8%" in tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0})])[1]
+    lines = tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0, "cheapest_eur": 40.0}, round_trip=True)])
+    assert "To and from the airports" in lines[3] and "Door to door" not in lines[3] and "cheapest option" not in lines[3]
+    assert "Door to door, one-way maps: median +8%" in tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0})])[3]
 
 # ---------------------------------------------------------------- the models
 def test_plan_b_and_the_failed_calls_are_counted_from_the_log():

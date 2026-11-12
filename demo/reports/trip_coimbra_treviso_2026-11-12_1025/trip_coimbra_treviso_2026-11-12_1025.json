@@ -1,0 +1,489 @@
+{
+ "trip": "Coimbra -> Treviso",
+ "prices_read": "2026-11-12T10:25",
+ "options": [
+  {
+   "number": 1,
+   "flight": "OPO-TSF-0312-1735",
+   "route": "OPO - TSF",
+   "date": "2026-12-03",
+   "flight_price": 15.99,
+   "total": 21.94,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "14:15",
+       "arrive": "16:00",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 145,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 3.95,
+     "price_kind": "operator",
+     "confirmed_eur": 3.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 855,
+     "arrive": 960,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "22:10",
+       "arrive": "22:23",
+       "line": "A",
+       "agency": "Mobilità di Marca",
+       "from": "AEROPORTO CANOVA",
+       "to": "FS DUCA D'AOSTA",
+       "from_id": "it-Veneto-Mobilita-di-Marca_006160",
+       "to_id": "it-Veneto-Mobilita-di-Marca_000001",
+       "from_at": [
+        45.655330000000006,
+        12.204604999999999
+       ],
+       "to_at": [
+        45.660465,
+        12.245272999999997
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 3,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 2.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "flight": "OPO-BGY-0312-1525",
+   "route": "OPO - BGY",
+   "date": "2026-12-03",
+   "flight_price": 26.74,
+   "total": 43.67,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "11:30",
+       "arrive": "13:20",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 151,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 2.95,
+     "price_kind": "operator",
+     "confirmed_eur": 2.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 690,
+     "arrive": 800,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "19:50",
+       "arrive": "23:15",
+       "line": "FlixBus",
+       "agency": "FlixBus",
+       "from": "Bergamo (Orio al Serio Airport - BGY)",
+       "to": "Treviso",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 197,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 13.98,
+     "price_kind": "operator",
+     "confirmed_eur": 13.98,
+     "tickets": [],
+     "source": "FlixBus",
+     "leave": 1190,
+     "arrive": 1395,
+     "city": {
+      "written": "Treviso",
+      "local_name": "Treviso",
+      "english_name": "Treviso",
+      "country": "Italy",
+      "latitude": 45.6658505,
+      "longitude": 12.2455414
+     },
+     "airport": {
+      "code": "BGY",
+      "name": "Il Caravaggio International Airport",
+      "city": "Orio al Serio (BG)",
+      "country": "IT",
+      "large": true,
+      "latitude": 45.669362,
+      "longitude": 9.708851,
+      "km": 197
+     }
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "flight": "OPO-BGY-0312-0830",
+   "route": "OPO - BGY",
+   "date": "2026-12-03",
+   "flight_price": 37.62,
+   "total": 52.6,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "04:30",
+       "arrive": "06:20",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 151,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.95,
+     "price_kind": "operator",
+     "confirmed_eur": 4.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 270,
+     "arrive": 380,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "13:15",
+       "arrive": "16:40",
+       "line": "FlixBus 401",
+       "agency": "FlixBus-eu",
+       "from": "Bergamo (Orio al Serio Airport - BGY)",
+       "to": "Venice Mestre (Stazione FS)",
+       "from_id": "eu-flixbus_dcc45a6f-9603-11e6-9066-549f350fcb0c",
+       "to_id": "eu-flixbus_dcc0139d-9603-11e6-9066-549f350fcb0c",
+       "from_at": [
+        45.66581300000001,
+        9.697448
+       ],
+       "to_at": [
+        45.482223999999995,
+        12.233842
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 198,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "16:44",
+       "arrive": "17:05",
+       "line": "RV 3666",
+       "agency": "TRENITALIA",
+       "from": "VENEZIA MESTRE",
+       "to": "TREVISO CENTRALE",
+       "from_id": "it-trenitalia_02589",
+       "to_id": "it-trenitalia_02712",
+       "from_at": [
+        45.482031,
+        12.23208
+       ],
+       "to_at": [
+        45.659515000000006,
+        12.246144
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 20,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 10.030000000000001,
+     "price_kind": "operator",
+     "confirmed_eur": 10.030000000000001,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "FlixBus",
+       "price_eur": 5.98,
+       "travel_day": true,
+       "tariff": false
+      },
+      {
+       "positions": [
+        1
+       ],
+       "operator": "Trenitalia",
+       "price_eur": 4.05,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "flight": "OPO-BLQ-0312-0635",
+   "route": "OPO - BLQ",
+   "date": "2026-12-03",
+   "flight_price": 30.99,
+   "total": 58.44,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "03:00",
+       "arrive": "04:35",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 131,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 8.45,
+     "price_kind": "operator",
+     "confirmed_eur": 8.45,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 180,
+     "arrive": 275,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "11:00",
+       "arrive": "11:08",
+       "line": "MEX",
+       "agency": "Marconi Express",
+       "from": "Bologna Aeroporto",
+       "to": "Bologna Centrale FS",
+       "from_id": "it-Emilia-Romagna-TPER-BLQ-Airport_BLQ",
+       "to_id": "it-Emilia-Romagna-TPER-BLQ-Airport_BFS",
+       "from_at": [
+        44.528760000000005,
+        11.2944
+       ],
+       "to_at": [
+        44.507202,
+        11.342895
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "OTHER",
+       "km": 5,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "11:10",
+       "arrive": "13:07",
+       "line": "RV 3994",
+       "agency": "TRENITALIA",
+       "from": "Bologna C.le/AV",
+       "to": "VENEZIA MESTRE",
+       "from_id": "it-trenitalia_05043",
+       "to_id": "it-trenitalia_02589",
+       "from_at": [
+        44.506234,
+        11.342267
+       ],
+       "to_at": [
+        45.482031,
+        12.23208
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 129,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "13:14",
+       "arrive": "13:32",
+       "line": "RV 3638",
+       "agency": "TRENITALIA",
+       "from": "VENEZIA MESTRE",
+       "to": "TREVISO CENTRALE",
+       "from_id": "it-trenitalia_02589",
+       "to_id": "it-trenitalia_02712",
+       "from_at": [
+        45.482031,
+        12.23208
+       ],
+       "to_at": [
+        45.659515000000006,
+        12.246144
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 20,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 19.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  }
+ ]
+}

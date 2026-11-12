@@ -968,6 +968,8 @@ TEXTS = {
     "app_quit_done": "O programa foi fechado: podes fechar este separador.",
     "app_swap": "Trocar a origem com o destino",
     "app_no_key": "Falta a GOOGLE_API_KEY em env/.env: sem ela nenhuma pesquisa funciona. Copia env/.env.example para env/.env, preenche a chave e volta a abrir o programa.",
+    "app_demo_note": "Demonstração: os relatórios e mapas aqui foram feitos por pesquisas reais e estão guardados no repositório (demo/). Abre-os em baixo; pesquisar, fazer um mapa e pedir preços de novo precisam das chaves em env/.env (ver o README).",
+    "app_demo_refused": "Não na demonstração: nada é pesquisado nem alterado. Para pesquisar, abre o programa sem --demo, com as chaves em env/.env.",
     "app_one_way": "Só ida",
     "app_round_trip": "Ida e volta",
     "app_theme": "Páginas escuras ou claras",

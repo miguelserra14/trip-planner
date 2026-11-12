@@ -1,0 +1,598 @@
+{
+ "version": 1,
+ "written": "2026-11-12T10:31",
+ "origin": {
+  "written": "Coimbra",
+  "label": "Coimbra, Portugal"
+ },
+ "destination": {
+  "written": "Faro",
+  "label": "Faro, Portugal"
+ },
+ "dates": [
+  "2026-12-03"
+ ],
+ "language": "pt-PT",
+ "recommended": 1,
+ "ground_only_asked": false,
+ "closest": false,
+ "options": [
+  {
+   "number": 1,
+   "flight": {
+    "id": "OPO-FAO-0312-1500",
+    "date": "2026-12-03",
+    "route": "OPO - FAO",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR5452",
+    "departure_airport": "OPO",
+    "arrival_airport": "FAO",
+    "departure_time": "15:00",
+    "arrival_time": "16:10",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 70,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 34.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 32.36,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=FAO",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "11:30"
+   },
+   "at_airport": "13:20",
+   "airport_wait": 100,
+   "wait_after_landing": 55,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "17:15"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "11:30",
+    "arrive_time": "13:20",
+    "minutes": 110,
+    "price_eur": 2.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "11:30",
+      "arrive": "13:20",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "operator",
+    "source": "FlixBus",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "17:05",
+    "arrive_time": "17:15",
+    "minutes": 10,
+    "price_eur": 1.98,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "17:05",
+      "arrive": "17:15",
+      "line": "FlixBus",
+      "agency": "FlixBus",
+      "from": "Faro (Airport)",
+      "to": "Faro (Alfândega)",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://shop.flixbus.pt/search?departureCity=6dc35a0d-fcb3-479c-8bf2-f338988a3399&arrivalCity=d0189569-bd3c-461f-9906-3bb7ebd9f65f&rideDate=03.12.2026&adult=1"
+    ],
+    "later": [
+     "17:25",
+     "17:29",
+     "18:05"
+    ]
+   },
+   "other": {
+    "leave_time": "17:25",
+    "arrive_time": "17:55",
+    "price_eur": 2.0,
+    "vehicles": [
+     {
+      "time": "17:30",
+      "arrive": "17:55",
+      "line": "15",
+      "agency": "Próximo - Transportes Urbanos de Faro",
+      "from": "Aeroporto Faro",
+      "to": "Doca",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "by_coach": false
+   },
+   "total_eur": 37.29,
+   "range_eur": null,
+   "confirmed_eur": 37.29,
+   "minutes": 345,
+   "extra_minutes": 0,
+   "time_cost": 0.0,
+   "schedule_grade": "A",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "A",
+    "part_from_price": "A"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 0.0,
+    "fastest_minutes": 0
+   }
+  },
+  {
+   "number": 2,
+   "flight": {
+    "id": "OPO-SVQ-0312-1355",
+    "date": "2026-12-03",
+    "route": "OPO - SVQ",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR5467",
+    "departure_airport": "OPO",
+    "arrival_airport": "SVQ",
+    "departure_time": "13:55",
+    "arrival_time": "16:10",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 75,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 29.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 27.04,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=SVQ",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "10:15"
+   },
+   "at_airport": "11:50",
+   "airport_wait": 125,
+   "wait_after_landing": 56,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "19:45"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "10:15",
+    "arrive_time": "11:50",
+    "minutes": 95,
+    "price_eur": 2.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "10:15",
+      "arrive": "11:50",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [
+     "FlixBus"
+    ],
+    "grade": "A",
+    "service_day": "2026-11-12",
+    "leave_time": "17:06",
+    "arrive_time": "19:45",
+    "minutes": 159,
+    "price_eur": 12.48,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [
+     "FlixBus"
+    ],
+    "vehicles": [
+     {
+      "time": "17:15",
+      "arrive": "19:45",
+      "line": "FlixBus 785A",
+      "agency": "FlixBus-eu",
+      "from": "Seville (Airport)",
+      "to": "Faro (Alfândega)",
+      "mode": "COACH",
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://global.flixbus.com"
+    ],
+    "later": []
+   },
+   "other": null,
+   "total_eur": 42.47,
+   "range_eur": null,
+   "confirmed_eur": 42.47,
+   "minutes": 510,
+   "extra_minutes": 165,
+   "time_cost": 20.9375,
+   "schedule_grade": "A",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "A",
+    "part_from_price": "A"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 5.18,
+    "fastest_minutes": 165
+   }
+  }
+ ],
+ "ground_only": [
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-12-03",
+   "leave": 610,
+   "arrive": 1020,
+   "minutes": 410,
+   "grade": "A",
+   "price_eur": 10.97,
+   "price_kind": "operator",
+   "confirmed_eur": 10.97,
+   "urls": [
+    "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=d0189569-bd3c-461f-9906-3bb7ebd9f65f&rideDate=03.12.2026&adult=1"
+   ],
+   "versus_eur": -20.7,
+   "versus_minutes": 345,
+   "beats": true,
+   "vehicles": [
+    {
+     "time": "10:10",
+     "arrive": "12:25",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Coimbra",
+     "to": "Lisbon (Oriente)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "13:30",
+     "arrive": "17:00",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Lisbon (Oriente)",
+     "to": "Faro (Alfândega)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    }
+   ]
+  },
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-12-03",
+   "leave": 685,
+   "arrive": 1100,
+   "minutes": 415,
+   "grade": "A",
+   "price_eur": 10.97,
+   "price_kind": "operator",
+   "confirmed_eur": 10.97,
+   "urls": [
+    "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=d0189569-bd3c-461f-9906-3bb7ebd9f65f&rideDate=03.12.2026&adult=1"
+   ],
+   "versus_eur": -20.07,
+   "versus_minutes": 345,
+   "beats": true,
+   "vehicles": [
+    {
+     "time": "11:25",
+     "arrive": "12:15",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Coimbra",
+     "to": "Leiria (Bus Station)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "13:00",
+     "arrive": "18:20",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Leiria (Bus Station)",
+     "to": "Faro (Alfândega)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    }
+   ]
+  },
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-12-03",
+   "leave": 840,
+   "arrive": 1255,
+   "minutes": 415,
+   "grade": "A",
+   "price_eur": 10.97,
+   "price_kind": "operator",
+   "confirmed_eur": 10.97,
+   "urls": [
+    "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=d0189569-bd3c-461f-9906-3bb7ebd9f65f&rideDate=03.12.2026&adult=1"
+   ],
+   "versus_eur": -20.07,
+   "versus_minutes": 345,
+   "beats": true,
+   "vehicles": [
+    {
+     "time": "14:00",
+     "arrive": "16:15",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Coimbra",
+     "to": "Lisbon (Oriente)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "17:25",
+     "arrive": "20:55",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Lisbon (Oriente)",
+     "to": "Faro (Alfândega)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    }
+   ]
+  },
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-11-12",
+   "leave": 943,
+   "arrive": 1223,
+   "minutes": 280,
+   "grade": "B",
+   "price_eur": null,
+   "price_kind": null,
+   "confirmed_eur": 0.0,
+   "urls": [
+    "https://www.cp.pt"
+   ],
+   "versus_eur": null,
+   "versus_minutes": null,
+   "beats": null,
+   "vehicles": [
+    {
+     "time": "15:43",
+     "arrive": "20:23",
+     "line": "AP",
+     "agency": "CP - Comboios de Portugal",
+     "from": "Coimbra-B",
+     "to": "Faro",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    }
+   ]
+  }
+ ],
+ "by_date": [
+  {
+   "date": "2026-12-03",
+   "option": 1,
+   "route": "OPO - FAO",
+   "total_eur": 37.29,
+   "minutes": 345
+  }
+ ],
+ "warnings": [
+  {
+   "key": "warn_ground_beats",
+   "values": {
+    "title": {
+     "key": "ground_title",
+     "values": {}
+    }
+   }
+  },
+  {
+   "key": "note_flights_beaten",
+   "values": {
+    "skipped": 2,
+    "checked": 8
+   }
+  }
+ ],
+ "metrics": {
+  "funnel": {
+   "found": 10,
+   "checked": 8,
+   "cheapest_flight": "LIS-SVQ-0312-2220",
+   "cheapest_ticket_eur": 18.0,
+   "left_out": [
+    {
+     "flight": "SCQ-SVQ-0312-0700",
+     "ticket_eur": 32.0,
+     "why": "timetable"
+    },
+    {
+     "flight": "LIS-SVQ-0312-2145",
+     "ticket_eur": 123.0,
+     "why": "timetable"
+    },
+    {
+     "flight": "LIS-SVQ-0312-2220",
+     "ticket_eur": 18.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "SCQ-SVQ-0312-2245",
+     "ticket_eur": 50.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-FAO-0312-1450",
+     "ticket_eur": 109.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-FAO-0312-0930",
+     "ticket_eur": 171.0,
+     "why": "not_worth_it"
+    }
+   ],
+   "itineraries": {
+    "LIS-SVQ-0312-2220": {
+     "total_eur": 40.95,
+     "flight_eur": 14.99
+    },
+    "OPO-SVQ-0312-1355": {
+     "total_eur": 42.47,
+     "flight_eur": 27.04
+    },
+    "OPO-FAO-0312-1500": {
+     "total_eur": 37.29,
+     "flight_eur": 32.36
+    },
+    "SCQ-SVQ-0312-2245": {
+     "total_eur": 112.48,
+     "flight_eur": 50.0
+    },
+    "LIS-FAO-0312-1450": {
+     "total_eur": 119.46,
+     "flight_eur": 109.0
+    },
+    "LIS-FAO-0312-0930": {
+     "total_eur": 176.95,
+     "flight_eur": 171.0
+    }
+   }
+  },
+  "checks": {
+   "links_dropped": 2
+  },
+  "models": {
+   "calls": 4,
+   "failed": 0,
+   "plan_b": 0,
+   "recommendation_by": null
+  },
+  "from_map": {
+   "map": "coimbra_2026-12-03_2026-12-03.html",
+   "key": "FAO-out",
+   "trip": [
+    "Coimbra",
+    "Faro",
+    "03/12/2026"
+   ],
+   "clicked": "2026-11-12T10:23",
+   "flight_id": "OPO-FAO-0312-1500",
+   "round_trip": false,
+   "flight_eur": 32.36,
+   "total_eur": 37.29,
+   "ground_eur": 4.93,
+   "looked_up": true,
+   "legs": [
+    {
+     "airport": "OPO",
+     "to_airport": true,
+     "price_eur": 2.95,
+     "grade": "A",
+     "price_grade": "A",
+     "looked_up": true
+    },
+    {
+     "airport": "FAO",
+     "to_airport": false,
+     "price_eur": 1.98,
+     "grade": "A",
+     "price_grade": "A",
+     "looked_up": true
+    }
+   ],
+   "planner": {
+    "found": true,
+    "cheapest_eur": 37.29,
+    "ticket_eur": 34.0,
+    "checked": true,
+    "total_eur": 37.29,
+    "flight_eur": 32.36,
+    "left_out": null
+   }
+  }
+ },
+ "recommendation": "## Recomendação\n\nPelas tuas preferências, as regras recomendam a opção 1. O modelo que explica a escolha por palavras não respondeu; a comparação acima mostra em que se baseou a escolha.",
+ "cheapest": 1,
+ "fastest": 1
+}

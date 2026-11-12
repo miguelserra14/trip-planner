@@ -13,6 +13,7 @@ The package, part by part:
   data (trip_planner/report/options.py), as their Markdown otherwise.
 - page.css: the look of every page, light or dark; its icons are drawn in trip_planner/report/icons.py, shared with Discover.
 - page.js: the only script of the app's own pages, which work without it.
+- demo.py: main.py --demo, the app over the reports and maps kept in demo/, with no key and nothing searched.
 
 A search and a map each have a process of their own (job.py), because the planner keeps the trip in globals
 (trip_planner/current.py); the two talk to the app in JSON lines. A map is asked to stop, not killed, unless it does

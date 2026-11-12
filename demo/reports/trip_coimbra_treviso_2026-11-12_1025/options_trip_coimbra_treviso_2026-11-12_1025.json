@@ -1,0 +1,893 @@
+{
+ "version": 1,
+ "written": "2026-11-12T10:25",
+ "origin": {
+  "written": "Coimbra",
+  "label": "Coimbra, Portugal"
+ },
+ "destination": {
+  "written": "Treviso",
+  "label": "Treviso, Italy"
+ },
+ "dates": [
+  "2026-12-03"
+ ],
+ "language": "pt-PT",
+ "recommended": 1,
+ "ground_only_asked": false,
+ "closest": false,
+ "options": [
+  {
+   "number": 1,
+   "flight": {
+    "id": "OPO-TSF-0312-1735",
+    "date": "2026-12-03",
+    "route": "OPO - TSF",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR2160",
+    "departure_airport": "OPO",
+    "arrival_airport": "TSF",
+    "departure_time": "17:35",
+    "arrival_time": "21:15",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 160,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 18.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 15.99,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=TSF",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "14:15"
+   },
+   "at_airport": "16:00",
+   "airport_wait": 95,
+   "wait_after_landing": 50,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "22:23"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "14:15",
+    "arrive_time": "16:00",
+    "minutes": 105,
+    "price_eur": 3.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "14:15",
+      "arrive": "16:00",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "B",
+    "service_day": "2026-11-12",
+    "leave_time": "22:05",
+    "arrive_time": "22:23",
+    "minutes": 18,
+    "price_eur": 2.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "22:10",
+      "arrive": "22:23",
+      "line": "A",
+      "agency": "Mobilità di Marca",
+      "from": "AEROPORTO CANOVA",
+      "to": "FS DUCA D'AOSTA",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.mobilitadimarca.it"
+    ],
+    "later": [
+     "22:35"
+    ]
+   },
+   "other": null,
+   "total_eur": 21.94,
+   "range_eur": [
+    20.94,
+    23.94
+   ],
+   "confirmed_eur": 19.94,
+   "minutes": 428,
+   "extra_minutes": 0,
+   "time_cost": 0.0,
+   "schedule_grade": "B",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "B",
+    "part_from_price": "C"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 0.0,
+    "fastest_minutes": 0
+   }
+  },
+  {
+   "number": 2,
+   "flight": {
+    "id": "OPO-BGY-0312-1525",
+    "date": "2026-12-03",
+    "route": "OPO - BGY",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR4637",
+    "departure_airport": "OPO",
+    "arrival_airport": "BGY",
+    "departure_time": "15:25",
+    "arrival_time": "19:00",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 155,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 30.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 26.74,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=BGY",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "11:30"
+   },
+   "at_airport": "13:20",
+   "airport_wait": 125,
+   "wait_after_landing": 50,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "23:15"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "11:30",
+    "arrive_time": "13:20",
+    "minutes": 110,
+    "price_eur": 2.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "11:30",
+      "arrive": "13:20",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "operator",
+    "source": "FlixBus",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "19:50",
+    "arrive_time": "23:15",
+    "minutes": 205,
+    "price_eur": 13.98,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "19:50",
+      "arrive": "23:15",
+      "line": "FlixBus",
+      "agency": "FlixBus",
+      "from": "Bergamo (Orio al Serio Airport - BGY)",
+      "to": "Treviso",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://shop.flixbus.pt/search?departureCity=e66b26bd-758d-4c59-ad1f-eddf72800f3e&arrivalCity=40e309f0-8646-11e6-9066-549f350fcb0c&rideDate=03.12.2026&adult=1"
+    ],
+    "later": []
+   },
+   "other": null,
+   "total_eur": 43.67,
+   "range_eur": null,
+   "confirmed_eur": 43.67,
+   "minutes": 645,
+   "extra_minutes": 217,
+   "time_cost": 34.15625,
+   "schedule_grade": "A",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "A",
+    "part_from_price": "A"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 21.73,
+    "fastest_minutes": 217
+   }
+  },
+  {
+   "number": 3,
+   "flight": {
+    "id": "OPO-BGY-0312-0830",
+    "date": "2026-12-03",
+    "route": "OPO - BGY",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR4041",
+    "departure_airport": "OPO",
+    "arrival_airport": "BGY",
+    "departure_time": "08:30",
+    "arrival_time": "12:05",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 155,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 40.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 37.62,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=BGY",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "04:30"
+   },
+   "at_airport": "06:20",
+   "airport_wait": 130,
+   "wait_after_landing": 65,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "17:05"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "04:30",
+    "arrive_time": "06:20",
+    "minutes": 110,
+    "price_eur": 4.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "04:30",
+      "arrive": "06:20",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [
+     "FlixBus",
+     "Trenitalia"
+    ],
+    "grade": "A",
+    "service_day": "2026-11-12",
+    "leave_time": "13:10",
+    "arrive_time": "17:05",
+    "minutes": 235,
+    "price_eur": 10.030000000000001,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [
+     "FlixBus",
+     "Trenitalia"
+    ],
+    "vehicles": [
+     {
+      "time": "13:15",
+      "arrive": "16:40",
+      "line": "FlixBus 401",
+      "agency": "FlixBus-eu",
+      "from": "Bergamo (Orio al Serio Airport - BGY)",
+      "to": "Venice Mestre (Stazione FS)",
+      "mode": "COACH",
+      "rail": false,
+      "coach": true
+     },
+     {
+      "time": "16:44",
+      "arrive": "17:05",
+      "line": "RV 3666",
+      "agency": "TRENITALIA",
+      "from": "VENEZIA MESTRE",
+      "to": "TREVISO CENTRALE",
+      "mode": "REGIONAL_RAIL",
+      "rail": true,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://global.flixbus.com",
+     "https://www.trenitalia.com"
+    ],
+    "later": [
+     "13:50",
+     "15:15",
+     "15:20"
+    ]
+   },
+   "other": null,
+   "total_eur": 52.6,
+   "range_eur": null,
+   "confirmed_eur": 52.599999999999994,
+   "minutes": 695,
+   "extra_minutes": 267,
+   "time_cost": 52.01562500000001,
+   "schedule_grade": "A",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "A",
+    "part_from_price": "A"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 30.66,
+    "fastest_minutes": 267
+   }
+  },
+  {
+   "number": 4,
+   "flight": {
+    "id": "OPO-BLQ-0312-0635",
+    "date": "2026-12-03",
+    "route": "OPO - BLQ",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR5809",
+    "departure_airport": "OPO",
+    "arrival_airport": "BLQ",
+    "departure_time": "06:35",
+    "arrival_time": "10:10",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 155,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 33.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 30.99,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=BLQ",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "03:00"
+   },
+   "at_airport": "04:35",
+   "airport_wait": 120,
+   "wait_after_landing": 45,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "13:32"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "03:00",
+    "arrive_time": "04:35",
+    "minutes": 95,
+    "price_eur": 8.45,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "03:00",
+      "arrive": "04:35",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "B",
+    "service_day": "2026-11-12",
+    "leave_time": "10:55",
+    "arrive_time": "13:32",
+    "minutes": 157,
+    "price_eur": 19.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "11:00",
+      "arrive": "11:08",
+      "line": "MEX",
+      "agency": "Marconi Express",
+      "from": "Bologna Aeroporto",
+      "to": "Bologna Centrale FS",
+      "mode": "OTHER",
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "11:10",
+      "arrive": "13:07",
+      "line": "RV 3994",
+      "agency": "TRENITALIA",
+      "from": "Bologna C.le/AV",
+      "to": "VENEZIA MESTRE",
+      "mode": "REGIONAL_RAIL",
+      "rail": true,
+      "coach": false
+     },
+     {
+      "time": "13:14",
+      "arrive": "13:32",
+      "line": "RV 3638",
+      "agency": "TRENITALIA",
+      "from": "VENEZIA MESTRE",
+      "to": "TREVISO CENTRALE",
+      "mode": "REGIONAL_RAIL",
+      "rail": true,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.marconiexpress.it",
+     "https://www.trenitalia.com"
+    ],
+    "later": [
+     "11:51",
+     "12:47",
+     "12:49"
+    ]
+   },
+   "other": {
+    "leave_time": "12:49",
+    "arrive_time": "16:30",
+    "price_eur": 14.0,
+    "vehicles": [
+     {
+      "time": "13:09",
+      "arrive": "13:35",
+      "line": "91",
+      "agency": "TPER spa",
+      "from": "BIRRA",
+      "to": "STAZIONE CENTRALE",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "13:45",
+      "arrive": "15:35",
+      "line": "FlixBus 466",
+      "agency": "FlixBus-eu",
+      "from": "Bologna (central bus station)",
+      "to": "Venice Mestre (Stazione FS)",
+      "mode": "COACH",
+      "rail": false,
+      "coach": true
+     },
+     {
+      "time": "15:41",
+      "arrive": "15:41",
+      "line": "31H",
+      "agency": "ACTVs.p.a",
+      "from": "Piave Podgora",
+      "to": "Terraglio Villa Salus",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "15:52",
+      "arrive": "16:30",
+      "line": "8E",
+      "agency": "Mobilità di Marca",
+      "from": "TERRAGLIO - VILLA SALUS",
+      "to": "TREVISO AUTOSTAZIONE",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "by_coach": true
+   },
+   "total_eur": 58.44,
+   "range_eur": [
+    48.94,
+    77.44
+   ],
+   "confirmed_eur": 39.44,
+   "minutes": 572,
+   "extra_minutes": 144,
+   "time_cost": 17.0,
+   "schedule_grade": "B",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "B",
+    "part_from_price": "C"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 36.5,
+    "fastest_minutes": 144
+   }
+  }
+ ],
+ "ground_only": [
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-11-12",
+   "leave": 585,
+   "arrive": 2465,
+   "minutes": 1820,
+   "grade": "B",
+   "price_eur": null,
+   "price_kind": null,
+   "confirmed_eur": 0.0,
+   "urls": [
+    "https://global.flixbus.com",
+    "https://www.renfe.com/es/es/cercanias",
+    "https://www.renfe.com",
+    "https://www.blablacar.co.uk/bus?comuto_cmkt=UK_GMAPS-PRO_ALL_ALL&utm_medium=Partnership&utm_source=Gmaps&utm_campaign=UK_GMAPS-PRO_ALL_ALL",
+    "https://www.tam-voyages.com",
+    "https://www.trenitalia.com"
+   ],
+   "versus_eur": null,
+   "versus_minutes": null,
+   "beats": null,
+   "vehicles": [
+    {
+     "time": "09:45",
+     "arrive": "16:20",
+     "line": "FlixBus N1156",
+     "agency": "FlixBus-eu",
+     "from": "Coimbra",
+     "to": "Salamanca (Bus Station)",
+     "mode": "COACH",
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "16:40",
+     "arrive": "19:15",
+     "line": "FlixBus 745",
+     "agency": "FlixBus-eu",
+     "from": "Salamanca (Bus Station)",
+     "to": "Madrid (South Bus Station)",
+     "mode": "COACH",
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "19:22",
+     "arrive": "19:25",
+     "line": "C5",
+     "agency": "Renfe Cercanias",
+     "from": "Méndez Álvaro P.V.",
+     "to": "Madrid-Atocha Cercanías",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "19:34",
+     "arrive": "23:20",
+     "line": "AVE 03309",
+     "agency": "RENFE OPERADORA",
+     "from": "Madrid-Puerta de Atocha-Almudena Grandes",
+     "to": "Barcelona-Sants",
+     "mode": "HIGHSPEED_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "23:28",
+     "arrive": "23:36",
+     "line": "R4",
+     "agency": "Renfe Cercanias",
+     "from": "Barcelona-Sants",
+     "to": "Barcelona Arc de Triomf",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "23:55",
+     "arrive": "04:45",
+     "line": "BlaBlaCar Bus",
+     "agency": "BlaBlaCar Bus",
+     "from": "Barcelona - North Bus Station",
+     "to": "Montpellier - Sabines Bus Station",
+     "mode": "COACH",
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "04:54",
+     "arrive": "05:05",
+     "line": "2",
+     "agency": "TaM",
+     "from": "Sabines",
+     "to": "Rondelet",
+     "mode": "TRAM",
+     "rail": false,
+     "coach": false
+    },
+    {
+     "time": "05:25",
+     "arrive": "07:23",
+     "line": "TGV INOUI 5156",
+     "agency": "SNCF VOYAGEURS",
+     "from": "Montpellier Saint-Roch",
+     "to": "Lyon Part Dieu",
+     "mode": "HIGHSPEED_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "08:32",
+     "arrive": "13:50",
+     "line": "FR 9281",
+     "agency": "TRENITALIA",
+     "from": "LYON-PART-DIEU",
+     "to": "MILANO CENTRALE",
+     "mode": "HIGHSPEED_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "14:15",
+     "arrive": "16:30",
+     "line": "FR 9733",
+     "agency": "TRENITALIA",
+     "from": "MILANO CENTRALE",
+     "to": "VENEZIA MESTRE",
+     "mode": "HIGHSPEED_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "16:44",
+     "arrive": "17:05",
+     "line": "RV 3666",
+     "agency": "TRENITALIA",
+     "from": "VENEZIA MESTRE",
+     "to": "TREVISO CENTRALE",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    }
+   ]
+  }
+ ],
+ "by_date": [
+  {
+   "date": "2026-12-03",
+   "option": 1,
+   "route": "OPO - TSF",
+   "total_eur": 21.94,
+   "minutes": 428
+  }
+ ],
+ "warnings": [],
+ "metrics": {
+  "funnel": {
+   "found": 8,
+   "checked": 8,
+   "cheapest_flight": "OPO-TSF-0312-1735",
+   "cheapest_ticket_eur": 18.0,
+   "left_out": [
+    {
+     "flight": "LIS-BGY-0312-1820",
+     "ticket_eur": 36.0,
+     "why": "timetable"
+    },
+    {
+     "flight": "LIS-TSF-0312-1800",
+     "ticket_eur": 76.0,
+     "why": "timetable"
+    },
+    {
+     "flight": "LIS-BGY-0312-1215",
+     "ticket_eur": 38.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-BLQ-0312-1540",
+     "ticket_eur": 81.0,
+     "why": "not_worth_it"
+    }
+   ],
+   "itineraries": {
+    "OPO-TSF-0312-1735": {
+     "total_eur": 21.94,
+     "flight_eur": 15.99
+    },
+    "OPO-BGY-0312-1525": {
+     "total_eur": 43.67,
+     "flight_eur": 26.74
+    },
+    "OPO-BLQ-0312-0635": {
+     "total_eur": 58.44,
+     "flight_eur": 30.99
+    },
+    "LIS-BGY-0312-1215": {
+     "total_eur": 57.5,
+     "flight_eur": 35.99
+    },
+    "OPO-BGY-0312-0830": {
+     "total_eur": 52.6,
+     "flight_eur": 37.62
+    },
+    "LIS-BLQ-0312-1540": {
+     "total_eur": 105.47,
+     "flight_eur": 76.99
+    }
+   }
+  },
+  "checks": {
+   "links_dropped": 1
+  },
+  "models": {
+   "calls": 40,
+   "failed": 16,
+   "plan_b": 2,
+   "recommendation_by": null
+  },
+  "from_map": {
+   "map": "coimbra_2026-12-03_2026-12-03.html",
+   "key": "TSF-out",
+   "trip": [
+    "Coimbra",
+    "Treviso",
+    "03/12/2026"
+   ],
+   "clicked": "2026-11-12T10:23",
+   "flight_id": "OPO-TSF-0312-1735",
+   "round_trip": false,
+   "flight_eur": 15.99,
+   "total_eur": 21.72,
+   "ground_eur": 5.73,
+   "looked_up": true,
+   "legs": [
+    {
+     "airport": "OPO",
+     "to_airport": true,
+     "price_eur": 3.95,
+     "grade": "A",
+     "price_grade": "A",
+     "looked_up": true
+    },
+    {
+     "airport": "TSF",
+     "to_airport": false,
+     "price_eur": 1.78,
+     "grade": "B",
+     "price_grade": "B",
+     "looked_up": true
+    }
+   ],
+   "planner": {
+    "found": true,
+    "cheapest_eur": 21.94,
+    "ticket_eur": 18.0,
+    "checked": true,
+    "total_eur": 21.94,
+    "flight_eur": 15.99,
+    "left_out": null
+   }
+  }
+ },
+ "recommendation": "## Recomendação\n\nPelas tuas preferências, as regras recomendam a opção 1. O modelo que explica a escolha por palavras não respondeu; a comparação acima mostra em que se baseou a escolha.",
+ "cheapest": 1,
+ "fastest": 1
+}

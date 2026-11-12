@@ -55,6 +55,17 @@ window opens it again.
 Nothing else needs installing. Your keys stay on your computer (`env/.env` is not in the repository).
 On macOS or Linux, see [Set up by hand](#set-up-by-hand).
 
+### Try it without a key
+
+```
+env\.venv\Scripts\python main.py --demo
+```
+
+The program opens on a few trips and one Discover map kept in `demo/`, made by real searches from Coimbra in
+November 2026: the results as cards, each report in full, the map with its filters. Nothing is searched, so no key
+is needed and no service is asked; the buttons that would search or change a file say so instead. The environment
+comes from step 3 above (close Notepad without filling anything in) or from [Set up by hand](#set-up-by-hand).
+
 ### Plan a trip
 
 1. Write where you leave from and where you are going, choose the dates in the calendar and press **Search**. The
@@ -147,6 +158,8 @@ env\.venv\Scripts\python main.py --prices     ask again the ground prices of the
 env\.venv\Scripts\python main.py --funnel     the reports kept, added up: cheap flights that could not be connected, what code corrected in the models' text, plan B, Discover against the planner (trip_planner/tools/funnel.py)
 env\.venv\Scripts\python -m app.sample Coimbra 03/12/2026   a Discover map, then the planner on six of its trips, to measure the map (app/sample.py)
 env\.venv\Scripts\python main.py --funnel reports/sample   those batches added up
+env\.venv\Scripts\python main.py --demo       the program over the reports and maps of demo/, with no key and nothing searched
+env\.venv\Scripts\python -m app.demo reports\trip_...   copy a trip's folder (or a map from discover\maps) into demo/, its log left out (app/demo.py)
 
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 19/11/2026  a map as a file (discover/maps/), leaving between the two days
 env\.venv\Scripts\python -m discover Coimbra 12/11/2026 14/11/2026 --back 15/11/2026 17/11/2026   there and back

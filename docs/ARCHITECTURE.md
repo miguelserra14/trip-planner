@@ -168,6 +168,7 @@ app/
 ├── maps.py            Discover's form, and its maps served by their address
 ├── map_job.py         a Discover map made in that process, told to the app as it changes
 ├── sample.py          python -m app.sample: a map, then the planner on some of its trips, to measure the map (reports/sample)
+├── demo.py            main.py --demo: the app over the reports and maps of demo/, nothing searched; python -m app.demo copies one in
 ├── reports.py         the saved reports, listed, kept or put back
 ├── report_page.py     a report as a page
 ├── results.py         a report as cards, from its options as data; each ground leg drawn vehicle by vehicle

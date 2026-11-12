@@ -968,6 +968,8 @@ TEXTS = {
     "app_quit_done": "The program is closed: this tab can be closed too.",
     "app_swap": "Swap where from and where to",
     "app_no_key": "GOOGLE_API_KEY is missing in env/.env: no search can run without it. Copy env/.env.example to env/.env, fill in the key, and start the program again.",
+    "app_demo_note": "Demo: the reports and maps here were made by real searches and are kept in the repository (demo/). Open them below; searching, making a map and asking prices again need the keys in env/.env (see the README).",
+    "app_demo_refused": "Not in the demo: nothing is searched or changed. To search, start the program without --demo, with the keys in env/.env.",
     "app_one_way": "One way",
     "app_round_trip": "Round trip",
     "app_theme": "Dark or light pages",

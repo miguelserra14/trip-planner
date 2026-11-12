@@ -1,0 +1,877 @@
+{
+ "version": 1,
+ "written": "2026-11-12T10:41",
+ "origin": {
+  "written": "Coimbra",
+  "label": "Coimbra, Portugal"
+ },
+ "destination": {
+  "written": "Funchal",
+  "label": "Funchal, Portugal"
+ },
+ "dates": [
+  "2026-12-03"
+ ],
+ "language": "pt-PT",
+ "recommended": 2,
+ "ground_only_asked": false,
+ "closest": false,
+ "options": [
+  {
+   "number": 1,
+   "flight": {
+    "id": "OPO-FNC-0312-1810",
+    "date": "2026-12-03",
+    "route": "OPO - FNC",
+    "airline": "easyJet",
+    "carrier": "U2",
+    "flights": "easyJet U26835",
+    "departure_airport": "OPO",
+    "arrival_airport": "FNC",
+    "departure_time": "18:10",
+    "arrival_time": "20:15",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 125,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 65.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 65.0,
+   "booking": {
+    "url": "https://www.google.com/search?q=easyJet+official+site",
+    "verified": false
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "14:15"
+   },
+   "at_airport": "16:00",
+   "airport_wait": 130,
+   "wait_after_landing": 66,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "22:28"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "14:15",
+    "arrive_time": "16:00",
+    "minutes": 105,
+    "price_eur": 3.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "14:15",
+      "arrive": "16:00",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "C",
+    "service_day": "2026-11-12",
+    "leave_time": "21:21",
+    "arrive_time": "22:28",
+    "minutes": 67,
+    "price_eur": 4.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "21:21",
+      "arrive": "21:53",
+      "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+      "agency": "",
+      "from": "FNC",
+      "to": "CAM ZN Industrial (67799)",
+      "mode": null,
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "22:02",
+      "arrive": "22:28",
+      "line": "039",
+      "agency": "HF",
+      "from": "Rotunda Cancela T-38 (192)",
+      "to": "Praça Autonomia D (156A)",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.horariosdofunchal.pt/"
+    ],
+    "later": [
+     "21:44",
+     "23:15"
+    ]
+   },
+   "other": null,
+   "total_eur": 72.95,
+   "range_eur": [
+    70.95,
+    76.95
+   ],
+   "confirmed_eur": 3.95,
+   "minutes": 493,
+   "extra_minutes": 25,
+   "time_cost": 2.0833333333333335,
+   "schedule_grade": "C",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "B",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "C",
+    "part_from_price": "C"
+   },
+   "notes": [
+    "Os 12 km entre FNC e CAM ZN Industrial (67799) não estão em nenhum horário publicado: o tempo e o preço são estimados pela distância. Confirma como os fazer antes de reservar."
+   ],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 0.0,
+    "fastest_minutes": 25
+   }
+  },
+  {
+   "number": 2,
+   "flight": {
+    "id": "OPO-FNC-0312-1840",
+    "date": "2026-12-03",
+    "route": "OPO - FNC",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR366",
+    "departure_airport": "OPO",
+    "arrival_airport": "FNC",
+    "departure_time": "18:40",
+    "arrival_time": "20:45",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 125,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 66.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 62.99,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=FNC",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "15:00"
+   },
+   "at_airport": "17:05",
+   "airport_wait": 95,
+   "wait_after_landing": 59,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "22:48"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "15:00",
+    "arrive_time": "17:05",
+    "minutes": 125,
+    "price_eur": 6.0,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "15:00",
+      "arrive": "17:05",
+      "line": "Rede Expressos, 1 transbordo pelo caminho",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "C",
+    "service_day": "2026-11-12",
+    "leave_time": "21:44",
+    "arrive_time": "22:48",
+    "minutes": 64,
+    "price_eur": 4.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "21:44",
+      "arrive": "22:16",
+      "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+      "agency": "",
+      "from": "FNC",
+      "to": "CAM ZN Industrial (67799)",
+      "mode": null,
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "22:25",
+      "arrive": "22:48",
+      "line": "038",
+      "agency": "HF",
+      "from": "Maxmat Cancela (1706)",
+      "to": "Praça Autonomia D (156A)",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.horariosdofunchal.pt/"
+    ],
+    "later": [
+     "23:15"
+    ]
+   },
+   "other": null,
+   "total_eur": 72.99000000000001,
+   "range_eur": [
+    70.99000000000001,
+    76.99000000000001
+   ],
+   "confirmed_eur": 68.99000000000001,
+   "minutes": 468,
+   "extra_minutes": 0,
+   "time_cost": 0.0,
+   "schedule_grade": "C",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "C",
+    "part_from_price": "C"
+   },
+   "notes": [
+    "Os 12 km entre FNC e CAM ZN Industrial (67799) não estão em nenhum horário publicado: o tempo e o preço são estimados pela distância. Confirma como os fazer antes de reservar."
+   ],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 0.04,
+    "fastest_minutes": 0
+   }
+  },
+  {
+   "number": 3,
+   "flight": {
+    "id": "OPO-FNC-0312-0600",
+    "date": "2026-12-03",
+    "route": "OPO - FNC",
+    "airline": "TAP Portugal",
+    "carrier": "TP",
+    "flights": "TAP Portugal TP1701",
+    "departure_airport": "OPO",
+    "arrival_airport": "FNC",
+    "departure_time": "06:00",
+    "arrival_time": "08:00",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 120,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 80.0,
+    "cabin_bag_included": true
+   },
+   "flight_price": 80.0,
+   "booking": {
+    "url": "https://www.flytap.com",
+    "verified": false
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "02:30"
+   },
+   "at_airport": "04:15",
+   "airport_wait": 105,
+   "wait_after_landing": 80,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "10:23"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "02:30",
+    "arrive_time": "04:15",
+    "minutes": 105,
+    "price_eur": 6.45,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "02:30",
+      "arrive": "04:15",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "C",
+    "service_day": "2026-11-12",
+    "leave_time": "09:20",
+    "arrive_time": "10:23",
+    "minutes": 63,
+    "price_eur": 4.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "09:20",
+      "arrive": "09:52",
+      "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+      "agency": "",
+      "from": "FNC",
+      "to": "CAM ZN Industrial (67799)",
+      "mode": null,
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "10:01",
+      "arrive": "10:23",
+      "line": "038",
+      "agency": "HF",
+      "from": "Rotunda Cancela T-38 (192)",
+      "to": "Praça Autonomia D (156A)",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.horariosdofunchal.pt/"
+    ],
+    "later": [
+     "09:51",
+     "10:20",
+     "10:45"
+    ]
+   },
+   "other": null,
+   "total_eur": 90.45,
+   "range_eur": [
+    88.45,
+    94.45
+   ],
+   "confirmed_eur": 6.45,
+   "minutes": 473,
+   "extra_minutes": 5,
+   "time_cost": 0.41666666666666663,
+   "schedule_grade": "C",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "B",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "C",
+    "part_from_price": "C"
+   },
+   "notes": [
+    "Os 12 km entre FNC e CAM ZN Industrial (67799) não estão em nenhum horário publicado: o tempo e o preço são estimados pela distância. Confirma como os fazer antes de reservar."
+   ],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 17.5,
+    "fastest_minutes": 5
+   }
+  },
+  {
+   "number": 4,
+   "flight": {
+    "id": "LIS-FNC-0312-1055",
+    "date": "2026-12-03",
+    "route": "LIS - FNC",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR88",
+    "departure_airport": "LIS",
+    "arrival_airport": "FNC",
+    "departure_time": "10:55",
+    "arrival_time": "12:45",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 110,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 107.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 100.49,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=LIS&destinationIata=FNC",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "07:00"
+   },
+   "at_airport": "09:20",
+   "airport_wait": 95,
+   "wait_after_landing": 60,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "14:53"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "07:00",
+    "arrive_time": "09:20",
+    "minutes": 140,
+    "price_eur": 4.45,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "07:00",
+      "arrive": "09:20",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Lisboa (Aeroporto)",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "C",
+    "service_day": "2026-11-12",
+    "leave_time": "13:45",
+    "arrive_time": "14:53",
+    "minutes": 68,
+    "price_eur": 4.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "13:45",
+      "arrive": "14:21",
+      "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+      "agency": "",
+      "from": "FNC",
+      "to": "ESCL Palheiro Ferreiro S (433)",
+      "mode": null,
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "14:33",
+      "arrive": "14:53",
+      "line": "047",
+      "agency": "HF",
+      "from": "Saída CAM Pretos (380)",
+      "to": "Praça Autonomia D (156A)",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.horariosdofunchal.pt/"
+    ],
+    "later": [
+     "14:09",
+     "14:58",
+     "16:08"
+    ]
+   },
+   "other": null,
+   "total_eur": 108.94,
+   "range_eur": [
+    106.94,
+    112.94
+   ],
+   "confirmed_eur": 104.94,
+   "minutes": 473,
+   "extra_minutes": 5,
+   "time_cost": 0.41666666666666663,
+   "schedule_grade": "C",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "C",
+    "part_from_price": "C"
+   },
+   "notes": [
+    "Os 14 km entre FNC e ESCL Palheiro Ferreiro  S (433) não estão em nenhum horário publicado: o tempo e o preço são estimados pela distância. Confirma como os fazer antes de reservar."
+   ],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 35.99,
+    "fastest_minutes": 5
+   }
+  },
+  {
+   "number": 5,
+   "flight": {
+    "id": "LIS-FNC-0312-0725",
+    "date": "2026-12-03",
+    "route": "LIS - FNC",
+    "airline": "TAP Portugal",
+    "carrier": "TP",
+    "flights": "TAP Portugal TP1685",
+    "departure_airport": "LIS",
+    "arrival_airport": "FNC",
+    "departure_time": "07:25",
+    "arrival_time": "09:15",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 110,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 153.0,
+    "cabin_bag_included": true
+   },
+   "flight_price": 153.0,
+   "booking": {
+    "url": "https://www.flytap.com",
+    "verified": false
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "03:20"
+   },
+   "at_airport": "05:55",
+   "airport_wait": 90,
+   "wait_after_landing": 65,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "11:23"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "FlixBus",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "03:20",
+    "arrive_time": "05:55",
+    "minutes": 155,
+    "price_eur": 11.98,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "03:20",
+      "arrive": "05:55",
+      "line": "FlixBus",
+      "agency": "FlixBus",
+      "from": "Coimbra",
+      "to": "Lisbon (Airport)",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=b0b30c2e-ad59-4583-a115-c9c4c21cec16&rideDate=03.12.2026&adult=1"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "C",
+    "service_day": "2026-11-12",
+    "leave_time": "10:20",
+    "arrive_time": "11:23",
+    "minutes": 63,
+    "price_eur": 4.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "10:20",
+      "arrive": "10:52",
+      "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+      "agency": "",
+      "from": "FNC",
+      "to": "CAM ZN Industrial (67799)",
+      "mode": null,
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "11:01",
+      "arrive": "11:23",
+      "line": "038",
+      "agency": "HF",
+      "from": "Rotunda Cancela T-38 (192)",
+      "to": "Praça Autonomia D (156A)",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.horariosdofunchal.pt/"
+    ],
+    "later": [
+     "10:45",
+     "11:20",
+     "11:55"
+    ]
+   },
+   "other": null,
+   "total_eur": 168.98,
+   "range_eur": [
+    166.98,
+    172.98
+   ],
+   "confirmed_eur": 11.98,
+   "minutes": 483,
+   "extra_minutes": 15,
+   "time_cost": 1.25,
+   "schedule_grade": "C",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "B",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "C",
+    "part_from_price": "C"
+   },
+   "notes": [
+    "Os 12 km entre FNC e CAM ZN Industrial (67799) não estão em nenhum horário publicado: o tempo e o preço são estimados pela distância. Confirma como os fazer antes de reservar."
+   ],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 96.03,
+    "fastest_minutes": 15
+   }
+  }
+ ],
+ "ground_only": [],
+ "by_date": [
+  {
+   "date": "2026-12-03",
+   "option": 1,
+   "route": "OPO - FNC",
+   "total_eur": 72.95,
+   "minutes": 493
+  }
+ ],
+ "warnings": [
+  {
+   "key": "warn_below_minimum",
+   "values": {
+    "minimum": "🟢"
+   }
+  },
+  {
+   "key": "note_flights_beaten",
+   "values": {
+    "skipped": 7,
+    "checked": 8
+   }
+  }
+ ],
+ "metrics": {
+  "funnel": {
+   "found": 15,
+   "checked": 8,
+   "cheapest_flight": "OPO-FNC-0312-1810",
+   "cheapest_ticket_eur": 65.0,
+   "left_out": [
+    {
+     "flight": "LIS-FNC-0312-1850",
+     "ticket_eur": 97.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-FNC-0312-0715",
+     "ticket_eur": 108.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-FNC-0312-2310",
+     "ticket_eur": 152.0,
+     "why": "not_worth_it"
+    }
+   ],
+   "itineraries": {
+    "OPO-FNC-0312-1810": {
+     "total_eur": 72.95,
+     "flight_eur": 65.0
+    },
+    "OPO-FNC-0312-1840": {
+     "total_eur": 72.99,
+     "flight_eur": 62.99
+    },
+    "OPO-FNC-0312-0600": {
+     "total_eur": 90.45,
+     "flight_eur": 80.0
+    },
+    "LIS-FNC-0312-1850": {
+     "total_eur": 108.6,
+     "flight_eur": 97.0
+    },
+    "LIS-FNC-0312-1055": {
+     "total_eur": 108.94,
+     "flight_eur": 100.49
+    },
+    "LIS-FNC-0312-0715": {
+     "total_eur": 119.45,
+     "flight_eur": 108.0
+    },
+    "LIS-FNC-0312-2310": {
+     "total_eur": 164.48,
+     "flight_eur": 152.0
+    },
+    "LIS-FNC-0312-0725": {
+     "total_eur": 168.98,
+     "flight_eur": 153.0
+    }
+   }
+  },
+  "checks": {
+   "links_dropped": 1
+  },
+  "models": {
+   "calls": 4,
+   "failed": 0,
+   "plan_b": 0,
+   "recommendation_by": null
+  },
+  "from_map": {
+   "map": "coimbra_2026-12-03_2026-12-03.html",
+   "key": "FNC-out",
+   "trip": [
+    "Coimbra",
+    "Funchal",
+    "03/12/2026"
+   ],
+   "clicked": "2026-11-12T10:23",
+   "flight_id": "OPO-FNC-0312-1840",
+   "round_trip": false,
+   "flight_eur": 62.99,
+   "total_eur": 71.64,
+   "ground_eur": 8.65,
+   "looked_up": false,
+   "legs": [
+    {
+     "airport": "OPO",
+     "to_airport": true,
+     "price_eur": 6.0,
+     "grade": "A",
+     "price_grade": "A",
+     "looked_up": true
+    },
+    {
+     "airport": "FNC",
+     "to_airport": false,
+     "price_eur": 2.65,
+     "grade": "C",
+     "price_grade": "B",
+     "looked_up": false
+    }
+   ],
+   "planner": {
+    "found": true,
+    "cheapest_eur": 72.95,
+    "ticket_eur": 66.0,
+    "checked": true,
+    "total_eur": 72.99,
+    "flight_eur": 62.99,
+    "left_out": null
+   }
+  }
+ },
+ "recommendation": "## Recomendação\n\nPelas tuas preferências, as regras recomendam a opção 2. O modelo que explica a escolha por palavras não respondeu; a comparação acima mostra em que se baseou a escolha.",
+ "cheapest": 1,
+ "fastest": 2
+}

@@ -1,0 +1,813 @@
+{
+ "trip": "Antuérpia -> Coimbra",
+ "prices_read": "2026-11-09T10:07",
+ "options": [
+  {
+   "number": 1,
+   "flight": "BRU-OPO-2903-1735",
+   "route": "BRU - OPO",
+   "date": "2027-03-29",
+   "flight_price": 102.0,
+   "total": 118.98,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-29",
+     "vehicles": [
+      {
+       "time": "15:19",
+       "arrive": "15:49",
+       "line": "EC 9240",
+       "agency": "NMBS/SNCB",
+       "from": "Anvers-Central",
+       "to": "Brussels Airport-Zaventem",
+       "from_id": "be-sncb_8821006",
+       "to_id": "be-sncb_8819406",
+       "from_at": [
+        51.217197,
+        4.421098000000001
+       ],
+       "to_at": [
+        50.89682,
+        4.48549
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 36,
+       "day": "2027-03-29"
+      }
+     ],
+     "price_eur": 7.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "timetable",
+     "day": "2027-03-29",
+     "vehicles": [
+      {
+       "time": "20:00",
+       "arrive": "21:50",
+       "line": "FlixBus 1022",
+       "agency": "FlixBus-eu",
+       "from": "Porto (Airport)",
+       "to": "Coimbra",
+       "from_id": "eu-flixbus_e9e4caca-0ae6-434f-9079-610de5e00a1d",
+       "to_id": "eu-flixbus_c9e8bf88-9d2e-46a6-a8e5-17129eb020cc",
+       "from_at": [
+        41.23593000000001,
+        -8.669926
+       ],
+       "to_at": [
+        40.22017000000001,
+        -8.439008
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 115,
+       "day": "2027-03-29"
+      }
+     ],
+     "price_eur": 9.98,
+     "price_kind": "operator",
+     "confirmed_eur": 9.98,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "FlixBus",
+       "price_eur": 9.98,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "flight": "DUS-LIS-3003-1505",
+   "route": "DUS - LIS",
+   "date": "2027-03-30",
+   "flight_price": 86.0,
+   "total": 122.86,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-30",
+     "vehicles": [
+      {
+       "time": "08:45",
+       "arrive": "09:19",
+       "line": "EC 9219",
+       "agency": "NMBS/SNCB",
+       "from": "Anvers-Central",
+       "to": "Breda (NL)",
+       "from_id": "be-sncb_8821006",
+       "to_id": "be-sncb_8400131",
+       "from_at": [
+        51.217197,
+        4.421098000000001
+       ],
+       "to_at": [
+        51.595676000000005,
+        4.780017
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 49,
+       "day": "2027-03-30"
+      },
+      {
+       "time": "09:40",
+       "arrive": "12:15",
+       "line": "FlixBus 023",
+       "agency": "FlixBus-eu",
+       "from": "Breda central train station",
+       "to": "Duisburg central train station",
+       "from_id": "eu-flixbus_dcc06f26-9603-11e6-9066-549f350fcb0c",
+       "to_id": "eu-flixbus_dcbbe873-9603-11e6-9066-549f350fcb0c",
+       "from_at": [
+        51.596275000000006,
+        4.778202000000001
+       ],
+       "to_at": [
+        51.42834500000001,
+        6.7711950000000005
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 139,
+       "day": "2027-03-30"
+      },
+      {
+       "time": "12:23",
+       "arrive": "12:31",
+       "line": "RE1 (26816)",
+       "agency": "National Express",
+       "from": "Duisburg Hbf",
+       "to": "D-Flughafen Bf",
+       "from_id": "de-DELFI_de:05112:16032:92:5",
+       "to_id": "de-DELFI_de:05111:18488:97:4",
+       "from_at": [
+        51.43049,
+        6.776226000000001
+       ],
+       "to_at": [
+        51.29135000000001,
+        6.786853000000001
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 15,
+       "day": "2027-03-30"
+      },
+      {
+       "time": "12:36",
+       "arrive": "12:41",
+       "line": "SkyTrain",
+       "agency": "Rheinbahn SkyTrain",
+       "from": "D-Flughafen Bf",
+       "to": "D-Flughafen Terminal A/B",
+       "from_id": "de-DELFI_de:05111:18488:3:1",
+       "to_id": "de-DELFI_de:05111:18493:0:1",
+       "from_at": [
+        51.291000000000004,
+        6.785901
+       ],
+       "to_at": [
+        51.279377000000004,
+        6.766102
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "OTHER",
+       "km": 2,
+       "day": "2027-03-30"
+      }
+     ],
+     "price_eur": 27.98,
+     "price_kind": "partly",
+     "confirmed_eur": 13.98,
+     "tickets": [
+      {
+       "positions": [
+        1
+       ],
+       "operator": "FlixBus",
+       "price_eur": 13.98,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    },
+    {
+     "side": "from",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-30",
+     "vehicles": [
+      {
+       "time": "18:50",
+       "arrive": "18:56",
+       "line": "Vm",
+       "agency": "Metropolitano de Lisboa, E.P.E.",
+       "from": "Aeroporto",
+       "to": "Oriente",
+       "from_id": "pt-Metro-Lisboa_AP",
+       "to_id": "pt-Metro-Lisboa_OR",
+       "from_at": [
+        38.76859000000001,
+        -9.128327999999996
+       ],
+       "to_at": [
+        38.767838000000005,
+        -9.099770999999999
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "SUBWAY",
+       "km": 2,
+       "day": "2027-03-30"
+      },
+      {
+       "time": "19:00",
+       "arrive": "21:20",
+       "line": "FlixBus 1018",
+       "agency": "FlixBus-eu",
+       "from": "Lisbon (Oriente)",
+       "to": "Coimbra",
+       "from_id": "eu-flixbus_9a30aab4-4caa-4ee6-9e33-739752be7cd0",
+       "to_id": "eu-flixbus_c9e8bf88-9d2e-46a6-a8e5-17129eb020cc",
+       "from_at": [
+        38.76788,
+        -9.100762
+       ],
+       "to_at": [
+        40.22017000000001,
+        -8.439008
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 171,
+       "day": "2027-03-30"
+      }
+     ],
+     "price_eur": 8.88,
+     "price_kind": "tariff",
+     "confirmed_eur": 6.98,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "Carris/Metro Lisbon (published tariff)",
+       "price_eur": 1.9,
+       "travel_day": true,
+       "tariff": true
+      },
+      {
+       "positions": [
+        1
+       ],
+       "operator": "FlixBus",
+       "price_eur": 6.98,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "flight": "CGN-OPO-3003-1625",
+   "route": "CGN - OPO",
+   "date": "2027-03-30",
+   "flight_price": 78.41,
+   "total": 124.39,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-30",
+     "vehicles": [
+      {
+       "time": "11:54",
+       "arrive": "12:29",
+       "line": "IC 4533",
+       "agency": "NMBS/SNCB",
+       "from": "Anvers-Central",
+       "to": "Bruxelles-Nord",
+       "from_id": "be-sncb_8821006",
+       "to_id": "be-sncb_8812005",
+       "from_at": [
+        51.217197,
+        4.421098000000001
+       ],
+       "to_at": [
+        50.85965999999999,
+        4.360849999999999
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 40,
+       "day": "2027-03-30"
+      },
+      {
+       "time": "12:34",
+       "arrive": "14:15",
+       "line": "ICE 315",
+       "agency": "DB Fernverkehr AG",
+       "from": "Bruxelles-Nord",
+       "to": "Köln Hbf",
+       "from_id": "de-DELFI_000008800002",
+       "to_id": "de-DELFI_de:05315:11201:7:74",
+       "from_at": [
+        50.860237,
+        4.361453999999999
+       ],
+       "to_at": [
+        50.943225999999996,
+        6.958314
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "HIGHSPEED_RAIL",
+       "km": 182,
+       "day": "2027-03-30"
+      },
+      {
+       "time": "14:21",
+       "arrive": "14:35",
+       "line": "S19",
+       "agency": "DB Regio AG NRW",
+       "from": "Köln Hbf",
+       "to": "Flughafen Köln/Bonn Bf",
+       "from_id": "de-DELFI_de:05315:11201",
+       "to_id": "de-DELFI_de:05315:17551:7:74",
+       "from_at": [
+        50.94303,
+        6.958729000000001
+       ],
+       "to_at": [
+        50.878902000000004,
+        7.119023
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "METRO",
+       "km": 13,
+       "day": "2027-03-30"
+      }
+     ],
+     "price_eur": 38.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "timetable",
+     "day": "2027-03-30",
+     "vehicles": [
+      {
+       "time": "20:00",
+       "arrive": "21:50",
+       "line": "FlixBus 1022",
+       "agency": "FlixBus-eu",
+       "from": "Porto (Airport)",
+       "to": "Coimbra",
+       "from_id": "eu-flixbus_e9e4caca-0ae6-434f-9079-610de5e00a1d",
+       "to_id": "eu-flixbus_c9e8bf88-9d2e-46a6-a8e5-17129eb020cc",
+       "from_at": [
+        41.23593000000001,
+        -8.669926
+       ],
+       "to_at": [
+        40.22017000000001,
+        -8.439008
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 115,
+       "day": "2027-03-30"
+      }
+     ],
+     "price_eur": 7.98,
+     "price_kind": "operator",
+     "confirmed_eur": 7.98,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "FlixBus",
+       "price_eur": 7.98,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "flight": "CRL-LIS-2903-1345",
+   "route": "CRL - LIS",
+   "date": "2027-03-29",
+   "flight_price": 105.14,
+   "total": 141.51999999999998,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-29",
+     "vehicles": [
+      {
+       "time": "08:36",
+       "arrive": "08:43",
+       "line": "11",
+       "agency": "De Lijn",
+       "from": "Antwerpen Wolstraat",
+       "to": "Antwerpen Centraal Station perron 2",
+       "from_id": "be-delijn_gs:delijn:104068",
+       "to_id": "be-delijn_gs:delijn:103734",
+       "from_at": [
+        51.221540000000005,
+        4.40409
+       ],
+       "to_at": [
+        51.218900000000005,
+        4.421320000000001
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "TRAM",
+       "km": 1,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "08:54",
+       "arrive": "10:36",
+       "line": "IC 4530",
+       "agency": "NMBS/SNCB",
+       "from": "Anvers-Central",
+       "to": "Charleroi-Central",
+       "from_id": "be-sncb_8821006",
+       "to_id": "be-sncb_8872009",
+       "from_at": [
+        51.217197,
+        4.421098000000001
+       ],
+       "to_at": [
+        50.40471,
+        4.43857
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 90,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "10:45",
+       "arrive": "11:03",
+       "line": "A1",
+       "agency": "LETEC",
+       "from": "CHARLEROI Gare Centrale",
+       "to": "CHARLEROI Airport - Quai 10",
+       "from_id": "be-tec_gs:tec:Cchcen18",
+       "to_id": "be-tec_gs:tec:Cgoairp4",
+       "from_at": [
+        50.405727,
+        4.4367480000000015
+       ],
+       "to_at": [
+        50.46992,
+        4.469697000000001
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 8,
+       "day": "2027-03-29"
+      }
+     ],
+     "price_eur": 26.0,
+     "price_kind": "partly",
+     "confirmed_eur": 0,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "De Lijn (published tariff)",
+       "price_eur": 3.0,
+       "travel_day": true,
+       "tariff": true
+      },
+      {
+       "positions": [
+        2
+       ],
+       "operator": "TEC Charleroi Airport (published tariff)",
+       "price_eur": 6.0,
+       "travel_day": true,
+       "tariff": true
+      }
+     ]
+    },
+    {
+     "side": "from",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-29",
+     "vehicles": [
+      {
+       "time": "17:32",
+       "arrive": "17:38",
+       "line": "Vm",
+       "agency": "Metropolitano de Lisboa, E.P.E.",
+       "from": "Aeroporto",
+       "to": "Oriente",
+       "from_id": "pt-Metro-Lisboa_AP",
+       "to_id": "pt-Metro-Lisboa_OR",
+       "from_at": [
+        38.76859000000001,
+        -9.128327999999996
+       ],
+       "to_at": [
+        38.767838000000005,
+        -9.099770999999999
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "SUBWAY",
+       "km": 2,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "17:45",
+       "arrive": "20:00",
+       "line": "FlixBus 1006",
+       "agency": "FlixBus-eu",
+       "from": "Lisbon (Oriente)",
+       "to": "Coimbra",
+       "from_id": "eu-flixbus_9a30aab4-4caa-4ee6-9e33-739752be7cd0",
+       "to_id": "eu-flixbus_c9e8bf88-9d2e-46a6-a8e5-17129eb020cc",
+       "from_at": [
+        38.76788,
+        -9.100762
+       ],
+       "to_at": [
+        40.22017000000001,
+        -8.439008
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 171,
+       "day": "2027-03-29"
+      }
+     ],
+     "price_eur": 10.38,
+     "price_kind": "tariff",
+     "confirmed_eur": 8.48,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "Carris/Metro Lisbon (published tariff)",
+       "price_eur": 1.9,
+       "travel_day": true,
+       "tariff": true
+      },
+      {
+       "positions": [
+        1
+       ],
+       "operator": "FlixBus",
+       "price_eur": 8.48,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "number": 5,
+   "flight": "LUX-OPO-2903-1455",
+   "route": "LUX - OPO",
+   "date": "2027-03-29",
+   "flight_price": 107.0,
+   "total": 142.48,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-29",
+     "vehicles": [
+      {
+       "time": "07:54",
+       "arrive": "08:29",
+       "line": "IC 4529",
+       "agency": "NMBS/SNCB",
+       "from": "Anvers-Central",
+       "to": "Bruxelles-Nord",
+       "from_id": "be-sncb_8821006",
+       "to_id": "be-sncb_8812005",
+       "from_at": [
+        51.217197,
+        4.421098000000001
+       ],
+       "to_at": [
+        50.85965999999999,
+        4.360849999999999
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 40,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "08:44",
+       "arrive": "11:22",
+       "line": "IC 2108",
+       "agency": "NMBS/SNCB",
+       "from": "Bruxelles-Nord",
+       "to": "Arlon",
+       "from_id": "be-sncb_8812005",
+       "to_id": "be-sncb_8866001",
+       "from_at": [
+        50.85965999999999,
+        4.360849999999999
+       ],
+       "to_at": [
+        49.680530000000005,
+        5.809972
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 167,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "11:29",
+       "arrive": "11:49",
+       "line": "IC",
+       "agency": "Chemins de Fer Luxembourgeois",
+       "from": "Arlon, Gare",
+       "to": "Luxembourg, Gare Centrale",
+       "from_id": "lu-administration-des-transports-publics_000300000015",
+       "to_id": "lu-administration-des-transports-publics_000200405060",
+       "from_at": [
+        49.680347,
+        5.809569000000001
+       ],
+       "to_at": [
+        49.599968000000004,
+        6.13424
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "REGIONAL_RAIL",
+       "km": 25,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "12:13",
+       "arrive": "12:26",
+       "line": "223",
+       "agency": "Régime Général des Transports Routiers",
+       "from": "Luxembourg, Gare Rocade",
+       "to": "Senningerberg, Lou Hemmer",
+       "from_id": "lu-administration-des-transports-publics_000200405046",
+       "to_id": "lu-administration-des-transports-publics_000200508012",
+       "from_at": [
+        49.60051300000001,
+        6.136658000000001
+       ],
+       "to_at": [
+        49.63301500000001,
+        6.2104610000000005
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 6,
+       "day": "2027-03-29"
+      }
+     ],
+     "price_eur": 27.0,
+     "price_kind": "partly",
+     "confirmed_eur": 0.0,
+     "tickets": [
+      {
+       "positions": [
+        2,
+        3
+       ],
+       "operator": "Luxembourg (free public transport)",
+       "price_eur": 0.0,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    },
+    {
+     "side": "from",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2027-03-29",
+     "vehicles": [
+      {
+       "time": "18:45",
+       "arrive": "19:10",
+       "line": "FlixBus 1783",
+       "agency": "FlixBus-eu",
+       "from": "Porto (Airport)",
+       "to": "Porto (TIC - Campanhã)",
+       "from_id": "eu-flixbus_e9e4caca-0ae6-434f-9079-610de5e00a1d",
+       "to_id": "eu-flixbus_cd022a5c-a591-46fe-86a1-f7ca0ebbaf37",
+       "from_at": [
+        41.23593000000001,
+        -8.669926
+       ],
+       "to_at": [
+        41.15289,
+        -8.583159
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 12,
+       "day": "2027-03-29"
+      },
+      {
+       "time": "19:15",
+       "arrive": "20:35",
+       "line": "FlixBus 1006",
+       "agency": "FlixBus-eu",
+       "from": "Porto (TIC - Campanhã)",
+       "to": "Coimbra",
+       "from_id": "eu-flixbus_cd022a5c-a591-46fe-86a1-f7ca0ebbaf37",
+       "to_id": "eu-flixbus_c9e8bf88-9d2e-46a6-a8e5-17129eb020cc",
+       "from_at": [
+        41.15289,
+        -8.583159
+       ],
+       "to_at": [
+        40.22017000000001,
+        -8.439008
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 104,
+       "day": "2027-03-29"
+      }
+     ],
+     "price_eur": 8.48,
+     "price_kind": "partly",
+     "confirmed_eur": 6.48,
+     "tickets": [
+      {
+       "positions": [
+        1
+       ],
+       "operator": "FlixBus",
+       "price_eur": 6.48,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

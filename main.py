@@ -1,4 +1,5 @@
 """Open the trip planner in the browser:           python main.py     (or double-click TripPlanner.bat)
+... over the reports kept in demo/, with no key:  python main.py --demo   (see app/demo.py)
 Plan the trip in settings.py in the terminal:     python main.py --terminal
 Check every service the program depends on:       python main.py --check
 The languages there are:                          python main.py --languages
@@ -58,22 +59,28 @@ def languages(arguments: list[str]) -> int:
             return action(code[0])
     return translate.show_languages()
 
-def in_browser() -> int:
+def in_browser(demo: bool = False) -> int:
+    """demo: the reports and maps kept in demo/, in English, with nothing searched (app/demo.py)."""
     try:
+        import dataclasses
         from trip_planner.trip.trip_settings import settings_file
         SETTINGS = settings_file().SETTINGS   # its dates moved forward once they have passed: the program still opens
         from trip_planner import current
         from trip_planner.texts import text_in
-        from app import server
+        from app import demo as demo_files, server
         from app.site import Site
     except Exception as error:
         # Usually a mistake in settings.py: said in the terminal window, which TripPlanner.bat then keeps open
         print(f"The trip planner could not start.\n\n{type(error).__name__}: {error}")
         return 1
-    if SETTINGS.moved_weeks:
+    if demo:
+        demo_files.use()
+        SETTINGS = dataclasses.replace(SETTINGS, language=demo_files.LANGUAGE)
+    elif SETTINGS.moved_weeks:
         print(text_in(SETTINGS.language, "settings_dates_moved", weeks=SETTINGS.moved_weeks, dates=", ".join(SETTINGS.dates)))
     current.SETTINGS = SETTINGS   # the pages are in the language of settings.py
-    server.serve(Site(SETTINGS))
+    # A demo's prices are old by nature: they are not offered to be asked again
+    server.serve(Site(SETTINGS, stale=list, demo=True) if demo else Site(SETTINGS))
     return 0
 
 if __name__ == "__main__":
@@ -103,4 +110,4 @@ if __name__ == "__main__":
     if "--terminals" in arguments:
         from trip_planner.sources import timetables
         sys.exit(1 if timetables.fill_terminals(again="all" in arguments) else 0)
-    sys.exit(in_terminal("--check" in arguments) if {"--check", "--terminal"} & set(arguments) else in_browser())
+    sys.exit(in_terminal("--check" in arguments) if {"--check", "--terminal"} & set(arguments) else in_browser("--demo" in arguments))

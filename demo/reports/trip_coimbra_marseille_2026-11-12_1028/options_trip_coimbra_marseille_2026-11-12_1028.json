@@ -1,0 +1,857 @@
+{
+ "version": 1,
+ "written": "2026-11-12T10:28",
+ "origin": {
+  "written": "Coimbra",
+  "label": "Coimbra, Portugal"
+ },
+ "destination": {
+  "written": "Marseille",
+  "label": "Marseille, France"
+ },
+ "dates": [
+  "2026-12-03"
+ ],
+ "language": "pt-PT",
+ "recommended": 1,
+ "ground_only_asked": false,
+ "closest": false,
+ "options": [
+  {
+   "number": 1,
+   "flight": {
+    "id": "OPO-MRS-0312-1750",
+    "date": "2026-12-03",
+    "route": "OPO - MRS",
+    "airline": "Ryanair",
+    "carrier": "FR",
+    "flights": "Ryanair FR2248",
+    "departure_airport": "OPO",
+    "arrival_airport": "MRS",
+    "departure_time": "17:50",
+    "arrival_time": "20:50",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 120,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 20.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 18.99,
+   "booking": {
+    "url": "https://www.ryanair.com/pt/pt/trip/flights/select?adults=1&teens=0&children=0&infants=0&dateOut=2026-12-03&isConnectedFlight=false&isReturn=false&discount=0&originIata=OPO&destinationIata=MRS",
+    "verified": true
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "14:15"
+   },
+   "at_airport": "16:00",
+   "airport_wait": 110,
+   "wait_after_landing": 45,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "22:02"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "14:15",
+    "arrive_time": "16:00",
+    "minutes": 105,
+    "price_eur": 3.95,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "14:15",
+      "arrive": "16:00",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [],
+    "grade": "B",
+    "service_day": "2026-11-12",
+    "leave_time": "21:35",
+    "arrive_time": "22:02",
+    "minutes": 27,
+    "price_eur": 4.0,
+    "price_kind": "estimate",
+    "price_grade": "C",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "21:40",
+      "arrive": "22:02",
+      "line": "A1",
+      "agency": "Métropole lecar",
+      "from": "AEROPORT MARSEILLE PROVENCE",
+      "to": "Gare St Charles",
+      "mode": "BUS",
+      "rail": false,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.lametropolemobilite.fr/lecar-metropole/"
+    ],
+    "later": [
+     "21:55",
+     "22:15",
+     "22:35"
+    ]
+   },
+   "other": null,
+   "total_eur": 26.939999999999998,
+   "range_eur": [
+    24.939999999999998,
+    30.939999999999998
+   ],
+   "confirmed_eur": 22.939999999999998,
+   "minutes": 407,
+   "extra_minutes": 0,
+   "time_cost": 0.0,
+   "schedule_grade": "B",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "A",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "B",
+    "part_from_price": "C"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 0.0,
+    "fastest_minutes": 0
+   }
+  },
+  {
+   "number": 2,
+   "flight": {
+    "id": "OPO-NCE-0312-1120",
+    "date": "2026-12-03",
+    "route": "OPO - NCE",
+    "airline": "easyJet",
+    "carrier": "U2",
+    "flights": "easyJet U26805",
+    "departure_airport": "OPO",
+    "arrival_airport": "NCE",
+    "departure_time": "11:20",
+    "arrival_time": "14:40",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 140,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 60.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 60.0,
+   "booking": {
+    "url": "https://www.google.com/search?q=easyJet+official+site",
+    "verified": false
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "07:30"
+   },
+   "at_airport": "09:15",
+   "airport_wait": 125,
+   "wait_after_landing": 85,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "19:00"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "07:30",
+    "arrive_time": "09:15",
+    "minutes": 105,
+    "price_eur": 3.45,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "07:30",
+      "arrive": "09:15",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "operator",
+    "source": "FlixBus",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "16:05",
+    "arrive_time": "19:00",
+    "minutes": 175,
+    "price_eur": 12.48,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "16:05",
+      "arrive": "19:00",
+      "line": "FlixBus",
+      "agency": "FlixBus",
+      "from": "Nice (Vauban Bus Station)",
+      "to": "Marseille (Saint-Charles)",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://shop.flixbus.pt/search?departureCity=40e13a46-8646-11e6-9066-549f350fcb0c&arrivalCity=40df8e99-8646-11e6-9066-549f350fcb0c&rideDate=03.12.2026&adult=1"
+    ],
+    "later": [
+     "17:03",
+     "17:10",
+     "17:12"
+    ]
+   },
+   "other": {
+    "leave_time": "15:57",
+    "arrive_time": "18:50",
+    "price_eur": 28.0,
+    "vehicles": [
+     {
+      "time": "16:17",
+      "arrive": "18:50",
+      "line": "TER 17488",
+      "agency": "TransDev RAIL5241",
+      "from": "Nice-St-Augustin",
+      "to": "Marseille-Blancarde",
+      "mode": "REGIONAL_RAIL",
+      "rail": true,
+      "coach": false
+     }
+    ],
+    "by_coach": false
+   },
+   "total_eur": 75.93,
+   "range_eur": null,
+   "confirmed_eur": 15.93,
+   "minutes": 630,
+   "extra_minutes": 223,
+   "time_cost": 35.84375,
+   "schedule_grade": "A",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "B",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "A",
+    "part_from_price": "A"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 48.99,
+    "fastest_minutes": 223
+   }
+  },
+  {
+   "number": 3,
+   "flight": {
+    "id": "OPO-LYS-0312-0625",
+    "date": "2026-12-03",
+    "route": "OPO - LYS",
+    "airline": "easyJet",
+    "carrier": "U2",
+    "flights": "easyJet U26807",
+    "departure_airport": "OPO",
+    "arrival_airport": "LYS",
+    "departure_time": "06:25",
+    "arrival_time": "09:30",
+    "arrival_date": "2026-12-03",
+    "arrival_day_offset": 0,
+    "duration_minutes": 125,
+    "stops": 0,
+    "source": "Kiwi",
+    "price_eur": 62.0,
+    "cabin_bag_included": false
+   },
+   "flight_price": 62.0,
+   "booking": {
+    "url": "https://www.google.com/search?q=easyJet+official+site",
+    "verified": false
+   },
+   "leave": {
+    "date": "2026-12-03",
+    "time": "03:00"
+   },
+   "at_airport": "04:35",
+   "airport_wait": 110,
+   "wait_after_landing": 220,
+   "arrive": {
+    "date": "2026-12-03",
+    "time": "14:48"
+   },
+   "to": {
+    "kind": "operator",
+    "source": "Rede Expressos",
+    "confirmed_by": [],
+    "grade": "A",
+    "service_day": "2026-12-03",
+    "leave_time": "03:00",
+    "arrive_time": "04:35",
+    "minutes": 95,
+    "price_eur": 8.45,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [],
+    "vehicles": [
+     {
+      "time": "03:00",
+      "arrive": "04:35",
+      "line": "Rede Expressos",
+      "agency": "Rede Expressos",
+      "from": "Coimbra",
+      "to": "Aeroporto Porto",
+      "mode": null,
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://rede-expressos.pt/pt"
+    ],
+    "later": []
+   },
+   "from": {
+    "kind": "timetable",
+    "source": "timetable",
+    "confirmed_by": [
+     "Trenitalia"
+    ],
+    "grade": "A",
+    "service_day": "2026-11-12",
+    "leave_time": "13:10",
+    "arrive_time": "14:48",
+    "minutes": 98,
+    "price_eur": 26.0,
+    "price_kind": "operator",
+    "price_grade": "A",
+    "operators": [
+     "Trenitalia"
+    ],
+    "vehicles": [
+     {
+      "time": "13:16",
+      "arrive": "14:48",
+      "line": "FR 6105",
+      "agency": "TRENITALIA",
+      "from": "LYON-SAINT EXUPERY TGV",
+      "to": "MARSEILLE-SAINT-CHARLES",
+      "mode": "HIGHSPEED_RAIL",
+      "rail": true,
+      "coach": false
+     }
+    ],
+    "text": "",
+    "urls": [
+     "https://www.trenitalia.com"
+    ],
+    "later": [
+     "13:16",
+     "14:10",
+     "14:31"
+    ]
+   },
+   "other": {
+    "leave_time": "12:46",
+    "arrive_time": "18:30",
+    "price_eur": 23.0,
+    "vehicles": [
+     {
+      "time": "12:52",
+      "arrive": "13:19",
+      "line": "RX",
+      "agency": "TCL",
+      "from": "Aéroport St Exupéry -RX",
+      "to": "Gare Part-Dieu Villette",
+      "mode": "TRAM",
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "13:23",
+      "arrive": "13:33",
+      "line": "B",
+      "agency": "TCL",
+      "from": "Gare Part-Dieu V.Merle",
+      "to": "Stade de Gerland Le LOU",
+      "mode": "SUBWAY",
+      "rail": false,
+      "coach": false
+     },
+     {
+      "time": "13:40",
+      "arrive": "18:30",
+      "line": "FlixBus 710",
+      "agency": "FlixBus-eu",
+      "from": "Lyon (Gerland Bus Station)",
+      "to": "Marseille (Saint-Charles)",
+      "mode": "COACH",
+      "rail": false,
+      "coach": true
+     }
+    ],
+    "by_coach": true
+   },
+   "total_eur": 96.45,
+   "range_eur": null,
+   "confirmed_eur": 34.45,
+   "minutes": 648,
+   "extra_minutes": 241,
+   "time_cost": 41.046875,
+   "schedule_grade": "A",
+   "grades": {
+    "part_flight_times": "A",
+    "part_flight_price": "B",
+    "part_to_times": "A",
+    "part_to_price": "A",
+    "part_from_times": "A",
+    "part_from_price": "A"
+   },
+   "notes": [],
+   "breaches": [],
+   "versus": {
+    "cheapest_eur": 69.51,
+    "fastest_minutes": 241
+   }
+  }
+ ],
+ "ground_only": [
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-12-03",
+   "leave": 585,
+   "arrive": 2075,
+   "minutes": 1430,
+   "grade": "A",
+   "price_eur": 84.97,
+   "price_kind": "operator",
+   "confirmed_eur": 84.97,
+   "urls": [
+    "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=40df8e99-8646-11e6-9066-549f350fcb0c&rideDate=03.12.2026&adult=1"
+   ],
+   "versus_eur": 10146.96,
+   "versus_minutes": 407,
+   "beats": false,
+   "vehicles": [
+    {
+     "time": "09:45",
+     "arrive": "18:30",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Coimbra",
+     "to": "International Interconnection Hub",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "19:45",
+     "arrive": "10:35",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "International Interconnection Hub",
+     "to": "Marseille (Saint-Charles)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    }
+   ]
+  },
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-12-03",
+   "leave": 585,
+   "arrive": 2140,
+   "minutes": 1495,
+   "grade": "A",
+   "price_eur": 84.97,
+   "price_kind": "operator",
+   "confirmed_eur": 84.97,
+   "urls": [
+    "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=40df8e99-8646-11e6-9066-549f350fcb0c&rideDate=03.12.2026&adult=1"
+   ],
+   "versus_eur": 15812.21,
+   "versus_minutes": 407,
+   "beats": false,
+   "vehicles": [
+    {
+     "time": "09:45",
+     "arrive": "07:40",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Coimbra",
+     "to": "Nîmes",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "09:55",
+     "arrive": "11:40",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Nîmes",
+     "to": "Marseille (Saint-Charles)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    }
+   ]
+  },
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-12-03",
+   "leave": 515,
+   "arrive": 2075,
+   "minutes": 1500,
+   "grade": "A",
+   "price_eur": 85.46,
+   "price_kind": "operator",
+   "confirmed_eur": 85.46,
+   "urls": [
+    "https://shop.flixbus.pt/search?departureCity=216860c2-aae8-4723-9a8f-299c22c6ba75&arrivalCity=40df8e99-8646-11e6-9066-549f350fcb0c&rideDate=03.12.2026&adult=1"
+   ],
+   "versus_eur": 16428.49,
+   "versus_minutes": 407,
+   "beats": false,
+   "vehicles": [
+    {
+     "time": "08:35",
+     "arrive": "09:45",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Coimbra",
+     "to": "Viseu  (Bus Station)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "11:40",
+     "arrive": "13:20",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Viseu  (Bus Station)",
+     "to": "Vilar Formoso",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "14:00",
+     "arrive": "10:35",
+     "line": "FlixBus",
+     "agency": "FlixBus",
+     "from": "Vilar Formoso",
+     "to": "Marseille (Saint-Charles)",
+     "mode": null,
+     "rail": false,
+     "coach": true
+    }
+   ]
+  },
+  {
+   "day": "2026-12-03",
+   "service_day": "2026-11-12",
+   "leave": 1435,
+   "arrive": 2613,
+   "minutes": 1118,
+   "grade": "B",
+   "price_eur": null,
+   "price_kind": null,
+   "confirmed_eur": 0.0,
+   "urls": [
+    "https://global.flixbus.com",
+    "https://www.renfe.com/es/es/cercanias",
+    "https://www.renfe.com",
+    "https://www.navitia.io/",
+    "https://www.lio-occitanie.fr/",
+    "https://www.rtm.fr/"
+   ],
+   "versus_eur": null,
+   "versus_minutes": null,
+   "beats": null,
+   "vehicles": [
+    {
+     "time": "23:55",
+     "arrive": "07:10",
+     "line": "FlixBus N795",
+     "agency": "FlixBus-eu",
+     "from": "Coimbra",
+     "to": "Madrid (South Bus Station)",
+     "mode": "COACH",
+     "rail": false,
+     "coach": true
+    },
+    {
+     "time": "07:13",
+     "arrive": "07:16",
+     "line": "C5",
+     "agency": "Renfe Cercanias",
+     "from": "Méndez Álvaro P.V.",
+     "to": "Madrid-Atocha Cercanías",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "07:57",
+     "arrive": "10:59",
+     "line": "AVE 03081",
+     "agency": "RENFE OPERADORA",
+     "from": "Madrid-Puerta de Atocha-Almudena Grandes",
+     "to": "Barcelona-Sants",
+     "mode": "HIGHSPEED_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "11:16",
+     "arrive": "13:56",
+     "line": "R11",
+     "agency": "Renfe Cercanias",
+     "from": "Barcelona-Sants",
+     "to": "Cerbère",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "14:22",
+     "arrive": "18:25",
+     "line": "TER 86992",
+     "agency": "ZOU ! TER",
+     "from": "Cerbère",
+     "to": "Gare d'Avignon centre",
+     "mode": "REGIONAL_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "18:30",
+     "arrive": "18:50",
+     "line": "151",
+     "agency": ".liO 30",
+     "from": "AVIGNON - PEM",
+     "to": "AVIGNON - Gare TGV",
+     "mode": "BUS",
+     "rail": false,
+     "coach": false
+    },
+    {
+     "time": "18:53",
+     "arrive": "19:24",
+     "line": "TGV INOUI 5306",
+     "agency": "SNCF VOYAGEURS",
+     "from": "Avignon TGV",
+     "to": "Marseille Saint-Charles",
+     "mode": "HIGHSPEED_RAIL",
+     "rail": true,
+     "coach": false
+    },
+    {
+     "time": "19:26",
+     "arrive": "19:27",
+     "line": "M2",
+     "agency": "Marseille",
+     "from": "Saint-Charles",
+     "to": "Jules Guesde",
+     "mode": "SUBWAY",
+     "rail": false,
+     "coach": false
+    },
+    {
+     "time": "19:29",
+     "arrive": "19:33",
+     "line": "32",
+     "agency": "Marseille",
+     "from": "Métro Jules Guesde",
+     "to": "Canebière Bourse",
+     "mode": "BUS",
+     "rail": false,
+     "coach": false
+    }
+   ]
+  }
+ ],
+ "by_date": [
+  {
+   "date": "2026-12-03",
+   "option": 1,
+   "route": "OPO - MRS",
+   "total_eur": 26.939999999999998,
+   "minutes": 407
+  }
+ ],
+ "warnings": [],
+ "metrics": {
+  "funnel": {
+   "found": 8,
+   "checked": 8,
+   "cheapest_flight": "OPO-MRS-0312-1750",
+   "cheapest_ticket_eur": 20.0,
+   "left_out": [
+    {
+     "flight": "OPO-LYS-0312-1830",
+     "ticket_eur": 88.0,
+     "why": "timetable"
+    },
+    {
+     "flight": "LIS-MRS-0312-1400",
+     "ticket_eur": 28.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-NCE-0312-0715",
+     "ticket_eur": 67.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-NCE-0312-1345",
+     "ticket_eur": 154.0,
+     "why": "not_worth_it"
+    },
+    {
+     "flight": "LIS-MRS-0312-1405",
+     "ticket_eur": 192.0,
+     "why": "not_worth_it"
+    }
+   ],
+   "itineraries": {
+    "OPO-MRS-0312-1750": {
+     "total_eur": 26.94,
+     "flight_eur": 18.99
+    },
+    "LIS-MRS-0312-1400": {
+     "total_eur": 38.99,
+     "flight_eur": 26.99
+    },
+    "OPO-NCE-0312-1120": {
+     "total_eur": 75.93,
+     "flight_eur": 60.0
+    },
+    "OPO-LYS-0312-0625": {
+     "total_eur": 96.45,
+     "flight_eur": 62.0
+    },
+    "LIS-NCE-0312-0715": {
+     "total_eur": 86.93,
+     "flight_eur": 67.0
+    },
+    "LIS-NCE-0312-1345": {
+     "total_eur": 172.48,
+     "flight_eur": 154.0
+    },
+    "LIS-MRS-0312-1405": {
+     "total_eur": 204.0,
+     "flight_eur": 192.0
+    }
+   }
+  },
+  "checks": {},
+  "models": {
+   "calls": 4,
+   "failed": 0,
+   "plan_b": 0,
+   "recommendation_by": null
+  },
+  "from_map": {
+   "map": "coimbra_2026-12-03_2026-12-03.html",
+   "key": "MRS-out",
+   "trip": [
+    "Coimbra",
+    "Marseille",
+    "03/12/2026"
+   ],
+   "clicked": "2026-11-12T10:23",
+   "flight_id": "OPO-MRS-0312-1750",
+   "round_trip": false,
+   "flight_eur": 18.99,
+   "total_eur": 30.94,
+   "ground_eur": 11.95,
+   "looked_up": true,
+   "legs": [
+    {
+     "airport": "OPO",
+     "to_airport": true,
+     "price_eur": 3.95,
+     "grade": "A",
+     "price_grade": "A",
+     "looked_up": true
+    },
+    {
+     "airport": "MRS",
+     "to_airport": false,
+     "price_eur": 8.0,
+     "grade": "B",
+     "price_grade": "B",
+     "looked_up": true
+    }
+   ],
+   "planner": {
+    "found": true,
+    "cheapest_eur": 26.94,
+    "ticket_eur": 20.0,
+    "checked": true,
+    "total_eur": 26.94,
+    "flight_eur": 18.99,
+    "left_out": null
+   }
+  }
+ },
+ "recommendation": "## Recomendação\n\nPelas tuas preferências, as regras recomendam a opção 1. O modelo que explica a escolha por palavras não respondeu; a comparação acima mostra em que se baseou a escolha.",
+ "cheapest": 1,
+ "fastest": 1
+}

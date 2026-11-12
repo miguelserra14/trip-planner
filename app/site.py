@@ -27,6 +27,9 @@ from trip_planner.trip.trip_settings import TripSettings
 
 KEY = "GOOGLE_API_KEY"   # the models' key, the only one a search cannot do without (tools/check.py)
 SCRIPT = Path(__file__).with_name("page.js")   # the page's only script: the calendar, and the part of a search asked again
+# What a demo (app/demo.py) still answers when posted: the look of the pages and closing the program. Anything else
+# would ask a service or change a file, and is answered with a note
+DEMO_ALLOWED = {"/language", "/theme", "/restore", "/quit"}
 
 class Reply(NamedTuple):
     status: int
@@ -38,8 +41,9 @@ class Reply(NamedTuple):
 
 class Site:
     def __init__(self, defaults: TripSettings, start: Callable[[dict[str, Any]], search.Job] = search.Job,
-                 stale: Callable[[], list] = stale_reports):
+                 stale: Callable[[], list] = stale_reports, demo: bool = False):
         self.defaults, self.start = defaults, start   # settings.py, and how a search or a job is started
+        self.demo = demo                              # the reports and maps of demo/, shown with nothing searched (app/demo.py)
         self.token = secrets.token_urlsafe(24)
         self.job: search.Job | None = None
         self.title = ""                               # what the job is: the trip, or the job's name
@@ -98,13 +102,24 @@ class Site:
         # The key is read from env/.env when the settings are (trip_settings.py): without it every search fails, so it
         # is said before one is tried
         missing = "" if os.environ.get(KEY) else f'<p class="refusal" role="alert">{html.escape(tr("app_no_key"))}</p>'
-        body = missing + fields.trip_form(self.token, self.values, self.defaults, refusal, self.busy(), note)
+        body = (self.demo_note() if self.demo else missing) + fields.trip_form(self.token, self.values, self.defaults, refusal, self.busy(), note)
         if self.job is not None:
             body += f'<p class="notice"><a href="/search">{html.escape(tr("app_last_search"))}</a></p>'
         stale = len(self.stale())
         if stale:   # the prices are asked again on the program's page: said here, where the reports are
             body += f'<p class="notice">{html.escape(tr("app_prices_old", count=stale))} <a href="/program">{html.escape(tr("ui_prices"))}</a></p>'
         return self.page(tr("app_plan_title"), body + reports.list_section(), here="/")
+
+    def demo_note(self) -> str:
+        return f'<p class="notice" role="note">{html.escape(tr("app_demo_note"))}</p>'
+
+    def demo_refused(self, path: str) -> Reply:
+        """What a demo answers to a post that would search or change something: the page it came from, as far as
+        it can tell, with why nothing was done."""
+        refusal = tr("app_demo_refused")
+        if path.startswith("/discover"):
+            return Reply(403, self.discover_page(refusal))
+        return Reply(403, self.home(refusal))
 
     def program_page(self) -> str:
         return self.page(tr("app_tools"), f'<h1>{html.escape(tr("app_tools"))}</h1>{self.tools()}', here="/program")
@@ -220,6 +235,8 @@ class Site:
         one = {name: values[0] for name, values in sent.items()}
         if not secrets.compare_digest(one.get("token", ""), self.token):
             return Reply(403, page(tr("app_not_this_app"), f"<p>{html.escape(tr('app_not_this_app'))}</p>", current.SETTINGS.language))
+        if self.demo and path not in DEMO_ALLOWED:
+            return self.demo_refused(path)
         answers = {"/search": self.post_search, "/stop": self.post_stop, "/place": self.post_place, "/airports": self.post_airports,
                    "/ask": self.post_question, "/keep": self.post_keep, "/language": self.post_language,
                    "/check": self.post_check, "/prices": self.post_prices, "/language/add": self.post_add_language,
@@ -326,7 +343,7 @@ class Site:
 
     # ---------------------------------------------------------------- Discover (maps.py)
     def discover_page(self, refusal: str = "") -> str:
-        body = maps.form(self.token, self.map_values, refusal)
+        body = (self.demo_note() if self.demo else "") + maps.form(self.token, self.map_values, refusal)
         if self.map_next is not None:
             body += f'<p role="status">{html.escape(tr("discover_win_stopping"))}</p>'
         if self.map_job is not None:
@@ -353,7 +370,8 @@ class Site:
             return Reply(200, json.dumps(state, ensure_ascii=False), kind="application/json; charset=utf-8")
         if path.startswith(maps.SAVED):   # a map made before (maps.saved_page)
             name = unquote(path[len(maps.SAVED):])
-            saved = maps.saved_page(name, self.token, self.saved_turn(name))
+            # In a demo without the token: the page then asks for no price (maps.saved_page)
+            saved = maps.saved_page(name, "" if self.demo else self.token, self.saved_turn(name))
             if saved is None:
                 return self.not_found()
             return Reply(200, saved[0], policy=saved[1], referrer=maps.MAP_REFERRER)

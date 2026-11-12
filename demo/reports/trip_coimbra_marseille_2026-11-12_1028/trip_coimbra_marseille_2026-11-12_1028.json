@@ -1,0 +1,316 @@
+{
+ "trip": "Coimbra -> Marseille",
+ "prices_read": "2026-11-12T10:28",
+ "options": [
+  {
+   "number": 1,
+   "flight": "OPO-MRS-0312-1750",
+   "route": "OPO - MRS",
+   "date": "2026-12-03",
+   "flight_price": 18.99,
+   "total": 26.939999999999998,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "14:15",
+       "arrive": "16:00",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 145,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 3.95,
+     "price_kind": "operator",
+     "confirmed_eur": 3.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 855,
+     "arrive": 960,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "B",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "21:40",
+       "arrive": "22:02",
+       "line": "A1",
+       "agency": "Métropole lecar",
+       "from": "AEROPORT MARSEILLE PROVENCE",
+       "to": "Gare St Charles",
+       "from_id": "fr-reseaux-de-transports-en-commun-de-la-metropole-daix-marseille-provence-et-des-bouches-du-rhone--39602_MAMP-23667",
+       "to_id": "fr-reseaux-de-transports-en-commun-de-la-metropole-daix-marseille-provence-et-des-bouches-du-rhone--39602_MAMP-26047",
+       "from_at": [
+        43.443203,
+        5.220260000000001
+       ],
+       "to_at": [
+        43.30419,
+        5.379723000000001
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 20,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "flight": "OPO-NCE-0312-1120",
+   "route": "OPO - NCE",
+   "date": "2026-12-03",
+   "flight_price": 60.0,
+   "total": 75.93,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "07:30",
+       "arrive": "09:15",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 134,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 3.45,
+     "price_kind": "operator",
+     "confirmed_eur": 3.45,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 450,
+     "arrive": 555,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "16:05",
+       "arrive": "19:00",
+       "line": "FlixBus",
+       "agency": "FlixBus",
+       "from": "Nice (Vauban Bus Station)",
+       "to": "Marseille (Saint-Charles)",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 154,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 12.48,
+     "price_kind": "operator",
+     "confirmed_eur": 12.48,
+     "tickets": [],
+     "source": "FlixBus",
+     "leave": 965,
+     "arrive": 1140,
+     "city": {
+      "written": "Marseille",
+      "local_name": "Marseille",
+      "english_name": "Marseille",
+      "country": "France",
+      "latitude": 43.2963986,
+      "longitude": 5.3777888
+     },
+     "airport": {
+      "code": "NCE",
+      "name": "Nice-Côte d'Azur Airport",
+      "city": "Nice, Alpes-Maritimes",
+      "country": "FR",
+      "large": true,
+      "latitude": 43.658401,
+      "longitude": 7.21587,
+      "km": 154
+     }
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "flight": "OPO-LYS-0312-0625",
+   "route": "OPO - LYS",
+   "date": "2026-12-03",
+   "flight_price": 62.0,
+   "total": 96.45,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "03:00",
+       "arrive": "04:35",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 131,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 8.45,
+     "price_kind": "operator",
+     "confirmed_eur": 8.45,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 180,
+     "arrive": 275,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "13:16",
+       "arrive": "14:48",
+       "line": "FR 6105",
+       "agency": "TRENITALIA",
+       "from": "LYON-SAINT EXUPERY TGV",
+       "to": "MARSEILLE-SAINT-CHARLES",
+       "from_id": "it-trenitalia_870076290",
+       "to_id": "it-trenitalia_870075100",
+       "from_at": [
+        45.720833000000006,
+        5.075556
+       ],
+       "to_at": [
+        43.303333,
+        5.381389
+       ],
+       "rail": true,
+       "coach": false,
+       "mode": "HIGHSPEED_RAIL",
+       "km": 270,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 26.0,
+     "price_kind": "operator",
+     "confirmed_eur": 26.0,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "Trenitalia",
+       "price_eur": 26.0,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

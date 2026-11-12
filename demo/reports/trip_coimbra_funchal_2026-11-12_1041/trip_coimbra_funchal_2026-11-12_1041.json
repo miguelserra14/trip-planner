@@ -1,0 +1,596 @@
+{
+ "trip": "Coimbra -> Funchal",
+ "prices_read": "2026-11-12T10:41",
+ "options": [
+  {
+   "number": 1,
+   "flight": "OPO-FNC-0312-1810",
+   "route": "OPO - FNC",
+   "date": "2026-12-03",
+   "flight_price": 65.0,
+   "total": 72.95,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "14:15",
+       "arrive": "16:00",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 145,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 3.95,
+     "price_kind": "operator",
+     "confirmed_eur": 3.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 855,
+     "arrive": 960,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "C",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "21:21",
+       "arrive": "21:53",
+       "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+       "agency": "",
+       "from": "FNC",
+       "to": "CAM ZN Industrial (67799)",
+       "from_id": "",
+       "to_id": "",
+       "from_at": [
+        32.69364,
+        -16.77538
+       ],
+       "to_at": [
+        32.649834,
+        -16.857765000000004
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": null,
+       "km": 9,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "22:02",
+       "arrive": "22:28",
+       "line": "039",
+       "agency": "HF",
+       "from": "Rotunda Cancela T-38 (192)",
+       "to": "Praça Autonomia D (156A)",
+       "from_id": "pt-Funchal_00192",
+       "to_id": "pt-Funchal_00323",
+       "from_at": [
+        32.647934,
+        -16.860612999999997
+       ],
+       "to_at": [
+        32.647662999999994,
+        -16.904947
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 4,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "flight": "OPO-FNC-0312-1840",
+   "route": "OPO - FNC",
+   "date": "2026-12-03",
+   "flight_price": 62.99,
+   "total": 72.99000000000001,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "15:00",
+       "arrive": "17:05",
+       "line": "Rede Expressos, 1 transbordo pelo caminho",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 131,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 6.0,
+     "price_kind": "operator",
+     "confirmed_eur": 6.0,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 900,
+     "arrive": 1025,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "C",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "21:44",
+       "arrive": "22:16",
+       "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+       "agency": "",
+       "from": "FNC",
+       "to": "CAM ZN Industrial (67799)",
+       "from_id": "",
+       "to_id": "",
+       "from_at": [
+        32.69364,
+        -16.77538
+       ],
+       "to_at": [
+        32.649834,
+        -16.857765000000004
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": null,
+       "km": 9,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "22:25",
+       "arrive": "22:48",
+       "line": "038",
+       "agency": "HF",
+       "from": "Maxmat Cancela (1706)",
+       "to": "Praça Autonomia D (156A)",
+       "from_id": "pt-Funchal_01706",
+       "to_id": "pt-Funchal_00323",
+       "from_at": [
+        32.64830800000001,
+        -16.859953000000004
+       ],
+       "to_at": [
+        32.647662999999994,
+        -16.904947
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 4,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "flight": "OPO-FNC-0312-0600",
+   "route": "OPO - FNC",
+   "date": "2026-12-03",
+   "flight_price": 80.0,
+   "total": 90.45,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "02:30",
+       "arrive": "04:15",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 145,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 6.45,
+     "price_kind": "operator",
+     "confirmed_eur": 6.45,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 150,
+     "arrive": 255,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "C",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "09:20",
+       "arrive": "09:52",
+       "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+       "agency": "",
+       "from": "FNC",
+       "to": "CAM ZN Industrial (67799)",
+       "from_id": "",
+       "to_id": "",
+       "from_at": [
+        32.69364,
+        -16.77538
+       ],
+       "to_at": [
+        32.649834,
+        -16.857765000000004
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": null,
+       "km": 9,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "10:01",
+       "arrive": "10:23",
+       "line": "038",
+       "agency": "HF",
+       "from": "Rotunda Cancela T-38 (192)",
+       "to": "Praça Autonomia D (156A)",
+       "from_id": "pt-Funchal_00192",
+       "to_id": "pt-Funchal_00323",
+       "from_at": [
+        32.647934,
+        -16.860612999999997
+       ],
+       "to_at": [
+        32.647662999999994,
+        -16.904947
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 4,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "flight": "LIS-FNC-0312-1055",
+   "route": "LIS - FNC",
+   "date": "2026-12-03",
+   "flight_price": 100.49,
+   "total": 108.94,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "07:00",
+       "arrive": "09:20",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Lisboa (Aeroporto)",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 201,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.45,
+     "price_kind": "operator",
+     "confirmed_eur": 4.45,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 420,
+     "arrive": 560,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "LIS",
+      "name": "Lisbon Humberto Delgado Airport",
+      "city": "Lisbon",
+      "country": "PT",
+      "large": true,
+      "latitude": 38.7813,
+      "longitude": -9.13592,
+      "km": 170
+     }
+    },
+    {
+     "side": "from",
+     "grade": "C",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "13:45",
+       "arrive": "14:21",
+       "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+       "agency": "",
+       "from": "FNC",
+       "to": "ESCL Palheiro Ferreiro S (433)",
+       "from_id": "",
+       "to_id": "",
+       "from_at": [
+        32.69364,
+        -16.77538
+       ],
+       "to_at": [
+        32.664350000000006,
+        -16.865095
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": null,
+       "km": 11,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "14:33",
+       "arrive": "14:53",
+       "line": "047",
+       "agency": "HF",
+       "from": "Saída CAM Pretos (380)",
+       "to": "Praça Autonomia D (156A)",
+       "from_id": "pt-Funchal_00380",
+       "to_id": "pt-Funchal_00323",
+       "from_at": [
+        32.664055000000005,
+        -16.871717
+       ],
+       "to_at": [
+        32.647662999999994,
+        -16.904947
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 4,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  },
+  {
+   "number": 5,
+   "flight": "LIS-FNC-0312-0725",
+   "route": "LIS - FNC",
+   "date": "2026-12-03",
+   "flight_price": 153.0,
+   "total": 168.98,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "03:20",
+       "arrive": "05:55",
+       "line": "FlixBus",
+       "agency": "FlixBus",
+       "from": "Coimbra",
+       "to": "Lisbon (Airport)",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 170,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 11.98,
+     "price_kind": "operator",
+     "confirmed_eur": 11.98,
+     "tickets": [],
+     "source": "FlixBus",
+     "leave": 200,
+     "arrive": 355,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "LIS",
+      "name": "Lisbon Humberto Delgado Airport",
+      "city": "Lisbon",
+      "country": "PT",
+      "large": true,
+      "latitude": 38.7813,
+      "longitude": -9.13592,
+      "km": 170
+     }
+    },
+    {
+     "side": "from",
+     "grade": "C",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "10:20",
+       "arrive": "10:52",
+       "line": "autocarro local ou táxi, sem horário publicado (estimado)",
+       "agency": "",
+       "from": "FNC",
+       "to": "CAM ZN Industrial (67799)",
+       "from_id": "",
+       "to_id": "",
+       "from_at": [
+        32.69364,
+        -16.77538
+       ],
+       "to_at": [
+        32.649834,
+        -16.857765000000004
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": null,
+       "km": 9,
+       "day": "2026-12-03"
+      },
+      {
+       "time": "11:01",
+       "arrive": "11:23",
+       "line": "038",
+       "agency": "HF",
+       "from": "Rotunda Cancela T-38 (192)",
+       "to": "Praça Autonomia D (156A)",
+       "from_id": "pt-Funchal_00192",
+       "to_id": "pt-Funchal_00323",
+       "from_at": [
+        32.647934,
+        -16.860612999999997
+       ],
+       "to_at": [
+        32.647662999999994,
+        -16.904947
+       ],
+       "rail": false,
+       "coach": false,
+       "mode": "BUS",
+       "km": 4,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 4.0,
+     "price_kind": "estimate",
+     "confirmed_eur": 0.0,
+     "tickets": []
+    }
+   ]
+  }
+ ]
+}

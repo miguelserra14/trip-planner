@@ -1,0 +1,221 @@
+{
+ "trip": "Coimbra -> Faro",
+ "prices_read": "2026-11-12T10:31",
+ "options": [
+  {
+   "number": 1,
+   "flight": "OPO-FAO-0312-1500",
+   "route": "OPO - FAO",
+   "date": "2026-12-03",
+   "flight_price": 32.36,
+   "total": 37.29,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "11:30",
+       "arrive": "13:20",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 151,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 2.95,
+     "price_kind": "operator",
+     "confirmed_eur": 2.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 690,
+     "arrive": 800,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "17:05",
+       "arrive": "17:15",
+       "line": "FlixBus",
+       "agency": "FlixBus",
+       "from": "Faro (Airport)",
+       "to": "Faro (Alfândega)",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 3,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 1.98,
+     "price_kind": "operator",
+     "confirmed_eur": 1.98,
+     "tickets": [],
+     "source": "FlixBus",
+     "leave": 1025,
+     "arrive": 1035,
+     "city": {
+      "written": "Faro",
+      "local_name": "Faro",
+      "english_name": "Faro",
+      "country": "Portugal",
+      "latitude": 37.0162944,
+      "longitude": -7.935182
+     },
+     "airport": {
+      "code": "FAO",
+      "name": "Faro - Gago Coutinho International Airport",
+      "city": "Faro",
+      "country": "PT",
+      "large": true,
+      "latitude": 37.015909,
+      "longitude": -7.970939,
+      "km": 3
+     }
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "flight": "OPO-SVQ-0312-1355",
+   "route": "OPO - SVQ",
+   "date": "2026-12-03",
+   "flight_price": 27.04,
+   "total": 42.47,
+   "legs": [
+    {
+     "side": "to",
+     "grade": "A",
+     "kind": "operator",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "10:15",
+       "arrive": "11:50",
+       "line": "Rede Expressos",
+       "agency": "Rede Expressos",
+       "from": "Coimbra",
+       "to": "Aeroporto Porto",
+       "from_id": null,
+       "to_id": null,
+       "from_at": null,
+       "to_at": null,
+       "rail": false,
+       "coach": true,
+       "mode": null,
+       "km": 131,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 2.95,
+     "price_kind": "operator",
+     "confirmed_eur": 2.95,
+     "tickets": [],
+     "source": "Rede Expressos",
+     "leave": 615,
+     "arrive": 710,
+     "city": {
+      "written": "Coimbra",
+      "local_name": "Coimbra",
+      "english_name": "Coimbra",
+      "country": "Portugal",
+      "latitude": 40.2111874,
+      "longitude": -8.4291478
+     },
+     "airport": {
+      "code": "OPO",
+      "name": "Francisco de Sá Carneiro Airport",
+      "city": "Porto",
+      "country": "PT",
+      "large": true,
+      "latitude": 41.2481002808,
+      "longitude": -8.68138980865,
+      "km": 117
+     }
+    },
+    {
+     "side": "from",
+     "grade": "A",
+     "kind": "timetable",
+     "day": "2026-12-03",
+     "vehicles": [
+      {
+       "time": "17:15",
+       "arrive": "19:45",
+       "line": "FlixBus 785A",
+       "agency": "FlixBus-eu",
+       "from": "Seville (Airport)",
+       "to": "Faro (Alfândega)",
+       "from_id": "eu-flixbus_4da73c00-ab54-4d42-ad56-282af784e949",
+       "to_id": "eu-flixbus_3076bd7a-3720-43df-b4b5-e29fdb86a77b",
+       "from_at": [
+        37.423595000000006,
+        -5.9011260000000005
+       ],
+       "to_at": [
+        37.017033,
+        -7.9365820000000005
+       ],
+       "rail": false,
+       "coach": true,
+       "mode": "COACH",
+       "km": 186,
+       "day": "2026-12-03"
+      }
+     ],
+     "price_eur": 12.48,
+     "price_kind": "operator",
+     "confirmed_eur": 12.48,
+     "tickets": [
+      {
+       "positions": [
+        0
+       ],
+       "operator": "FlixBus",
+       "price_eur": 12.48,
+       "travel_day": true,
+       "tariff": false
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

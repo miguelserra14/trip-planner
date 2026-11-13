@@ -127,14 +127,21 @@ def times_grade(flight: dict[str, Any]) -> str:
     the page draws it."""
     return max((leg.get("grade") or "C" for leg in flight.get("access") or []), default="C")
 
+def below_minimum(flight: dict[str, Any], min_reliability: str) -> bool:
+    """Whether a way to or from the trip's airports was looked up in the timetables and still has times graded below
+    the planner's least grade: the lookup found no published timetable good enough, so the planner shows the
+    itinerary only when it finds nothing better. A way not looked up is C because it is not known yet, which its
+    card already says (estimated): marked too, it would mark nearly every dot of a map and say nothing."""
+    return any(leg.get("looked_up") and (leg.get("grade") or "C") > min_reliability for leg in flight.get("access") or [])
+
 def map_state(found: Found, sections: list[dict[str, Any]], running: bool = False, version: int = 0,
               airport_minutes: int = TripSettings.min_airport_minutes, landing_minutes: int = TripSettings.min_landing_minutes,
               min_reliability: str = TripSettings.min_reliability) -> dict[str, Any]:
     """What the page shows that changes while the timetables are looked up (confirm.py): the destinations, the
     flights left out, the cities looked up and the sections. The served page asks for it again while running.
     airport_minutes and landing_minutes are the planner's, for the time in the city (stay). min_reliability is the
-    planner's too: a trip whose times are graded below it is marked (below_minimum), because the planner shows such
-    an itinerary only when it finds nothing better, and may open on another one, dearer."""
+    planner's too: a trip whose ways were looked up and still have times graded below it is marked (below_minimum),
+    because the planner shows such an itinerary only when it finds nothing better, and may open on another one."""
     airports = load_airports()
     planned = trips(found, airports)
     plan = lambda key: {"key": key} if key in planned else None
@@ -151,7 +158,7 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
                "centres": {code: [found.centres[code].latitude, found.centres[code].longitude]
                            for code in {flight["to"], (flight.get("back") or {}).get("from")} if code in found.centres},
                "stay": stay(flight, airport_minutes, landing_minutes),
-               "times_grade": times_grade(flight), "below_minimum": times_grade(flight) > min_reliability}
+               "times_grade": times_grade(flight), "below_minimum": below_minimum(flight, min_reliability)}
               for flight in found.destinations if flight["to"] in airports]
     codes = {code for flight in points for leg in (flight, flight.get("back")) if leg
              for segment in [leg, *leg.get("segments", [])] for code in (segment["from"], segment["to"])}

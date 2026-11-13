@@ -328,20 +328,23 @@ def test_the_dot_of_a_city_is_at_its_centre_and_its_airport_stays_for_the_route(
     [point] = state["points"]
     assert (point["lat"], point["lon"]) == (48.86, 2.35) and state["places"]["BVA"] == [49.45, 2.11]
 
-def test_a_trip_with_times_below_the_planners_least_grade_is_marked_as_the_planner_may_show_another(monkeypatch):
+def test_a_trip_looked_up_and_found_below_the_planners_least_grade_is_marked_as_the_planner_may_show_another(monkeypatch):
     monkeypatch.setattr(page, "load_airports", lambda: {code: {"city": code, "name": code, "country": "IT", "latitude": 42.0, "longitude": 14.0}
-                                                        for code in ("PSR", "TSF", "XXX")})
-    way = lambda grade: {"airport": "OPO", "to_airport": True, "grade": grade, "price_eur": 3.0, "looked_up": True}
-    trips = [{**flight("OPO", "PSR", 15), "ground_eur": 5.0, "total_eur": 20.0, "access": [way("A"), way("C")]},   # no published timetable into Pescara
+                                                        for code in ("PSR", "TSF", "RAK", "XXX")})
+    way = lambda grade, looked_up=True: {"airport": "OPO", "to_airport": True, "grade": grade, "price_eur": 3.0, "looked_up": looked_up}
+    trips = [{**flight("OPO", "PSR", 15), "ground_eur": 5.0, "total_eur": 20.0, "access": [way("A"), way("C")]},   # looked up: no timetable into Pescara
              {**flight("OPO", "TSF", 16), "ground_eur": 5.0, "total_eur": 21.0, "access": [way("A"), way("B")]},
-             {**flight("OPO", "XXX", 17), "ground_eur": 5.0, "total_eur": 22.0}]                                     # no way known: drawn as C
+             {**flight("OPO", "RAK", 17), "ground_eur": 5.0, "total_eur": 22.0, "access": [way("A"), way("C", looked_up=False)]},   # not known yet
+             {**flight("OPO", "XXX", 18), "ground_eur": 5.0, "total_eur": 23.0}]                                     # no way at all: drawn as C
     found = finder.Found(PLACE, ONE_WAY, [], trips, [], [])
     marked = {point["to"]: (point["times_grade"], point["below_minimum"]) for point in page.map_state(found, [])["points"]}
-    assert marked == {"PSR": ("C", True), "TSF": ("B", False), "XXX": ("C", True)}
+    # Only what a lookup proved is marked: a way not looked up is C for want of knowing, as its card says (estimated)
+    assert marked == {"PSR": ("C", True), "TSF": ("B", False), "RAK": ("C", False), "XXX": ("C", False)}
     # A traveller who accepts grade C in settings.py is shown every trip by the planner: none is marked
     assert not any(point["below_minimum"] for point in page.map_state(found, [], min_reliability="C")["points"])
     data = json.loads(re.search(r'<script type="application/json" id="data">(.*?)</script>', page.map_page(found, "", [], min_reliability="A")).group(1))
-    assert data["min_reliability"] == "A" and all(point["below_minimum"] for point in data["state"]["points"])
+    marked = [point["to"] for point in data["state"]["points"] if point["below_minimum"]]
+    assert data["min_reliability"] == "A" and marked == ["PSR", "TSF"]   # a typical timetable looked up is below A
 
 def test_the_page_draws_the_lines_in_the_planners_colours_and_has_the_cities_with_no_flight(monkeypatch):
     from trip_planner.trip.trip_settings import LIGHT_COLOURS

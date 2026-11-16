@@ -41,24 +41,24 @@ def trip(monkeypatch):
 def accept(**changes) -> None:
     current.SETTINGS = dataclasses.replace(current.SETTINGS, **changes)
 
-def test_a_night_flight_is_kept_with_the_day_it_lands():
+def test_night_flight_landing_day():
     flight = flight_search.register_flight(NIGHT_FLIGHT)
     assert flight["date"] == LEAVES.isoformat() and flight["arrival_date"] == LANDS.isoformat()
     assert flight["arrival_day_offset"] == 1 and landing_day(flight) == LANDS.isoformat()
     assert flight["timezone_shift_minutes"] == 180   # the difference between the two clocks, not a day and three hours
 
-def test_a_flight_of_one_day_is_unchanged():
+def test_same_day_flight_unchanged():
     flight = flight_search.register_flight(found_by_search("10:00", "17:10", 610))
     assert flight["arrival_day_offset"] == 0 and landing_day(flight) == flight["date"]
     assert flight["timezone_shift_minutes"] == 180
 
-def test_it_is_left_out_when_the_traveller_does_not_accept_it():
+def test_night_flight_refused():
     accept(next_day_arrivals=False)
     assert flight_search.flight_problems(NIGHT_FLIGHT["outbound"]) == ["next_day"]
     assert flight_search.register_flight(NIGHT_FLIGHT) is None
     assert flight_search.register_flight(NIGHT_FLIGHT, closest=True) is None   # not even among the closest alternatives
 
-def test_the_arrival_time_asked_for_is_read_on_the_day_of_arrival():
+def test_arrival_limit_landing_day():
     accept(latest_arrival="06:00")
     assert flight_search.flight_problems(NIGHT_FLIGHT["outbound"]) == ["too_late"]
     accept(latest_arrival="12:00")
@@ -69,7 +69,7 @@ def connection(leave: int, arrive: int, day: str) -> dict:
     return {"covered": True, "service_day": day, "grade": "A", "options": [
         {"leave": leave, "arrive": arrive, "steps": [step], "urls": [], "grade": "A", "source": "timetable", "service_day": day, "price_eur": None}]}
 
-def test_the_duration_counts_the_night():
+def test_duration_counts_night():
     flight = flight_search.register_flight(NIGHT_FLIGHT)
     ground = {flight["id"]: {"to_airport": connection(19 * 60, 20 * 60, flight["date"]),             # leaves Lisbon at 19:00
                              "from_airport": connection(7 * 60 + 30, 8 * 60 + 30, flight["arrival_date"])}}   # in Rio at 08:30
@@ -78,13 +78,13 @@ def test_the_duration_counts_the_night():
     assert itinerary["total_minutes"] == 16 * 60 + 30   # 08:30 in Rio is 11:30 in Lisbon, the day after
     assert itinerary["wait_after_landing"] == 60 and itinerary["breaches"] == []
 
-def test_the_timetable_of_the_day_of_arrival_is_confirmed_by_that_day():
+def test_landing_day_timetable_confirmed():
     flight = flight_search.register_flight(NIGHT_FLIGHT)
     timetables = Timetables()
     assert timetables.answer([], flight["arrival_date"], landing_day(flight))["grade"] == "A"
     assert timetables.answer([], flight["date"], landing_day(flight))["grade"] == "B"
 
-def test_the_report_says_which_day():
+def test_report_says_the_day():
     flight = flight_search.register_flight(NIGHT_FLIGHT)
     assert at_destination("06:30", flight) == f"06:30 ({LANDS:%d/%m})"
     assert at_destination("17:10", flight_search.register_flight(found_by_search("10:00", "17:10", 610))) == "17:10"

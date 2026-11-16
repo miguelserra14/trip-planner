@@ -43,6 +43,11 @@ def flight_problems(leg: dict[str, Any]) -> list[str]:
         problems.append("too_late")     # lands after the time the traveller must already be at the destination
     return problems
 
+def flight_id(departure: str, arrival: str, day: str, time: str) -> str:
+    """The id of a flight, the same wherever it is made (the planner, Discover's lookups, a map opening the planner):
+    its two airports, the day (yyyy-mm-dd) and the time it leaves (HH:MM). "BRU-OPO-1712-0935"."""
+    return f"{departure}-{arrival}-{day[8:10]}{day[5:7]}-{time.replace(':', '')}"
+
 def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[str, Any] | None:
     """Copy one Kiwi result into FLIGHTS. Returns the flight, or None if it breaks one of the traveller's limits.
     closest=True also keeps a flight that breaks them, for the closest alternatives, unless it lands on a later
@@ -57,9 +62,9 @@ def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[st
     if not current.TRIP.airport(leg["from"]) or not current.TRIP.airport(leg["to"]):
         return None   # Kiwi reads a code as its city: asked for BRU it also answers with CRL, which is not in the trip
     duration_minutes = leg["durationSeconds"] // 60
-    flight_id = f"{leg['from']}-{leg['to']}-{departure_date[8:10]}{departure_date[5:7]}-{departure_time.replace(':', '')}"
+    identity = flight_id(leg["from"], leg["to"], departure_date, departure_time)
     flight = {
-        "id": flight_id,
+        "id": identity,
         "date": departure_date,
         "departure_airport": leg["from"],
         "departure_time": departure_time,
@@ -82,9 +87,9 @@ def register_flight(itinerary: dict[str, Any], closest: bool = False) -> dict[st
         "booking_url": itinerary["bookingUrl"],
         "source": itinerary.get("source", kiwi.NAME),
     }
-    if flight_id not in FLIGHTS or FLIGHTS[flight_id]["price_eur"] > flight["price_eur"]:
-        FLIGHTS[flight_id] = flight
-    return FLIGHTS[flight_id]
+    if identity not in FLIGHTS or FLIGHTS[identity]["price_eur"] > flight["price_eur"]:
+        FLIGHTS[identity] = flight
+    return FLIGHTS[identity]
 
 async def search(fly_from: str, fly_to: str, first_day: str, last_day: str,
                        stopovers: int | None = None) -> list[dict[str, Any]] | None:

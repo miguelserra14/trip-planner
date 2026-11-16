@@ -12,7 +12,7 @@ from trip_planner import planner
 from trip_planner.agents import coordinator, steps
 
 # ---------------------------------------------------------------- the steps
-def test_the_steps_run_in_order_and_leave_their_notes(monkeypatch):
+def test_steps_run_in_order(monkeypatch):
     async def first(state):
         return {"step": 1, "flights": ["a flight"], "message": "one flight"}
     def second(state):   # a step may be a plain function: it then runs on a thread
@@ -22,7 +22,7 @@ def test_the_steps_run_in_order_and_leave_their_notes(monkeypatch):
     assert state["step"] == 2 and state["seen"] == ["a flight"] and state["origin"] == "A"
     assert state["notes"] == ["one flight", "its transport"] and "message" not in state
 
-def test_each_step_says_when_it_starts_and_what_it_found_for_a_page_that_waits(monkeypatch):
+def test_steps_report_progress(monkeypatch):
     from trip_planner import utils
     async def search_flights(state):
         return {"step": 1, "flights": ["a", "b"], "message": "two flights"}
@@ -32,7 +32,7 @@ def test_each_step_says_when_it_starts_and_what_it_found_for_a_page_that_waits(m
     asyncio.run(steps.run_steps({}))
     assert said == [{"step": "search_flights"}, {"found": "search_flights", "count": 2}]
 
-def test_a_run_that_failed_continues_from_the_step_that_failed(monkeypatch):
+def test_failed_run_resumes(monkeypatch):
     calls = []
     async def first(state):
         calls.append("first")
@@ -47,7 +47,7 @@ def test_a_run_that_failed_continues_from_the_step_that_failed(monkeypatch):
     state = asyncio.run(planner.run_search({}))
     assert calls == ["first", "second", "second"] and state["step"] == 2   # the first step was not run again
 
-def test_a_trip_starts_without_what_the_last_one_found(monkeypatch):
+def test_trip_starts_clean(monkeypatch):
     from trip_planner import current, utils
     from trip_planner.sources import airlines, web
     monkeypatch.setattr(current, "SETTINGS", current.SETTINGS)
@@ -61,7 +61,7 @@ def test_a_trip_starts_without_what_the_last_one_found(monkeypatch):
     assert not steps.FAULTS and not airlines.CHECKED and not web.SEEN_DOMAINS and not utils.TIMINGS
     assert web.safe_url("https://made-up.example/tickets") == ""   # a site of the last trip's searches is not one of this trip's
 
-def test_another_trip_is_the_current_one_only_for_a_while_even_when_it_fails(monkeypatch):
+def test_temporary_trip_restored(monkeypatch):
     from trip_planner import current
     monkeypatch.setattr(current, "SETTINGS", "the map's settings")
     monkeypatch.setattr(current, "TRIP", None)
@@ -71,7 +71,7 @@ def test_another_trip_is_the_current_one_only_for_a_while_even_when_it_fails(mon
             raise RuntimeError("the timetables are down")
     assert (current.SETTINGS, current.TRIP) == ("the map's settings", None)
 
-def test_a_step_that_ends_the_trip_skips_the_others(monkeypatch):
+def test_final_step_skips_rest(monkeypatch):
     async def no_flights(state):
         return {"step": 2, "report": "no flight fits", "message": "nothing"}
     async def never(state):
@@ -103,20 +103,20 @@ def two_models(monkeypatch):
         return found["first"], found["second"]
     return use
 
-def test_a_busy_model_is_not_insisted_with(two_models):
+def test_busy_model_skipped(two_models):
     """Each model is asked once, then the next: the second round only comes after every model failed."""
     first, second = two_models(None, None)
     first.failures, first.answer = 1, "## Recommendation\n\nOption 1."
     assert asyncio.run(coordinator.write([HumanMessage(content="the results")])).endswith("Option 1.")
     assert len(first.asked) == 2 and len(second.asked) == 1
 
-def test_a_model_that_does_not_answer_in_time_is_given_up(two_models, monkeypatch):
+def test_slow_model_given_up(two_models, monkeypatch):
     first, second = two_models("too late", "## Recommendation\n\nOption 2.")
     first.seconds = 5
     monkeypatch.setattr(coordinator, "ANSWER_SECONDS", 0.05)
     assert asyncio.run(coordinator.write([HumanMessage(content="the results")])).endswith("Option 2.")
 
-def test_a_model_out_of_its_daily_quota_is_left_alone(two_models):
+def test_exhausted_model_skipped(two_models):
     first, second = two_models(None, "## Recommendation\n\nOption 2.")
     async def out_of_quota(conversation, config=None):
         first.asked.append(conversation)
@@ -126,34 +126,34 @@ def test_a_model_out_of_its_daily_quota_is_left_alone(two_models):
         asyncio.run(coordinator.write([HumanMessage(content="the results")]))
     assert len(first.asked) == 1 and len(second.asked) == 2
 
-def test_the_next_model_answers_when_the_first_fails(two_models):
+def test_next_model_answers(two_models):
     first, second = two_models(None, "## Recommendation\n\nOption 2.")
     answer = asyncio.run(coordinator.write([HumanMessage(content="the results")]))
     assert answer.endswith("Option 2.") and len(first.asked) == len(second.asked) == 1
     system, results = second.asked[0]
     assert "You cannot search or call any tool" in system.content and results.content == "the results"
 
-def test_the_recommendation_is_kept_for_the_questions_that_follow(two_models):
+def test_recommendation_kept_for_questions(two_models):
     two_models("## Recommendation\n\nOption 1 is the cheapest.", None)
     messages = [HumanMessage(content="the results")]
     text = asyncio.run(planner.recommend({"recommended": 1, "report": "the report"}, messages))
     assert "Option 1" in text and len(messages) == 2 and messages[-1].content == text
 
-def test_without_any_model_the_rules_still_name_their_option(two_models):
+def test_no_model_rules_recommend(two_models):
     two_models(None, None)
     messages = [HumanMessage(content="the results")]
     text = asyncio.run(planner.recommend({"recommended": 3, "report": "the report"}, messages))
     assert "3" in text and text.startswith("## ") and len(messages) == 1   # nothing a model said was added
 
-def test_without_a_model_and_without_an_option_nothing_is_added(two_models):
+def test_no_model_no_option(two_models):
     two_models(None, None)
     assert asyncio.run(planner.recommend({"recommended": 0, "report": "nothing fits"}, [HumanMessage(content="x")])) == ""
 
-def test_the_model_reads_the_request_and_what_each_step_found():
+def test_model_reads_step_notes():
     text = planner.results_for_model("I want to go to Antwerp.", {"notes": ["8 flights", "timetables cover 6 of 8 legs", "the report"]})
     assert text.startswith("I want to go to Antwerp.") and "Step 1, flight search:\n8 flights" in text and "Step 3, itineraries:\nthe report" in text
 
-def test_with_no_option_a_recommendation_of_one_is_not_shown(two_models):
+def test_invented_option_not_shown(two_models):
     """Nothing respected the requirements, and a model recommended "option 1": a flight of the list, not an option."""
     two_models("## Recommendation\n\nI recommend option 1 (CRL-BGY, 69 EUR).", None)
     messages = [HumanMessage(content="the results")]

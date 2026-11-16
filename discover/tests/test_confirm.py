@@ -45,7 +45,7 @@ def kiwi_leg(start: str, end: str, leaves: str, lands: str, minutes: int) -> dic
             "airline": "easyJet", "stops": 0, "segments": []}
 
 # ---------------------------------------------------------------- the ways to and from the airports
-def test_a_way_not_looked_up_is_an_estimate_and_one_looked_up_is_remembered_for_the_next_maps():
+def test_airport_way_remembered():
     first = access.leg("OPO", True, HOME, TODAY)
     assert first["grade"] == first["price_grade"] == "C" and first["how"].startswith("estimated") and not first["looked_up"]
     access.remember("OPO", True, HOME, {"price_eur": 7.5, "minutes": 80, "grade": "A", "price_grade": "A", "for": "a flight leaving at 10:00"}, TODAY)
@@ -55,7 +55,7 @@ def test_a_way_not_looked_up_is_an_estimate_and_one_looked_up_is_remembered_for_
     assert access.leg("OPO", False, HOME, TODAY)["how"].startswith("estimated")   # the way back home is another way
     assert access.leg("OPO", True, HOME, TODAY + timedelta(days=access.ACCESS_DAYS))["how"].startswith("estimated")   # too old
 
-def test_a_city_is_located_once_and_a_place_of_its_name_far_from_its_airport_is_not_taken(monkeypatch):
+def test_city_located_once(monkeypatch):
     asked = []
 
     def find(name: str, country: str) -> Place:
@@ -70,11 +70,11 @@ def test_a_city_is_located_once_and_a_place_of_its_name_far_from_its_airport_is_
     access.centres(["MAD", "ORY"], airports, TODAY + timedelta(days=access.MISSING_DAYS + 1), say=lambda text: None)
     assert asked[2:] == ["Paris"]   # the one not found is asked about again, a while later
 
-def test_the_name_of_a_city_leaves_out_where_its_airport_is():
+def test_city_name_without_airport():
     assert access.city_name({"city": "Paris (Orly, Val-de-Marne)"}) == "Paris" and access.city_name({"city": "London, Essex"}) == "London"
     assert access.city_key({"country": "FR", "city": "Paris (Orly, Val-de-Marne)"}) == access.city_key({"country": "FR", "city": "Paris"})
 
-def test_the_dot_of_a_city_is_its_cheapest_airport_once_the_way_into_the_city_is_counted(monkeypatch):
+def test_dot_is_cheapest_airport(monkeypatch):
     into_paris = {"CDG": 15.0, "ORY": 2.0, "OPO": 10.0}
     monkeypatch.setattr(access, "leg", lambda code, to_airport, place, today, label="", ride=None: {
         "airport": code, "to_airport": to_airport, "place": label, "price_eur": into_paris[code], "minutes": 30, "grade": "C",
@@ -93,7 +93,7 @@ def way(code: str, to_airport: bool, price: float, looked_up: bool = False) -> d
 def option(code: str, price: float, ground: list) -> dict:
     return {"to": code, "price_eur": price, "access": ground, "total_eur": price + sum(leg["price_eur"] for leg in ground)}
 
-def test_the_cities_are_looked_up_until_no_destination_left_can_change_the_cheapest(monkeypatch):
+def test_lookups_stop_when_settled(monkeypatch):
     monkeypatch.setattr(confirm, "TOP", 1)
     airports = {code: {"code": code, "country": "XX", "city": city} for code, city in (("AAA", "A"), ("AA2", "A"), ("BBB", "B"), ("CCC", "C"))}
     a = option("AAA", 20, [way("OPO", True, 10), way("AAA", False, 10)])
@@ -109,7 +109,7 @@ def test_the_cities_are_looked_up_until_no_destination_left_can_change_the_cheap
     c.update(option("CCC", 25, [way("OPO", True, 12, True), way("CCC", False, 40, True)]), checked=True)
     assert confirm.next_city(options, airports) == []
 
-def test_a_way_looked_up_replaces_its_estimate_and_an_impossible_one_takes_its_flight_off_the_map(monkeypatch):
+def test_lookup_replaces_estimate(monkeypatch):
     monkeypatch.setattr(legs, "price_with_tickets", lambda *arguments: None)   # no operator is asked for its tickets
     bus = {"leave": 6 * 60, "arrive": 7 * 60 + 30, "grade": "B", "service_day": DAY, "urls": [],
            "steps": [{"line": "Coach 4", "time": "06:00", "arrive": "07:30", "rail": False, "coach": True, "mode": "COACH", "km": 100,
@@ -137,14 +137,14 @@ def test_a_way_looked_up_replaces_its_estimate_and_an_impossible_one_takes_its_f
     assert access.leg("OPO", True, HOME, TODAY)["how"].startswith("looked up on")   # remembered for the next maps
     assert "no destination left" in found.confirm_stop
 
-def test_each_vehicle_of_a_way_is_drawn_with_the_apps_icon_and_an_estimated_walk_is_left_out():
+def test_vehicles_drawn_with_icons():
     steps = [{"mode": "WALK", "time": "05:50", "arrive": "06:00", "estimated": True},
              {"mode": "LONG_DISTANCE", "time": "06:00", "arrive": "06:40", "from": "Pavia", "to": "Milano"},
              {"mode": "SUBWAY", "time": "06:45", "arrive": "06:55", "from": "Milano", "to": "Linate"},
              {"mode": "BUS", "coach": True, "time": "07:00", "arrive": "07:20"}, {"mode": "FERRY", "time": "08:00", "arrive": "09:00"}]
     assert [vehicle["kind"] for vehicle in confirm.vehicles({"steps": steps})] == ["train", "tram", "bus", "ferry"]
 
-def test_a_lookup_is_the_planners_trip_only_while_it_runs_even_when_it_fails(monkeypatch):
+def test_lookup_trip_restored(monkeypatch):
     seen = []
 
     async def failing(flights: list) -> dict:
@@ -159,16 +159,16 @@ def test_a_lookup_is_the_planners_trip_only_while_it_runs_even_when_it_fails(mon
     asyncio.run(confirm.confirm(found))
     assert seen == [("Madrid", ["MAD"])] and current.SETTINGS is the_map and current.TRIP is its_places
 
-def test_the_duration_of_a_ryanair_flight_comes_from_the_time_zones_of_its_airports():
+def test_ryanair_duration_from_zones():
     flight = confirm.planner_flight(kiwi_leg("OPO", "MAD", "07:00", "09:15", 0), 20.0, load_airports())
     assert flight["duration_minutes"] == 75 and flight["timezone_shift_minutes"] == -60   # Madrid is an hour ahead of Porto
     assert confirm.planner_flight({**kiwi_leg("OPO", "MAD", "07:00", "", 0), "arrival_time": ""}, 20.0, load_airports()) is None
 
-def test_a_city_not_located_yet_is_not_counted_free():
+def test_unlocated_city_not_free():
     unknown = access.leg("BCN", False, None, TODAY)
     assert unknown["price_eur"] >= 2 and unknown["grade"] == "C" and "not located yet" in unknown["how"]
 
-def test_when_openstreetmap_asks_to_wait_the_other_cities_wait_for_the_next_map(monkeypatch):
+def test_nominatim_backoff(monkeypatch):
     asked = []
 
     def busy(name: str, country: str) -> Place:
@@ -179,7 +179,7 @@ def test_when_openstreetmap_asks_to_wait_the_other_cities_wait_for_the_next_map(
     assert access.centres(["MAD", "BCN", "AGP"], load_airports(), TODAY, say=lambda text: None) == {}
     assert len(asked) == 1   # not asked again for the two others
 
-def test_a_city_that_cannot_be_looked_up_does_not_use_up_a_lookup(monkeypatch):
+def test_unlookable_city_free(monkeypatch):
     async def never(flights: list) -> dict:
         raise AssertionError("the timetables were asked")
     monkeypatch.setattr(timetables, "ground_transport_for", never)
@@ -188,7 +188,7 @@ def test_a_city_that_cannot_be_looked_up_does_not_use_up_a_lookup(monkeypatch):
     asyncio.run(confirm.confirm(found))
     assert found.lookups == [] and found.destinations[0]["not_looked_up"] == "its city is not located yet"
 
-def test_a_map_locates_only_a_few_new_cities_the_cheapest_first(monkeypatch):
+def test_few_new_cities_located(monkeypatch):
     monkeypatch.setattr(access, "MAX_NEW_CITIES", 2)
     asked = []
     monkeypatch.setattr(access, "find_centre", lambda name, country: asked.append(name) or MADRID)

@@ -42,12 +42,12 @@ def tickets(monkeypatch):
     return answers
 
 # ---------------------------------------------------------------- the traveller's limits
-def test_a_trip_leaves_and_arrives_within_the_travellers_limits(settings):
+def test_trip_within_limits(settings):
     settings.earliest_leave, settings.latest_leave = "06:00", "20:00"
     assert ground_only.fits(trip(7 * 60, 12 * 60, TRAINS, grade="B"))
     assert not ground_only.fits(trip(5 * 60, 12 * 60, TRAINS, grade="B"))   # too early
 
-def test_arriving_the_next_day_needs_next_day_arrivals_and_respects_the_limit_on_that_day(settings):
+def test_next_day_arrival_rules(settings):
     overnight = trip(23 * 60 + 55, 24 * 60 + 7 * 60 + 10, COACH, source="FlixBus", grade="A")
     assert ground_only.fits(overnight)
     settings.latest_arrival = "06:00"
@@ -55,35 +55,35 @@ def test_arriving_the_next_day_needs_next_day_arrivals_and_respects_the_limit_on
     settings.latest_arrival, settings.next_day_arrivals = "", False
     assert not ground_only.fits(overnight)
 
-def test_a_trip_below_the_reliability_asked_for_is_left_out(settings):
+def test_unreliable_trip_excluded(settings):
     settings.min_reliability = "A"
     assert not ground_only.fits(trip(7 * 60, 12 * 60, TRAINS, grade="B"))
 
 # ---------------------------------------------------------------- prices
-def test_a_trip_whose_train_nobody_priced_has_no_price_not_a_guess(tickets, settings):
+def test_unpriced_train_no_guess(tickets, settings):
     tickets["AVE"] = [([2], 45.0)]   # Renfe prices the AVE; nobody the IC of CP
     priced = ground_only.priced(trip(5 * 60 + 10, 18 * 60 + 29, TRAINS))
     assert priced["price_eur"] is None and priced["price_kind"] is None
 
-def test_when_every_train_is_priced_only_the_metro_is_estimated(tickets, settings):
+def test_only_metro_estimated(tickets, settings):
     tickets["AVE"] = [([1], 20.0), ([2], 45.0)]
     priced = ground_only.priced(trip(5 * 60 + 10, 18 * 60 + 29, TRAINS))
     assert 65.0 < priced["price_eur"] < 70.0 and priced["price_kind"] == "partly" and priced["confirmed_eur"] == 65.0
     assert priced["grade"] == "A"   # the timetable read is the travel date's
 
-def test_a_timetable_of_another_week_is_confirmed_when_its_operators_sell_every_vehicle_that_day(tickets, settings):
+def test_operators_confirm_typical_timetable(tickets, settings):
     week = (date.today() + timedelta(days=6)).isoformat()
     tickets["AVE"] = [([0, 1, 2], 70.0)]
     assert ground_only.priced(trip(5 * 60 + 10, 18 * 60 + 29, TRAINS, service=week))["grade"] == "A"
     tickets["AVE"] = [([1, 2], 65.0)]   # the metro is not sold by anyone: the times stay typical
     assert ground_only.priced(trip(5 * 60 + 10, 18 * 60 + 29, TRAINS, service=week))["grade"] == "B"
 
-def test_flixbus_sold_it_for_the_day(settings):
+def test_flixbus_sale_confirmed(settings):
     priced = ground_only.priced(trip(23 * 60 + 55, 31 * 60 + 10, COACH, source="FlixBus", grade="A", price_eur=28.98))
     assert priced["price_eur"] == 28.98 and priced["confirmed_eur"] == 28.98 and priced["grade"] == "A"
 
 # ---------------------------------------------------------------- choosing and comparing
-def test_the_trips_are_compared_with_the_recommended_option_by_the_same_rules(tickets, settings):
+def test_compared_with_recommended(tickets, settings):
     tickets["AVE"] = [([1], 20.0), ([2], 45.0)]
     found = {"connections": [trip(23 * 60 + 55, 31 * 60 + 10, COACH, source="FlixBus", grade="A", price_eur=29.0),
                              trip(5 * 60 + 10, 18 * 60 + 29, TRAINS)]}
@@ -94,13 +94,13 @@ def test_the_trips_are_compared_with_the_recommended_option_by_the_same_rules(ti
     slow = shown(found, flight_option(40.0, 3 * 60))
     assert not any(option["beats"] for option in slow)
 
-def test_the_same_trains_reached_another_way_are_one_trip(tickets, settings):
+def test_same_trains_one_trip(tickets, settings):
     tickets["AVE"] = [([1], 20.0), ([2], 45.0)]
     longer = [step("05:10", "07:05", "Bus 7", "Coimbra", "Coimbra-B", 4, rail=False), *TRAINS[1:]]
     found = {"connections": [trip(5 * 60 + 10, 18 * 60 + 29, TRAINS), trip(5 * 60 + 10, 18 * 60 + 40, longer)]}
     assert len(shown(found, None)) == 1
 
-def test_the_coach_flixbus_sold_and_the_same_coach_in_the_timetables_are_one_trip(tickets, settings):
+def test_same_coach_one_trip(tickets, settings):
     """Coimbra to Madrid, 2026-10-27: FlixBus's own answer, and its coach in the timetables with a train at the end."""
     in_timetables = [step("23:55", "07:10", "FlixBus N795", "Coimbra", "Madrid (South Bus Station)", 0, rail=False, coach=True),
                      step("07:13", "07:19", "C5", "Méndez Álvaro", "Embajadores", 3)]
@@ -109,21 +109,21 @@ def test_the_coach_flixbus_sold_and_the_same_coach_in_the_timetables_are_one_tri
     options = shown(found, None)
     assert len(options) == 1 and options[0]["source"] == "FlixBus"
 
-def test_a_long_regional_bus_is_a_main_vehicle_and_gets_no_guessed_price(tickets, settings):
+def test_long_bus_not_guessed(tickets, settings):
     """Vigo to Ourense, 90 km by a regional bus of Galicia: not the bus to the station."""
     galicia = [step("12:50", "18:25", "FlixBus 1082", "Coimbra", "Vigo", 220, rail=False, coach=True),
                step("18:45", "20:25", "XG623002", "Vigo", "Ourense", 90, rail=False), step("20:43", "23:07", "AVE", "Ourense", "Madrid", 360)]
     tickets["AVE"] = [([0], 25.0), ([2], 25.0)]
     assert ground_only.priced(trip(12 * 60 + 50, 23 * 60 + 7, galicia))["price_eur"] is None
 
-def test_hours_too_many_to_be_worth_anything_in_euros_are_said_in_hours(tickets, settings):
+def test_huge_gap_in_hours(tickets, settings):
     """Antwerp to Coimbra, 2026-10-27: 30 hours by coach against 11 by plane were worth "+21489 EUR"."""
     found = {"connections": [trip(60 + 10, 30 * 60 + 25, COACH, source="FlixBus", grade="A", price_eur=97.0)]}
     text = "\n".join(ground_lines(shown(found, flight_option(151.0, 11 * 60 + 20)), 1))
     assert "EUR" not in text.split("| No plane 1 |")[1].split("\n")[0].split("|")[-2]   # the last column says hours
     assert "17h55 longer" in text and "21489" not in text
 
-def test_a_faster_trip_without_a_price_is_shown_after_the_priced_ones(tickets, settings):
+def test_faster_unpriced_shown_last(tickets, settings):
     found = {"connections": [trip(23 * 60 + 55, 31 * 60 + 10, COACH, source="FlixBus", grade="A", price_eur=29.0),
                              trip(5 * 60 + 10, 11 * 60, TRAINS)]}   # no ticket for the trains
     options = shown(found, None)
@@ -133,7 +133,7 @@ def test_nothing_found_shows_nothing(settings):
     assert shown(None, flight_option(100.0, 300)) == [] and ground_lines([], 1) == []
 
 # ---------------------------------------------------------------- the report
-def test_the_report_shows_each_trip_with_its_line_and_says_which_is_better(tickets, settings):
+def test_report_shows_each_trip(tickets, settings):
     found = {"connections": [trip(23 * 60 + 55, 31 * 60 + 10, COACH, source="FlixBus", grade="A", price_eur=29.0)]}
     options = shown(found, flight_option(150.0, 7 * 60))
     lines = ground_lines(options, 2)
@@ -142,12 +142,12 @@ def test_the_report_shows_each_trip_with_its_line_and_says_which_is_better(ticke
     points, parts = read_timeline(next(line for line in lines if read_timeline(line)))
     assert points[0][0] == "23:55" and points[-1][0] == "07:10" and [grade for grade, _ in parts] == ["A"]
 
-def test_without_any_price_the_report_says_to_look_them_up(tickets, settings):
+def test_unpriced_report_says_check(tickets, settings):
     lines = "\n".join(ground_lines(shown({"connections": [trip(5 * 60 + 10, 18 * 60 + 29, TRAINS)]}, None), 0))
     assert "no price found" in lines and "look their price up" in lines
 
 # ---------------------------------------------------------------- reading the sources
-def test_a_connection_of_the_timetables_keeps_its_vehicles_and_its_real_length():
+def test_connection_keeps_vehicles():
     leg = lambda mode, start, end, at, to: {"mode": mode, "startTime": start, "endTime": end, "displayName": mode, "agencyName": "",
                                            "from": {"name": at, "lat": 40.2, "lon": -8.4}, "to": {"name": to, "lat": 40.4, "lon": -3.7}}
     itinerary = {"legs": [leg("WALK", "2026-11-16T05:00:00Z", "2026-11-16T05:10:00Z", "a", "b"),
@@ -171,7 +171,7 @@ class Answering:
                                 "agencyName": "", "from": {"name": "a", "lat": 40.2, "lon": -8.4}, "to": {"name": "b", "lat": 40.4, "lon": -3.7}}]
         return {"itineraries": [{"startTime": text(moment), "legs": legs(moment)} for moment in moments]}
 
-def test_the_whole_way_is_asked_from_the_last_connection_found_but_never_more_often_than_before(settings):
+def test_windows_follow_last_connection(settings):
     def asked(hours: float) -> int:
         answering = Answering(hours)
         assert asyncio.run(all_the_way.published(answering, (40.2, -8.4), (40.4, -3.7), DAY, ("UTC", "UTC")))
@@ -180,11 +180,11 @@ def test_the_whole_way_is_asked_from_the_last_connection_found_but_never_more_of
     assert asked(10) == 3          # each answer reaches ten hours further: three requests cover the day
     assert asked(1) == windows     # an answer of one hour: still one request every WINDOW_HOURS, as many as before
 
-def test_a_plane_in_the_timetables_is_not_a_trip_on_the_ground():
+def test_timetable_plane_ignored():
     leg = {"mode": "AIRPLANE", "startTime": "2026-11-16T05:00:00Z", "endTime": "2026-11-16T06:00:00Z", "from": {}, "to": {}}
     assert all_the_way.connection(DAY, DAY, {"legs": [leg]}, ("UTC", "UTC")) is None
 
-def test_flixbus_city_to_city_with_its_change(monkeypatch):
+def test_flixbus_city_with_change(monkeypatch):
     from trip_planner.trip.places import Place
     monkeypatch.setattr(all_the_way.flixbus, "flixbus_city", lambda name, latitude, longitude, km: name)
     ride = {"status": "available", "price": {"total": 27.99, "total_with_platform_fee": 28.98},
@@ -198,23 +198,23 @@ def test_flixbus_city_to_city_with_its_change(monkeypatch):
     assert [one["to"] for one in found[0]["steps"]] == ["Salamanca", "Madrid Sur"] and found[0]["arrive"] == 24 * 60 + 7 * 60 + 10
 
 # ---------------------------------------------------------------- a trip asked for without a plane
-def test_a_trip_asked_without_a_plane_runs_no_flight_search(settings):
+def test_ground_only_skips_flights(settings):
     settings.ground_only = True
     assert steps.steps_of(settings) == steps.GROUND_STEPS
     assert steps.search_flights not in steps.GROUND_STEPS and steps.search_ground_transport not in steps.GROUND_STEPS
 
-def test_its_report_lists_the_trips_by_the_rules_with_none_recommended(tickets, settings):
+def test_ground_only_ranked_list(tickets, settings):
     tickets["AVE"] = [([1, 2], 60.0)]
     found = steps.rank_by_ground_only({"all_the_way": {"priced": ground_only.price_all({"connections": [trip(5 * 60 + 10, 18 * 60 + 29, TRAINS)]})}})
     assert found["recommended"] == 0 and found["shown"] == [] and len(found["ground_only"]) == 1
     price = found["ground_only"][0]["price_eur"]
     assert price >= 60 and f"{price:.0f} EUR" in found["report"] and "Without a plane" in found["report"]
 
-def test_with_nothing_found_its_report_says_so(settings):
+def test_ground_only_nothing_found(settings):
     found = steps.rank_by_ground_only({"all_the_way": {}})
     assert found["ground_only"] == [] and "No trip by train or coach" in found["report"]
 
-def test_a_trip_searched_with_a_plane_shows_every_flight_option_before_the_trips_without_one(tickets, settings):
+def test_flights_shown_before_ground(tickets, settings):
     from tests.report.test_options import itinerary
     from trip_planner.report.summary import render_closest, render_report
     flying = [itinerary(120, 600), itinerary(150, 420)]
@@ -223,3 +223,28 @@ def test_a_trip_searched_with_a_plane_shows_every_flight_option_before_the_trips
     for text in (render_report(flying, flying[1], [], ground), render_closest([{**option, "breaches": []} for option in flying], [], ground)):
         last_flight = max(text.index(f"### {word}") for word in ("Option 1", "Option 2") if f"### {word}" in text)
         assert text.index("Without a plane") > last_flight
+
+def test_no_flights_ground_searched(tickets, settings, monkeypatch):
+    tickets["AVE"] = [([1, 2], 60.0)]
+
+    async def whole_way(days, transit):
+        return {"connections": [trip(5 * 60 + 10, 18 * 60 + 29, TRAINS)]}
+    monkeypatch.setattr(steps, "all_the_way", whole_way)
+    from types import SimpleNamespace
+    from trip_planner import current
+    monkeypatch.setattr(current, "TRIP", SimpleNamespace(departure=[{"code": "OPO"}], arrival=[{"code": "BRU"}]))
+
+    async def no_flights():
+        return None
+
+    async def why():
+        return "## No flights fit", []
+    monkeypatch.setattr(steps.flight_search, "search_all_flights", no_flights)
+    monkeypatch.setattr(steps.flight_search, "why_no_flights", why)
+    state = asyncio.run(steps.search_flights({}))
+    assert state["flights"] == [] and state["step"] == 1   # the next step still runs
+    state.update(asyncio.run(steps.search_ground_transport(state)))
+    assert state["checked"] == [] and len(state["all_the_way"]["priced"]) == 1
+    found = steps.build_itineraries(state)
+    assert found["recommended"] == 0 and len(found["ground_only"]) == 1
+    assert found["report"].startswith("## No flights fit") and "Without a plane" in found["report"]

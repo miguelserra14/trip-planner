@@ -47,22 +47,22 @@ def priced(leg: dict) -> dict:
     return leg
 
 # ---------------------------------------------------------------- confirmed by the operator
-def test_an_operator_that_sells_the_departure_on_the_day_confirms_it(sells):
+def test_sale_on_day_confirms(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     leg = priced(connection(600, 660, step("Rail", "10:00", "11:00")))
     assert leg["grade"] == "A" and leg["confirmed_by"] == ["Rail"] and leg["price_kind"] == "operator"
 
-def test_sold_only_for_the_day_the_timetable_was_read_it_stays_typical(sells):
+def test_other_day_sale_typical(sells):
     sells[("Rail", SERVICE, "10:00")] = 20.0
     leg = priced(connection(600, 660, step("Rail", "10:00", "11:00")))
     assert leg["grade"] == "B" and "confirmed_by" not in leg and leg["price_kind"] == "operator_typical"
 
-def test_every_vehicle_must_be_confirmed(sells):
+def test_all_vehicles_confirmed(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     leg = priced(connection(600, 720, step("Rail", "10:00", "11:00"), step("Nobody", "11:10", "12:00", rail=False)))
     assert leg["grade"] == "B" and "confirmed_by" not in leg
 
-def test_a_published_tariff_confirms_nothing(sells):
+def test_tariff_confirms_nothing(sells):
     sells[("City", TRAVEL, "10:00")] = 2.0
     leg = priced(connection(600, 640, step("City", "10:00", "10:40")))
     assert leg["grade"] == "B" and leg["price_kind"] == "tariff"
@@ -72,7 +72,7 @@ def landing(*options: dict) -> tuple:
     flight = {"id": "X", "date": TRAVEL, "arrival_airport": "XXX", "arrival_time": "09:00"}
     return flight, {"X": {"from_airport": {"covered": True, "service_day": SERVICE, "grade": "B", "options": list(options)}}}
 
-def test_the_real_price_decides_between_two_connections(sells):
+def test_real_price_decides(sells):
     """By the distance a coach is the cheaper way. Here the train is in fact a third of the coach's price."""
     sells[("Rail", TRAVEL, "10:00")] = 9.0
     sells[("Coach", TRAVEL, "10:05")] = 30.0
@@ -85,13 +85,13 @@ def test_the_real_price_decides_between_two_connections(sells):
     assert chosen["steps"][0]["agency"] == "Rail" and chosen["price_eur"] == 9.0
     assert chosen["grade"] == "A" and chosen["other"]["steps"][0]["agency"] == "Coach"
 
-def test_without_any_operator_the_choice_is_the_one_by_estimate(sells):
+def test_no_operator_estimate_decides(sells):
     first = connection(600, 690, step("Nobody", "10:00", "11:30"))
     second = connection(660, 750, step("Nobody", "11:00", "12:30"))
     flight, ground = landing(first, second)
     assert from_airport_leg(flight, ground, None, priced=True)["leave"] == from_airport_leg(flight, ground, None)["leave"] == 600
 
-def test_towards_the_airport_too(sells):
+def test_real_price_decides_outbound(sells):
     """Both reach the airport in time. The later one would win on its guessed price, the earlier one is in fact cheaper."""
     sells[("Rail", TRAVEL, "11:00")] = 60.0
     sells[("Coach", TRAVEL, "10:30")] = 8.0

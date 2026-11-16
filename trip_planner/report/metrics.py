@@ -6,7 +6,8 @@ over every report kept by tools/funnel.py (python main.py --funnel). Nothing her
   kinds of the ranking: below_minimum, not_worth_it, program). The kinds in legs.PROVEN are the ones a real timetable
   or an operator proves: what a flight search site cannot see.
 - checks: what code did to what the models wrote (utils.COUNTS): the colours of a part put right and the claims only
-  pointed out (agents/claims.py), the times and durations no step gave, the links left out (sources/web.py).
+  pointed out (agents/claims.py), the times, durations and prices no step gave, the links left out (sources/web.py),
+  and the ways a model estimated where an operator's rides did not fit (steps.note_rides_missed).
 - models: every call to a model in the log of the run, how many failed, how many went to plan B (agents/models.py)
   and which model wrote the recommendation.
 - from_map: when a Discover map opened this search, what the map said of the trip (app/maps.estimate_of) and what

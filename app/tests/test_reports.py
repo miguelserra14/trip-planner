@@ -15,34 +15,34 @@ def write_report(folder, name: str, text: str):
     path.write_text(text, encoding="utf-8")
     return path
 
-def test_what_a_model_wrote_cannot_become_markup():
+def test_model_text_not_markup():
     body, _ = report_page.to_html('Book here <script>alert(1)</script> javascript:alert(1) "x" onclick=1')
     assert "<script>" not in body and "&lt;script&gt;" in body
     assert "<a " not in body
 
-def test_a_link_is_kept_without_the_punctuation_after_it():
+def test_link_drops_punctuation():
     body, _ = report_page.to_html("- Where to book: https://shop.flixbus.pt/search?a=1&b=2).")
     assert '<a href="https://shop.flixbus.pt/search?a=1&amp;b=2"' in body and body.count("<li>") == 1
 
-def test_the_line_of_an_option_is_drawn_to_scale():
+def test_option_line_to_scale():
     line = timeline([("16:07", "Bruxelas"), ("17:38", "CRL"), ("19:25", "✈")], [("B", 30), (None, 30)])
     body, _ = report_page.to_html(line)
     widths = [float(width) for width in re.findall(r"width: ([\d.]+)%", body)]
     assert widths == [50.0, 50.0] and "var(--light-B)" in body and "Bruxelas" in body and "point last" in body
 
-def test_a_table_has_its_header_and_its_lights():
+def test_table_header_and_lights():
     body, _ = report_page.to_html("| Part | Grade |\n| :-- | :-- |\n| Flight | 🔵 confirmed |")
     assert "<th>Part</th>" in body and 'class="light-A"' in body and ":--" not in body
 
-def test_a_rule_the_model_wrote_is_a_line():
+def test_model_rule_is_line():
     body, _ = report_page.to_html("Before\n***\n- - -\nAfter")
     assert body.count("<hr>") == 2 and "*" not in body
 
-def test_the_list_of_contents_has_the_two_first_levels_of_headings():
+def test_contents_two_levels():
     _, sections = report_page.to_html("# Plan\n## Settings\n### 1. Places\n# Final result")
     assert [title for _, title in sections] == ["Plan", "Settings", "Final result"]
 
-def test_a_report_is_found_by_its_key_and_nothing_else_is():
+def test_report_found_by_key():
     write_report(reports.REPORTS, "trip_coimbra_antwerp_2026-11-02_1310", "# Trip plan: Coimbra → Antwerp\n\nHello")
     site = Site(SETTINGS)
     listed = site.get("/")
@@ -70,7 +70,7 @@ def ask(port: int, method: str, host: str, body: str | None = None, length: int 
     finally:
         connection.close()
 
-def test_the_server_answers_only_to_its_own_address_and_to_a_form_sized_post():
+def test_server_rejects_foreign_requests():
     running = server.start(Answers())
     try:
         port = running.server_address[1]
@@ -81,6 +81,6 @@ def test_the_server_answers_only_to_its_own_address_and_to_a_form_sized_post():
     finally:
         server.stop(running)
 
-def test_english_and_portuguese_have_the_same_texts():
+def test_app_languages_match():
     keys = lambda language: {key for key in TEXTS[language] if key.startswith("app_")}
     assert keys("en") and keys("en") == keys("pt-PT")

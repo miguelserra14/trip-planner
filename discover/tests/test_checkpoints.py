@@ -148,7 +148,7 @@ def ryanair_case(request, monkeypatch):
 def near(reached: list, latitude: float, longitude: float) -> list:
     return [stop for stop in reached if distance_km(latitude, longitude, stop["lat"], stop["lon"]) <= ground.MATCH_KM]
 
-def test_a_city_reaches_its_neighbours_straight(ground_case):
+def test_city_reaches_neighbours(ground_case):
     case, reached = ground_case
     for city, (latitude, longitude), most in case.reaches:
         found = near(reached, latitude, longitude)
@@ -156,7 +156,7 @@ def test_a_city_reaches_its_neighbours_straight(ground_case):
         quickest = min(found, key=lambda stop: stop["minutes"])
         assert quickest["minutes"] <= most, f"{case.name} to {city} takes {quickest['minutes']} minutes by {quickest['operator']}"
 
-def test_the_trains_between_neighbours_are_found(ground_case):
+def test_neighbour_trains_found(ground_case):
     case, reached = ground_case
     missing = [city for city, (latitude, longitude), _ in case.reaches if city in case.trains_to
                and not [stop for stop in near(reached, latitude, longitude) if stop["mode"] == "train"]]
@@ -165,7 +165,7 @@ def test_the_trains_between_neighbours_are_found(ground_case):
     assert not missing, f"no train from {case.name} to {', '.join(missing)}"
     assert not case.known_gap, f"the trains of {case.name} are found now: remove known_gap"
 
-def test_every_station_reached_says_how_and_when(ground_case):
+def test_stations_say_how_when(ground_case):
     case, reached = ground_case
     assert reached, f"nothing reached from {case.name}"
     for stop in reached:
@@ -177,12 +177,12 @@ def test_every_station_reached_says_how_and_when(ground_case):
         assert not stop["site"] or stop["site"].startswith("https://"), where
         assert distance_km(case.place.latitude, case.place.longitude, stop["from_lat"], stop["from_lon"]) <= ground.STOP_KM, where
 
-def test_a_national_coach_network_sells_from_a_city_to_the_big_ones(sold_case):
+def test_national_coaches_sold(sold_case):
     case, record, reached = sold_case
     for city, (latitude, longitude) in case.reaches:
         assert near(reached, latitude, longitude), f"no direct coach sold from {case.place.written} to {city}"
 
-def test_every_coach_sold_says_when_and_by_whom(sold_case):
+def test_coaches_say_when_who(sold_case):
     case, record, reached = sold_case
     assert reached == record["reached"], "the replay reads the answers otherwise than the recording did"
     for stop in reached:
@@ -191,7 +191,7 @@ def test_every_coach_sold_says_when_and_by_whom(sold_case):
         assert 0 < stop["minutes"] <= 24 * 60 and stop["times"] and all(TIME.match(time) for time in stop["times"]), where
         assert stop["weekdays"] and set(stop["weekdays"]) <= set(ground.WEEKDAYS), where
 
-def test_the_routes_of_an_airport_are_read_from_its_wikipedia_table(flown_case):
+def test_wikipedia_routes_read(flown_case):
     case, record, routes = flown_case
     assert routes == record["routes"][case.airport]["routes"], "the replay reads the table otherwise than the recording did"
     assert len({route["to"] for route in routes}) >= case.at_least
@@ -200,13 +200,13 @@ def test_the_routes_of_an_airport_are_read_from_its_wikipedia_table(flown_case):
     for code, airline in case.flies_to:
         assert any(route["to"] == code and route["airline"] == airline for route in routes), f"{case.airport} -> {code} by {airline}"
 
-def test_every_route_read_is_an_airport_of_the_database(flown_case):
+def test_routes_are_known_airports(flown_case):
     case, record, routes = flown_case
     airports = load_airports()
     assert all(route["to"] in airports and route["to"] != case.airport for route in routes)
     assert any(route["seasonal"] for route in routes) and not all(route["seasonal"] for route in routes)
 
-def test_the_city_an_airport_serves_is_the_one_travellers_go_to(wikidata_case):
+def test_served_city_is_real(wikidata_case):
     case, rows = wikidata_case
     airports = load_airports()
     for code, city in case.serves.items():
@@ -215,11 +215,11 @@ def test_the_city_an_airport_serves_is_the_one_travellers_go_to(wikidata_case):
     for code, region in case.not_cities.items():
         assert region not in {row["cityLabel"] for row in rows if row["iata"] == code}, f"{code}: {region} is no city"
 
-def test_ryanair_flies_from_its_bases_to_many_places(ryanair_case):
+def test_ryanair_bases_fly_widely(ryanair_case):
     case, days, flights = ryanair_case
     assert len({flight["to"] for flight in flights}) >= case.at_least
 
-def test_every_ryanair_fare_is_a_flight_of_the_days_asked(ryanair_case):
+def test_ryanair_fares_match_days(ryanair_case):
     case, days, flights = ryanair_case
     for flight in flights:
         where = f"{flight['from']} -> {flight['to']} on {flight['date']}"

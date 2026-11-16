@@ -15,18 +15,18 @@ from trip_planner.trip.places import Place, TripPlaces
 from trip_planner.sources import web
 
 # ---------------------------------------------------------------- the models
-def test_without_its_key_plan_b_changes_nothing(monkeypatch):
+def test_plan_b_needs_key(monkeypatch):
     monkeypatch.delenv(models.BACKUP_KEY, raising=False)
     assert models.backup_models() == [] and models.subagent_guards() == [models.give_up_slow_calls]   # only the time limit
     assert models.coordinator_models() == models.GEMINI_COORDINATOR_MODELS
 
-def test_with_its_key_mistral_is_tried_last(monkeypatch):
+def test_mistral_tried_last(monkeypatch):
     monkeypatch.setenv(models.BACKUP_KEY, "a key")
     names = models.coordinator_models()
     assert names == [*models.GEMINI_COORDINATOR_MODELS, models.BACKUP_MODEL]
     assert len(models.subagent_guards()) == 2 and models.subagent_guards()[-1] is models.give_up_slow_calls
 
-def test_a_subagent_that_fails_is_answered_by_plan_b():
+def test_failed_subagent_falls_back():
     """The fallback of the agent library, as the subagents use it: the first model fails, the second answers."""
     from langchain.agents import create_agent
     from langchain.agents.middleware import ModelFallbackMiddleware
@@ -40,7 +40,7 @@ def test_a_subagent_that_fails_is_answered_by_plan_b():
     answer = asyncio.run(agent.ainvoke({"messages": [("user", "hello")]}))
     assert answer["messages"][-1].content == "answered by plan B"
 
-def test_a_subagent_whose_model_takes_too_long_is_answered_by_plan_b(monkeypatch):
+def test_slow_subagent_falls_back(monkeypatch):
     """The time limit inside the fallback, as subagent_guards puts them: the slow call is given up, plan B answers."""
     from langchain.agents import create_agent
     from langchain.agents.middleware import ModelFallbackMiddleware
@@ -64,14 +64,14 @@ def no_web(monkeypatch):
     monkeypatch.setattr(web, "search", refuse)
     monkeypatch.setattr(web, "last_check", (0.0, False))
 
-def test_a_search_that_fails_is_remembered(no_web, monkeypatch):
+def test_failed_search_remembered(no_web, monkeypatch):
     assert web.available() is False
     monkeypatch.setattr(web, "search", lambda query, **options: {"results": []})
     assert web.available() is False        # not asked again for ten minutes
     monkeypatch.setattr(web, "last_check", (0.0, False))
     assert web.available() is True
 
-def test_only_the_airports_no_timetable_covers():
+def test_only_uncovered_airports_asked():
     flights = [{"id": "a", "departure_airport": "OPO", "arrival_airport": "BRU"},
                {"id": "b", "departure_airport": "OPO", "arrival_airport": "MLA"},
                {"id": "c", "departure_airport": "LIS", "arrival_airport": "BRU"}]
@@ -82,7 +82,7 @@ def test_only_the_airports_no_timetable_covers():
     assert steps.not_covered(flights, ground, "to_airport") == {"LIS"}
     assert steps.not_covered(flights, ground, "from_airport") == {"MLA"}
 
-def test_a_specialist_with_no_airport_to_look_at_is_not_asked(monkeypatch):
+def test_idle_specialist_not_asked(monkeypatch):
     place = Place("a", "a", "a", "", 0.0, 0.0)
     airport = lambda code: {"code": code, "name": code, "city": code, "country": "", "km": 10}
     monkeypatch.setattr(current, "TRIP", TripPlaces(place, place, [airport("OPO")], [], [airport("BRU")]))

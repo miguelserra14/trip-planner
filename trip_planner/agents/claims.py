@@ -154,6 +154,26 @@ def check_numbers(text: str, known: str, shown: list[dict[str, Any]]) -> list[st
         problems.append(tr("claim_unknown_times", values=listed(list(dict.fromkeys(times)))))
     return problems
 
+# An amount in euros as the report writes it ("45 EUR", "45.50 EUR") or as a model may ("45 €", "€45", "45,50 euros")
+AMOUNT = re.compile(r"€\s*(\d+(?:[.,]\d{1,2})?)(?![\d.,]*\d)|(?<![\d.,])(\d+(?:[.,]\d{1,2})?)\s*(?:€|eur(?:os?)?\b)", re.IGNORECASE)
+ROUNDED_EUR = 1.0   # "about 45 EUR" for 44.60: a whole amount stands for anything this close to it
+
+def amounts(text: str) -> list[tuple[str, float]]:
+    """The amounts in euros written in a text: (as written, value)."""
+    return [(match[0], float((match[1] or match[2]).replace(",", "."))) for match in AMOUNT.finditer(text or "")]
+
+def check_prices(text: str, known: str, shown: list[dict[str, Any]]) -> list[str]:
+    """The amounts in euros of the text that appear nowhere in what the model was given. As for durations, the
+    difference between the totals of two options may be compared, and a whole amount may round one given."""
+    allowed = {value for _, value in amounts(known)}
+    totals = [itinerary["total_cost"] for itinerary in shown if itinerary.get("total_cost") is not None]
+    allowed |= {abs(first - second) for first in totals for second in totals}
+    unknown = [written.strip() for written, value in amounts(text)
+               if not any(abs(value - known_value) < 0.01 for known_value in allowed)
+               and not (value == int(value) and any(abs(value - known_value) <= ROUNDED_EUR for known_value in allowed))]
+    count("prices_unknown", len(set(unknown)))
+    return [tr("claim_unknown_prices", values=listed(list(dict.fromkeys(unknown))))] if unknown else []
+
 def check_claims(text: str, known: str, shown: list[dict[str, Any]], recommended: int, colours: bool = True) -> str:
     """The model's text, with the colours it got wrong for one part corrected, and a note under it for each claim
     the options or the report contradict. known is everything the model was given: the reports and the notes.
@@ -161,5 +181,5 @@ def check_claims(text: str, known: str, shown: list[dict[str, Any]], recommended
     if not text:
         return text
     text, problems = check_lights(text, shown, recommended) if colours else (text, [])
-    problems += check_numbers(text, known, shown)
+    problems += check_numbers(text, known, shown) + check_prices(text, known, shown)
     return text + "".join(f"\n\n> {problem}" for problem in problems)

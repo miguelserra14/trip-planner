@@ -23,26 +23,26 @@ def itinerary_of(departure: str, arrival: str, to_airport: tuple, from_airport: 
     ground = {flight["id"]: {"to_airport": connection(*to_airport, DAY), "from_airport": connection(*from_airport, DAY)}}
     return check_itinerary(flight, ground, None, None, closest)
 
-def test_arriving_after_midnight_is_an_arrival_of_the_next_day():
+def test_after_midnight_next_day():
     itinerary = itinerary_of("14:00", "21:10", (11 * 60, 12 * 60), (22 * 60 + 30, MIDNIGHT + 20))
     assert itinerary["breaches"] == [] and itinerary["arrival_time"] == "00:20"
     assert itinerary["arrival_date"] == NEXT and arriving(itinerary) == f"00:20 ({LEAVES + timedelta(days=1):%d/%m})"
     assert itinerary["leave_date"] == DAY and leaving(itinerary) == "11:00"
     assert itinerary["total_minutes"] == MIDNIGHT + 20 + 180 - 11 * 60   # Rio's clock is three hours behind Lisbon's
 
-def test_after_midnight_is_later_than_any_time_asked_for():
+def test_after_midnight_is_later():
     accept(latest_arrival="23:30")
     with pytest.raises(ValueError):
         itinerary_of("14:00", "21:10", (11 * 60, 12 * 60), (22 * 60 + 30, MIDNIGHT + 20))
     itinerary = itinerary_of("14:00", "21:10", (11 * 60, 12 * 60), (22 * 60 + 30, MIDNIGHT + 20), closest=True)
     assert [(breach["kind"], breach["amount"]) for breach in itinerary["breaches"]] == [("arrival", 50)]
 
-def test_not_after_midnight_for_who_does_not_accept_a_later_day():
+def test_midnight_needs_next_day():
     accept(next_day_arrivals=False)
     with pytest.raises(ValueError):
         itinerary_of("14:00", "21:10", (11 * 60, 12 * 60), (22 * 60 + 30, MIDNIGHT + 20))
 
-def test_the_evening_before_is_only_a_closest_alternative():
+def test_evening_before_only_closest():
     evening = (-30, 45)   # leaves at 23:30 the day before, at the terminal at 00:45
     with pytest.raises(ValueError):
         itinerary_of("07:00", "14:10", evening, (15 * 60, 16 * 60))
@@ -73,7 +73,7 @@ def read(answer: dict, to_airport: bool) -> list[tuple]:
         return [(connection["leave"], connection["arrive"]) for connection in found]
     return asyncio.run(work())
 
-def test_a_connection_from_the_airport_may_end_in_the_night_after():
+def test_arrival_may_end_overnight():
     assert read(planned(f"{DAY}T22:40:00Z", f"{NEXT}T00:20:00Z"), to_airport=False) == [(22 * 60 + 40, MIDNIGHT + 20)]
     late = f"{NEXT}T{current.SETTINGS.night_minutes // 60 + 1:02}:00:00Z"
     assert read(planned(f"{DAY}T23:00:00Z", late), to_airport=False) == []       # a night in a station is not a connection
@@ -81,7 +81,7 @@ def test_a_connection_from_the_airport_may_end_in_the_night_after():
     accept(next_day_arrivals=False)
     assert read(planned(f"{DAY}T22:40:00Z", f"{NEXT}T00:20:00Z"), to_airport=False) == []
 
-def test_a_connection_to_the_airport_may_leave_the_evening_before():
+def test_departure_may_leave_evening():
     assert read(planned(f"{EVE}T23:30:00Z", f"{DAY}T00:45:00Z"), to_airport=True) == [(-30, 45)]
     assert read(planned(f"{EVE}T12:00:00Z", f"{EVE}T13:00:00Z"), to_airport=True) == []      # the day before, not its evening
     assert read(planned(f"{DAY}T22:40:00Z", f"{NEXT}T00:20:00Z"), to_airport=True) == []     # after the day of the flight

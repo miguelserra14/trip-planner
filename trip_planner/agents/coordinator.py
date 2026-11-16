@@ -48,8 +48,10 @@ async def write(messages: list[Any]) -> str:
                     return message_text(await asyncio.wait_for(answer, ANSWER_SECONDS))
             except Exception as error:
                 failure = error
+                # The daily quota only comes back tomorrow. Only Gemini's errors say so in words code can read; plan B
+                # (Mistral) is the last model tried, so not knowing its quota costs one failed call per question
                 if "PerDay" in str(error):
-                    EXHAUSTED_MODELS.add(name)   # the daily quota only comes back tomorrow
+                    EXHAUSTED_MODELS.add(name)
         if attempt < ROUNDS - 1:
             await asyncio.sleep(ROUND_WAIT_SECONDS)
     raise failure
@@ -105,6 +107,6 @@ def coordinator_prompt() -> str:
     After that answer the traveller may ask follow-up questions about the trip:
     answer in a few sentences, only from the report and the results above, without the heading. Never state
     a time or a price that is not in them. You cannot search again, so never offer to. If the question needs a new
-    search (other dates, airports or limits), name the setting in settings.py to change, such as `dates` or
+    search (other dates, airports or limits), name the setting to change (on the form, or in settings.py from the terminal), such as `dates` or
     `latest_leave`, and say that the traveller must run the search again.
     """

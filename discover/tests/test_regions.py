@@ -10,29 +10,29 @@ AIRPORTS = {code: {"code": code, "country": country, "large": True, "latitude": 
              ("JFK", "US", "New York", 40.64, -73.78))}
 city = lambda code, airports: airports[code]["city"]
 
-def test_an_airport_belongs_to_its_region_and_the_islands_to_their_own():
+def test_airport_region_and_islands():
     assert regions.region_of(AIRPORTS["BCN"]) == "Iberia" and regions.region_of(AIRPORTS["LPA"]) == "Canary Islands"
     assert regions.region_of({"country": "PT", "latitude": 32.7, "longitude": -16.8}) == "Madeira and the Azores"
     assert regions.region_of(AIRPORTS["JFK"]) is None
 
-def test_a_flight_to_an_airport_the_list_does_not_know_counts_in_no_region():
+def test_unknown_airport_no_region():
     assert regions.region_of({}) is None
     assert regions.cities_found({"BCN", "XXX"}, AIRPORTS, city, ANTWERP) == {"Iberia": {"Barcelona"}}
 
-def test_a_thin_region_is_asked_its_countries_and_islands_their_airports_by_name():
+def test_thin_region_requests():
     wanted = regions.requests_for(ANTWERP, AIRPORTS, 3500, {"BCN", "MAD"}, asked={"LV"}, city_of=city)
     assert [region["region"] for region in wanted] == ["Baltic states", "Canary Islands"]   # Iberia has its two cities; New York is too far
     baltic, canaries = wanted
     assert baltic["targets"] == ["LT", "LV"]   # Lithuania not asked yet and with more airports; by name would give the same cities
     assert canaries["targets"] == ["LPA"]   # by name only: a request for Spain gives the mainland
 
-def test_a_region_asked_again_makes_at_most_a_few_requests():
+def test_region_requests_capped():
     many = {f"X{number:02}": {"code": f"X{number:02}", "country": "PL", "large": True, "latitude": 52.0, "longitude": 20.0 + number / 10,
                               "city": f"Town {number}"} for number in range(100)}
     wanted = regions.requests_for(ANTWERP, many, 3500, set(), asked=set(), city_of=city)
     assert len(wanted[0]["targets"]) == regions.REGION_REQUESTS
 
-def test_the_map_says_how_many_cities_of_each_region_it_found():
+def test_region_counts_shown():
     from discover.view import breakdown
     from discover import finder
     from discover.flights.sources import Days
@@ -42,7 +42,7 @@ def test_the_map_says_how_many_cities_of_each_region_it_found():
     part = breakdown.regions_section(found)
     assert part["rows"] == [["Baltic states", "5", "0", "3", "2"], ["Iberia", "20", "9", "-", "9"]] and "1 regions were" in part["note"]
 
-def test_a_region_is_thin_by_its_share_of_cities_found_and_the_next_towns_count_for_none():
+def test_region_thin_by_share():
     assert regions.thin(3, 8) and not regions.thin(4, 8) and regions.thin(1, 2) and not regions.thin(2, 2)
     near = {"BRU": {"code": "BRU", "country": "BE", "large": True, "latitude": 50.9, "longitude": 4.48, "city": "Brussels"},
             "RTM": {"code": "RTM", "country": "NL", "large": True, "latitude": 51.96, "longitude": 4.44, "city": "Rotterdam"}}

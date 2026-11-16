@@ -23,35 +23,42 @@ def itinerary(of: dict, to_price: float = 10, from_price: float = 10, to_minutes
     return {"flight": of, "to": {"price_eur": to_price, "leave": 0, "arrive": to_minutes}, "from": {"price_eur": from_price, "leave": 0, "arrive": from_minutes},
             "total_cost": cost, "total_minutes": minutes, "schedule_grade": grade}
 
+@pytest.fixture(autouse=True)
+def every_airport_primary(monkeypatch):
+    """A trip whose departure airports are all primary: a fallback airport changes the result only where a test says so."""
+    from types import SimpleNamespace
+    codes = ("OPO", "LIS", "VGO", *(f"D{n}" for n in range(7)))
+    monkeypatch.setattr(current, "TRIP", SimpleNamespace(primary=[{"code": code} for code in codes]))
+
 def ids(found: tuple) -> list:
     return [chosen["id"] for chosen in found[0]]
 
-def test_the_first_round_is_the_cheapest_flights_with_one_of_every_departure_airport():
+def test_first_round_spans_airports():
     flights = [flight(n, 20 + n) for n in range(12)] + [flight(50, 90, "LIS"), flight(51, 95, "VGO")]
     chosen, reason = next_flights(flights, {})
     assert reason == "" and len(chosen) == selection.BATCH
     assert {"OPO", "LIS", "VGO"} <= {picked["departure_airport"] for picked in chosen}
     assert chosen[0]["id"] == "F0"
 
-def test_a_flight_whose_ticket_alone_costs_more_than_the_best_itinerary_is_left_out():
+def test_dear_ticket_left_out():
     cheap, dear = flight(1, 30), flight(2, 200)
     assert next_flights([cheap, dear], {"F1": itinerary(cheap)}) == ([], "beaten")
 
-def test_a_dearer_flight_of_an_airport_not_seen_yet_is_still_looked_up():
+def test_unseen_airport_looked_up():
     """The transport of its airport may cost nothing: 15 EUR more on the ticket does not rule it out."""
     cheap, other = flight(1, 30, "OPO"), flight(2, 45, "LIS")
     assert ids(next_flights([cheap, other], {"F1": itinerary(cheap, to_price=30)})) == ["F2"]
 
-def test_a_dearer_flight_of_an_airport_known_to_be_dear_to_reach_is_left_out():
+def test_dear_access_left_out():
     cheap, same_airport = flight(1, 30, "OPO"), flight(2, 45, "OPO")
     assert next_flights([cheap, same_airport], {"F1": itinerary(cheap, to_price=30)}) == ([], "beaten")
 
-def test_a_much_faster_flight_is_looked_up_even_when_it_cannot_be_cheaper():
+def test_faster_flight_looked_up():
     """The recommended itinerary is the cheapest once the extra hours are priced: four hours less are worth a dearer ticket."""
     slow, fast = flight(1, 30, minutes=420), flight(2, 60, minutes=120)
     assert ids(next_flights([slow, fast], {"F1": itinerary(slow, to_price=20)})) == ["F2"]
 
-def test_the_airlines_own_price_may_be_below_the_one_found():
+def test_airline_price_maybe_lower():
     """50 EUR in all is the best found. A ticket found at 37 EUR may be 29.60 on the airline's site: with the
     20 EUR of transport it could still be cheaper, so it is looked up. One found at 60 EUR could not."""
     cheap = flight(1, 30)
@@ -59,27 +66,36 @@ def test_the_airlines_own_price_may_be_below_the_one_found():
     assert ids(next_flights([cheap, flight(2, 37)], known)) == ["F2"]
     assert next_flights([cheap, flight(3, 60)], known) == ([], "beaten")
 
-def test_an_itinerary_below_the_reliability_asked_for_does_not_stop_the_search():
+def test_unreliable_does_not_stop():
     unreliable, other = flight(1, 30), flight(2, 300, "LIS")
     assert ids(next_flights([unreliable, other], {"F1": itinerary(unreliable, grade="C")})) == []
     reliable = itinerary(flight(3, 500, "VGO"), grade="B")
     assert ids(next_flights([unreliable, other, reliable["flight"]], {"F1": itinerary(unreliable, grade="C"), "F3": reliable})) == ["F2"]
 
-def test_an_airport_and_date_whose_flights_all_fail_is_given_up():
+def test_dropped_fallback_not_stopping(monkeypatch):
+    """LIS is a fallback airport: 40 EUR cheaper than OPO but three hours longer, not enough to be worth it, so the
+    ranking drops it. Weighed against it, the second flight from OPO would look beaten; against OPO alone it can win."""
+    from types import SimpleNamespace
+    monkeypatch.setattr(current, "TRIP", SimpleNamespace(primary=[{"code": "OPO"}]))
+    primary, fallback, second = flight(1, 80, "OPO"), flight(2, 40, "LIS"), flight(3, 90, "OPO")
+    looked_up = {"F1": itinerary(primary), "F2": itinerary(fallback, to_minutes=300)}
+    assert ids(next_flights([primary, fallback, second], looked_up)) == ["F3"]
+
+def test_failing_airport_day_dropped():
     flights = [flight(n, 20 + n) for n in range(6)] + [flight(9, 80, "LIS")]
     failed = {f"F{n}": None for n in range(selection.FAILURES_PER_AIRPORT_DAY)}
     assert ids(next_flights(flights, failed)) == ["F9"]
 
-def test_the_search_ends_at_the_limit_and_says_so():
+def test_stops_at_the_limit():
     flights = [flight(n, 20, "OPO" if n % 2 else "LIS", day=f"2026-12-{10 + n % 9}") for n in range(60)]
     looked_up = {f"F{n}": itinerary(flights[n], to_price=0, from_price=0) for n in range(selection.MAX_FLIGHTS_CHECKED)}
     assert next_flights(flights, looked_up) == ([], "limit")
 
-def test_it_gives_up_when_nothing_makes_an_itinerary():
+def test_gives_up_without_itineraries():
     flights = [flight(n, 20, f"A{n:02d}"[:3] + str(n % 10), day=f"2026-12-{10 + n % 9}") for n in range(40)]
     assert next_flights(flights, {f"F{n}": None for n in range(selection.STOP_WITHOUT_ITINERARY)}) == ([], "none")
 
-def test_everything_looked_up_is_the_end():
+def test_ends_when_all_checked():
     only = flight(1, 30)
     assert next_flights([only], {"F1": itinerary(only)}) == ([], "all")
 
@@ -117,7 +133,7 @@ def in_rounds(flights: list, look_up) -> tuple:
 
 SEEDS = range(400)
 
-def test_no_flight_left_out_would_have_been_recommended_whenever_the_rounds_say_so():
+def test_rounds_never_miss_winner():
     sure = 0
     for seed in SEEDS:
         flights, look_up = world(seed)
@@ -127,7 +143,7 @@ def test_no_flight_left_out_would_have_been_recommended_whenever_the_rounds_say_
             assert missed(looked_up, flights, look_up) == [], f"world {seed}"
     assert sure > 0.9 * len(SEEDS), f"only {sure} of {len(SEEDS)} searches ended sure of their result"
 
-def test_the_rounds_miss_less_and_look_up_little_more_than_the_fixed_number_did():
+def test_rounds_beat_fixed_number():
     """The rule before: the 16 cheapest flights, three per departure airport and date."""
     missed_before = missed_now = looked_before = looked_now = 0
     for seed in SEEDS:

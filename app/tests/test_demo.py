@@ -25,7 +25,7 @@ def in_demo(monkeypatch, tmp_path):
     site = Site(SETTINGS, start=lambda first: started.append(first), stale=list, demo=True)
     return site, started
 
-def test_every_report_and_map_kept_in_the_demo_still_opens_as_a_page(in_demo):
+def test_demo_pages_still_open(in_demo):
     site, _ = in_demo
     found = [key for group in reports.reports().values() for key in group]
     shown = maps.saved_maps()
@@ -40,7 +40,7 @@ def test_every_report_and_map_kept_in_the_demo_still_opens_as_a_page(in_demo):
         page = site.get(maps.SAVED + path.stem)
         assert page.status == 200 and site.token not in page.html, path.name   # no token: the page asks for no price
 
-def test_the_demo_searches_nothing_and_changes_no_file(in_demo):
+def test_demo_changes_nothing(in_demo):
     site, started = in_demo
     key = next(iter(reports.reports()["recent"]))
     asked = {"/search": "origin=Coimbra&destination=Faro&dates=03/12/2026", "/check": "", "/prices": "report=x",
@@ -51,12 +51,12 @@ def test_the_demo_searches_nothing_and_changes_no_file(in_demo):
         assert answer.status == 403 and "Not in the demo" in answer.html, path
     assert started == [] and key in reports.reports()["recent"]
 
-def test_the_demo_still_turns_the_theme_and_the_language(in_demo):
+def test_demo_switches_theme_language(in_demo):
     site, _ = in_demo
     assert site.post("/theme", f"token={site.token}&shown=dark&back=/".encode()).status == 303 and site.theme == "light"
     assert site.post("/language", f"token={site.token}&language=pt-PT".encode()).status == 303
 
-def test_a_trip_copied_into_the_demo_leaves_its_log_out(monkeypatch, tmp_path):
+def test_demo_copy_drops_log(monkeypatch, tmp_path):
     monkeypatch.setattr(demo, "DEMO_REPORTS", tmp_path / "demo")
     trip = tmp_path / "reports" / "trip_coimbra_faro_2026-11-12_1031"
     trip.mkdir(parents=True)

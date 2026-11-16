@@ -39,7 +39,7 @@ def rede_expressos(monkeypatch):
     monkeypatch.setattr(ground, "cities", lambda: CITIES)
     return asked
 
-def test_rede_expressos_is_asked_for_the_cities_of_portugal_and_its_direct_coaches_reach_them(rede_expressos):
+def test_rede_expressos_portugal_cities(rede_expressos):
     stops = sold.from_city(COIMBRA, TODAY, say=lambda text: None)
     assert sorted(end.split(" ")[0] for _, end, _ in rede_expressos) == ["Faro", "Lisboa"]   # not Aveiro, not Salamanca
     assert all(day == "2026-11-16" for _, _, day in rede_expressos)
@@ -48,24 +48,24 @@ def test_rede_expressos_is_asked_for_the_cities_of_portugal_and_its_direct_coach
     assert (lisbon["operator"], lisbon["minutes"], lisbon["times"], lisbon["weekdays"]) == ("Rede Expressos", 130, ["08:00", "17:00"], ["Mon"])
     assert (lisbon["sold"], lisbon["mode"], lisbon["source"], lisbon["last"]) == ("PT", "bus", "rede-expressos", True)
 
-def test_the_coaches_found_are_kept_and_not_asked_again(rede_expressos):
+def test_coaches_kept_not_reasked(rede_expressos):
     sold.from_city(COIMBRA, TODAY, say=lambda text: None)
     asked = len(rede_expressos)
     assert sold.from_city(COIMBRA, TODAY, say=lambda text: None) and len(rede_expressos) == asked
 
-def test_no_operator_is_asked_from_a_city_outside_their_countries(rede_expressos, monkeypatch):
+def test_operators_stay_in_country(rede_expressos, monkeypatch):
     monkeypatch.setattr(ground, "cities", lambda: CITIES + [{"name": "Antwerpen", "country": "BE", "lat": 51.22, "lon": 4.40, "population": 529_000}])
     assert sold.from_city(Place("Antwerp", "Antwerpen", "Antwerp", "Belgium", 51.22, 4.40), TODAY, say=lambda text: None) == []
     assert rede_expressos == []
 
-def test_the_price_of_a_day_is_its_cheapest_direct_coach_and_the_way_back_is_asked_the_other_way(rede_expressos):
+def test_day_price_cheapest_coach(rede_expressos):
     lisbon = sold.from_city(COIMBRA, TODAY, say=lambda text: None)[0]
     out = sold.day_price(lisbon, False, "2026-11-20")
     assert (out["price_eur"], out["leave"], out["seller"], out["grade"], out["to_stop"]) == (9.9, "17:00", "Rede Expressos", "A", "Lisboa (Sete Rios)")
     back = sold.day_price(lisbon, True, "2026-11-22")
     assert (back["price_eur"], back["leave"], back["from_stop"]) == (8.0, "18:00", "Lisboa (Sete Rios)")
 
-def test_movelia_leaves_out_its_trains_and_names_each_company(monkeypatch):
+def test_movelia_coaches_by_company(monkeypatch):
     combination = lambda company, kind="1", direct="1": {"busOrBoat": kind, "salable": "1", "basicPrice": "15,5", "companyName": company,
                                                          "departureDate": "16/11/2026", "departureTime": "08:00", "arrivalDate": "16/11/2026",
                                                          "arrivalTime": "11:30", "originName": "SEVILLA", "destinationName": "GRANADA", "direct": direct}

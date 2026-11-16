@@ -41,12 +41,12 @@ def trip(settings, tmp_path, monkeypatch):
                 {"number": 1, "total": 120, "legs": [{"side": "to", "price_eur": 10.0}, {"side": "from", "price_eur": 10.0}]},
                 {"number": 2, "total": 150, "legs": [{"side": "to", "price_eur": 10.0}, {"side": "from", "price_eur": 10.0}]}]}}
 
-def test_the_options_are_saved_beside_the_report_where_verify_does_not_read_them(trip):
+def test_options_saved_apart(trip):
     report = full.save_report(trip, "")
     assert full.options_of(report).exists() and full.options_of(report).parent == report.parent
     assert full.report_files("trip_*.json") == [full.vehicles_of(report)]   # --verify and --prices read only their own file
 
-def test_the_options_keep_the_values_of_the_report_and_who_wrote_what(trip):
+def test_options_keep_report_values(trip):
     data = full.read_options(full.save_report(trip, ""))
     first = data["options"][0]
     assert [option["number"] for option in data["options"]] == [1, 2] and data["recommended"] == 2
@@ -59,28 +59,28 @@ def test_the_options_keep_the_values_of_the_report_and_who_wrote_what(trip):
     assert data["origin"] == {"written": "Coimbra", "label": current.TRIP.origin.label}
     assert data["warnings"] == ["A warning in words"] and data["recommendation"] == "Take option 2."   # the model's words, apart
 
-def test_each_option_says_how_far_it_is_from_the_cheapest_and_the_fastest(trip):
+def test_option_gap_to_best(trip):
     data = full.read_options(full.save_report(trip, ""))
     assert (data["cheapest"], data["fastest"]) == (1, 2)
     assert [option["versus"] for option in data["options"]] == [{"cheapest_eur": 0, "fastest_minutes": 180},
                                                                 {"cheapest_eur": 30, "fastest_minutes": 0}]
 
-def test_a_total_with_a_guessed_part_carries_what_it_may_really_cost(trip):
+def test_guessed_total_has_range(trip):
     trip["shown"][0]["guessed_eur"] = 20.0
     data = full.read_options(full.save_report(trip, ""))
     lowest, highest = data["options"][0]["range_eur"]
     assert lowest < 120 < highest and data["options"][1]["range_eur"] is None
 
-def test_each_travel_date_says_what_it_would_cost_and_which_option_that_is(trip):
+def test_cost_per_travel_date(trip):
     data = full.read_options(full.save_report(trip, ""))
     assert data["by_date"] == [{"date": DAY, "option": 1, "route": "OPO → BRU", "total_eur": 120, "minutes": 600},
                                {"date": NEXT_DAY, "option": None, "route": None, "total_eur": None, "minutes": None}]
 
-def test_the_cheapest_of_each_date_is_the_faster_one_when_two_cost_the_same():
+def test_date_tie_goes_faster():
     slow, fast, other = itinerary(100, 600), itinerary(100, 500), itinerary(90, 700, day=NEXT_DAY)
     assert cheapest_by_date([slow, fast, other], [DAY, NEXT_DAY, "2026-11-14"]) == [(DAY, fast), (NEXT_DAY, other), ("2026-11-14", None)]
 
-def test_ground_prices_asked_again_since_replace_the_ones_written(trip):
+def test_refreshed_prices_replace_old(trip):
     report = full.save_report(trip, "")
     kept = json.loads(full.vehicles_of(report).read_text(encoding="utf-8"))
     kept["options"][1] |= {"total": 110, "legs": [{"side": "to", "price_eur": 2.0}, {"side": "from", "price_eur": 8.0}]}
@@ -92,7 +92,7 @@ def test_ground_prices_asked_again_since_replace_the_ones_written(trip):
     assert "prices_read" not in data["options"][0]   # unchanged: the price it was planned with
     assert data["cheapest"] == 2 and second["versus"]["cheapest_eur"] == 0   # compared again with the new total
 
-def test_a_report_without_options_or_of_another_version_is_shown_as_it_is(trip):
+def test_old_report_shown_raw(trip):
     report = full.save_report(trip, "")
     data = json.loads(full.options_of(report).read_text(encoding="utf-8"))
     full.options_of(report).write_text(json.dumps({**data, "version": options.VERSION + 1}), encoding="utf-8")

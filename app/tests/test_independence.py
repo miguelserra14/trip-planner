@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 
-def test_neither_the_planner_nor_discover_imports_the_app():
+def test_app_never_imported():
     code = [*(ROOT / "trip_planner").rglob("*.py"), *(ROOT / "discover").rglob("*.py"), ROOT / "settings.py"]
     assert not [path.relative_to(ROOT).as_posix() for path in code
                 if re.search(r"^\s*(from|import) app\b", path.read_text(encoding="utf-8"), re.M)]

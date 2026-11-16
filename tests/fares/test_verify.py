@@ -17,7 +17,7 @@ def step(time: str, arrive: str, agency: str = "Coach") -> dict:
     return {"time": time, "arrive": arrive, "line": "X", "agency": agency, "from": "A", "to": "B", "rail": False, "coach": True,
             "mode": "COACH", "km": 100, "from_id": "", "to_id": "", "from_at": [], "to_at": []}
 
-def test_each_vehicle_leaves_on_its_own_day():
+def test_vehicle_keeps_own_day():
     day = date.fromisoformat(SOON)
     after_midnight = verify.vehicles({"leave": 23 * 60, "steps": [step("23:00", "23:40"), step("00:10", "01:00")]}, SOON)
     assert [vehicle["day"] for vehicle in after_midnight] == [SOON, (day + timedelta(days=1)).isoformat()]
@@ -50,27 +50,27 @@ def checked(found: list) -> list:
     asyncio.run(verify.check_vehicles(found, NoTimetable()))
     return [vehicle.get("outcome") for vehicle in found]
 
-def test_the_operator_says_whether_each_vehicle_ran(coach):
+def test_operator_says_vehicle_ran(coach):
     coach.append("08:00")
     found = verify.vehicles({"leave": 8 * 60, "steps": [step("08:00", "09:00"), step("10:00", "11:00")]}, SOON)
     assert checked(found) == ["ran", "did_not_run"]
     assert found[0]["how"] == "Coach"
 
-def test_a_day_that_has_passed_is_not_asked_about(coach):
+def test_past_day_not_asked(coach):
     found = verify.vehicles({"leave": 8 * 60, "steps": [step("08:00", "09:00")]}, PAST)
     assert checked(found) == [None]
 
-def test_a_settled_answer_is_not_asked_again(coach):
+def test_settled_answer_kept(coach):
     found = verify.vehicles({"leave": 8 * 60, "steps": [step("08:00", "09:00")]}, SOON)
     found[0]["outcome"] = "ran"
     coach.clear()   # it would now say it does not run
     assert checked(found) == ["ran"]
 
-def test_a_timetable_far_ahead_is_not_published_yet():
+def test_far_timetable_unpublished():
     vehicle = verify.vehicles({"leave": 8 * 60, "steps": [step("08:00", "09:00", agency="Local bus") | {"from_id": "x", "to_id": "y", "from_at": [1, 2]}]}, SOON)[0]
     assert asyncio.run(verify.in_timetable(vehicle, NoTimetable())) is None   # 20 days ahead: not asked
 
-def test_the_count_is_by_light_and_by_who_answered():
+def test_count_by_light_source():
     vehicle = lambda outcome, how: {"day": SOON, "time": "08:00", "line": "X", "from": "A", "to": "B", "agency": "", "rail": False,
                                     "from_id": "", "to_id": "", "outcome": outcome, "how": how}
     kept = {"trip": "A -> B", "options": [{"number": 1, "flight": "F", "legs": [
@@ -91,7 +91,7 @@ class Timetable:
         day = params["time"][:10]
         return {"itineraries": [{"legs": [{"mode": "WALK"}, {"mode": "REGIONAL_RAIL", "startTime": f"{day}T{self.leaves_utc}:00Z"}]}]}
 
-def test_the_timetable_of_the_day_itself_says_whether_it_runs():
+def test_same_day_timetable_decides():
     tomorrow = (date.today() + timedelta(days=1)).isoformat()   # within the week: published
     train = step("10:19", "10:50", agency="SNCB") | {"from_id": "x", "to_id": "y", "from_at": [51.2, 4.4], "mode": "REGIONAL_RAIL"}
     vehicle = verify.vehicles({"leave": 10 * 60, "steps": [train]}, tomorrow)[0]

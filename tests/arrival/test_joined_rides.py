@@ -50,7 +50,7 @@ def join(published: list, monkeypatch, landings: tuple = ("12:30",), asked: list
     asyncio.run(work())
     return ground["operators_from"]["TGD"][DAY]
 
-def test_a_published_bus_to_the_station_and_the_coach_are_one_ride(monkeypatch):
+def test_bus_and_coach_joined(monkeypatch):
     rides = join([("13:34", "14:05"), ("15:40", "16:10")], monkeypatch)
     joined = [ride for ride in rides if not ride.get("estimated_km")]
     assert len(joined) == 1   # the coach of 07:05 leaves before the flight lands: nothing to join it to
@@ -59,13 +59,13 @@ def test_a_published_bus_to_the_station_and_the_coach_are_one_ride(monkeypatch):
     assert [step["line"] for step in ride["steps"]] == ["Ulcinj to Podgorica", "Royal Travel"]
     assert ride["price_eur"] > 11.0 and not ride["notes"]
 
-def test_flights_landing_together_share_the_way_to_the_station(monkeypatch):
+def test_landings_share_station_way(monkeypatch):
     asked = []
     rides = join([("13:34", "14:05")], monkeypatch, landings=("12:30", "12:30"), asked=asked)
     assert len(asked) == 1
     assert len([ride for ride in rides if not ride.get("estimated_km")]) == 2   # each flight still has its joined ride
 
-def test_with_nothing_published_the_estimate_is_measured_by_road_to_the_station(monkeypatch):
+def test_unpublished_way_road_measured(monkeypatch):
     rides = join([], monkeypatch)
     assert all(ride.get("estimated_km") == 11 for ride in rides) and len(rides) == 2
     stretch = rides[0]["steps"][0]

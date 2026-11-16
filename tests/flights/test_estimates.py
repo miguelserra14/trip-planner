@@ -13,17 +13,17 @@ TRANSFER = {"reachable": True, "duration_minutes": 40, "price_eur": 6, "price_kn
 def airport_at(km: int) -> None:
     current.TRIP.primary[0]["km"] = km
 
-def test_a_near_airport_may_be_reached_by_an_estimate():
+def test_near_airport_estimated():
     airport_at(current.SETTINGS.max_estimate_km)
     leg = legs.to_airport_leg(flight_search.register_flight(found_by_search("10:00", "17:10", 610)), {}, TRANSFER)
     assert leg["kind"] == "model" and leg["grade"] == "C"
 
-def test_a_far_airport_is_never_reached_by_an_estimate():
+def test_far_airport_never_estimated():
     airport_at(current.SETTINGS.max_estimate_km + 1)
     with pytest.raises(legs.Rejected, match=str(current.SETTINGS.max_estimate_km)):
         legs.to_airport_leg(flight_search.register_flight(found_by_search("10:00", "17:10", 610)), {}, TRANSFER)
 
-def test_nor_among_the_closest_alternatives():
+def test_far_airport_not_closest():
     airport_at(150)
     with pytest.raises(legs.Rejected):
         legs.to_airport_leg(flight_search.register_flight(found_by_search("10:00", "17:10", 610)), {}, TRANSFER, closest=True)

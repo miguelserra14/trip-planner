@@ -65,7 +65,7 @@ def coach(monkeypatch):
     monkeypatch.setattr(fares, "NOT_RUNNING", set())
     return price
 
-def test_only_prices_read_more_than_a_day_ago_for_a_trip_to_come_are_asked_again(report):
+def test_only_stale_prices_refreshed(report):
     report([timetable_leg(15.0)])
     assert [path.name for path in prices.stale_reports()] == ["trip_a_b.json"]
     report([timetable_leg(15.0)], read=AN_HOUR_AGO)
@@ -73,7 +73,7 @@ def test_only_prices_read_more_than_a_day_ago_for_a_trip_to_come_are_asked_again
     report([timetable_leg(15.0, day=PAST)])
     assert prices.stale_reports() == []   # the trip has passed: nothing left to book
 
-def test_a_new_price_of_the_operator_changes_the_leg_the_total_and_the_report(report, coach):
+def test_new_price_updates_report(report, coach):
     report([timetable_leg(15.0), model_leg(10.0)])
     markdown = prices.refresh()
     assert "15.00 → 19.00 EUR (Coach)" in markdown and "75.00 → 79.00 EUR" in markdown
@@ -81,25 +81,25 @@ def test_a_new_price_of_the_operator_changes_the_leg_the_total_and_the_report(re
     assert kept["options"][0]["total"] == 79.0 and kept["options"][0]["legs"][0]["price_eur"] == 19.0
     assert "15.00 → 19.00 EUR" in report.md() and prices.stale_reports() == []   # read now: good for another day
 
-def test_a_price_kept_from_earlier_in_the_session_is_not_used(report, coach):
+def test_session_price_not_reused(report, coach):
     leg = timetable_leg(15.0)
     report([leg])
     fares.CACHE[("Coach", fares.trip_of(leg["vehicles"], [0], SOON))] = 15.0
     assert "15.00 → 19.00 EUR" in prices.refresh()
 
-def test_a_departure_no_longer_sold_is_said_and_its_price_stays(report, coach):
+def test_unsold_departure_reported(report, coach):
     report([timetable_leg(15.0)])
     coach.clear()
     markdown = prices.refresh()
     assert "Coach no longer sells this departure" in markdown and "Option 1: Coach no longer sells" in markdown
     assert report.json()["options"][0]["legs"][0]["price_eur"] == 15.0
 
-def test_a_tariff_and_a_models_price_are_not_asked_again(report, coach):
+def test_tariff_and_model_skipped(report, coach):
     report([timetable_leg(15.0, tariff=True), model_leg(10.0)])
     markdown = prices.refresh()
     assert markdown.count("not from a booking system") == 2 and "| 75.00 EUR |" in markdown and "EUR →" not in markdown
 
-def test_a_ride_an_operator_sold_is_asked_of_that_operator_again(report, monkeypatch):
+def test_sold_ride_reasked(report, monkeypatch):
     asked = []
 
     def rides(city, airport, day, to_airport):
@@ -113,7 +113,7 @@ def test_a_ride_an_operator_sold_is_asked_of_that_operator_again(report, monkeyp
     assert "9.00 → 12.00 EUR (FlixBus)" in prices.refresh()
     assert asked == [("Coimbra", "OPO", SOON, True)]
 
-def test_a_report_keeps_its_prices_and_when_they_were_read():
+def test_report_keeps_price_time():
     leg = {"grade": "A", "kind": "timetable", "leave": 480, "steps": [vehicle()], "price_eur": 15.0, "price_kind": "operator",
            "tickets": [{"positions": [0], "operator": "Coach", "price_eur": 15.0, "travel_day": True, "tariff": False, "confirms": True}]}
     flight = {"id": "F", "date": SOON, "route": "OPO → BRU"}

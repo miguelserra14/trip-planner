@@ -1,4 +1,4 @@
-"""`pytest` replays the checkpoints saved in the tests folders: no network, a few seconds.
+"""`pytest` replays the checkpoints saved in the tests folders: no network, under a minute.
 `pytest --live` asks the real services again and saves new checkpoints: several minutes.
 `pytest --live -k BRU` does that for one airport, `pytest --live tests/departure` for one direction."""
 import asyncio

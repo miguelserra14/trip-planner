@@ -30,19 +30,19 @@ def nominatim(monkeypatch):
         return asked
     return answers
 
-def test_a_boundary_is_moved_to_the_point_of_its_town(nominatim):
+def test_boundary_moved_to_town(nominatim):
     asked = nominatim([result("boundary", "city", *BOUNDARY)],
                       [result("boundary", "city", *BOUNDARY), result("place", "city", *CITY, name="Syracuse")])   # named in English
     place = places.as_place("Siracusa", places.search_places("Siracusa"))
     assert (place.latitude, place.longitude) == CITY
     assert asked[1] == {"city": "Siracusa", "countrycodes": "it"}
 
-def test_a_town_found_as_a_point_is_not_asked_about_again(nominatim):
+def test_town_point_not_reasked(nominatim):
     asked = nominatim([result("place", "city", *CITY)], [])
     place = places.as_place("Siracusa", places.search_places("Siracusa"))
     assert (place.latitude, place.longitude) == CITY and len(asked) == 1
 
-def test_a_boundary_stays_where_it_is_when_nothing_better_is_known(nominatim):
+def test_boundary_kept_without_better(nominatim):
     for as_city in ([result("boundary", "city", *BOUNDARY)],                       # the town has no point of its own
                     [result("place", "city", *CITY, local="Siracusa Scalo")],     # another place
                     [result("place", "city", 45.0, 9.0)],                         # a town of that name somewhere else

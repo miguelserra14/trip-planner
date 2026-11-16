@@ -26,7 +26,7 @@ from trip_planner.report.summary import ground_lines, render_closest, render_rep
 from trip_planner.sources import airlines, flight_search, google_flights, kiwi, timetables, web
 from trip_planner.sources.timetables.all_the_way import all_the_way
 from trip_planner.texts import said, tr
-from trip_planner.utils import as_duration, logged, progress, REQUESTS, say, timed
+from trip_planner.utils import as_duration, count, logged, progress, REQUESTS, say, timed
 
 # What each step found, as one number for the page that waits (utils.progress)
 COUNTED = {
@@ -81,7 +81,8 @@ async def search_flights(state: dict[str, Any]) -> dict[str, Any]:
         summary += "\nThe flight list may be incomplete: " + "; ".join(flight_search.FLIGHT_GAPS)
     return {
         "flights": flights,
-        "step": 1 if flights else len(STEPS),   # without flights there is nothing left to look up
+        # Without flights the next steps still run: the trip by train or coach all the way is what is left to offer
+        "step": 1,
         "flight_gaps": list(flight_search.FLIGHT_GAPS),
         "checked": [], "ground": {}, "transfers": [], "trains": [], "report": reason,
         "message": f"{found} flights fit the traveller's limits, cheapest first:\n{summary}"}
@@ -268,7 +269,10 @@ async def search_ground_transport(state: dict[str, Any]) -> dict[str, Any]:
         transit = timetables.Timetables(keep=True)
         try:
             whole_way = asyncio.ensure_future(without_a_plane(transit))
-            if state.get("report"):
+            if not flights:
+                # No flight at all: no airport to reach, only the trip without a plane
+                checked, ground, transfers, trains, stopped = [], {}, [], [], "all"
+            elif state.get("report"):
                 # No flight fits the traveller's limits: the closest ones are looked up, the ones that break the least first
                 checked, stopped = timetables.flights_to_check(flights), "limit"
                 ground, transfers, trains = await ground_transport(checked, transit=transit)
@@ -330,6 +334,19 @@ def without_a_plane_part(state: dict[str, Any], recommended: dict[str, Any] | No
     return options, warnings, ("\n\nWithout a plane (by train or coach all the way), compared by code with the same rules: " + found
                                + (". One of them is better than the recommended option: say so." if warnings else "."))
 
+RULES_SERVICE = "rules"   # a decision of the rules worth finding in the log of the run, next to the requests
+
+def note_rides_missed(itineraries: list[dict[str, Any]]) -> None:
+    """The ways a model estimated although an operator sold rides there that day, none of which fit (legs.rides_missed):
+    counted with the report and kept in its log, once per itinerary made, to see how often it happens (--funnel)."""
+    for itinerary in itineraries:
+        for side in ("to", "from"):
+            operators = itinerary[side].get("rides_missed")
+            if operators:
+                count("rides_missed")
+                REQUESTS.append({"at": "", "service": RULES_SERVICE, "seconds": 0.0, "result": "ok: estimated",
+                                 "what": f"{itinerary['flight']['id']}, way {side} the airport: no ride of {', '.join(operators)} fits, a model's estimate is used"})
+
 def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
     """Combine the flights with their ground transport into door-to-door itineraries, discard the ones that break
     a hard constraint or are not reliable enough, and rank the rest."""
@@ -353,6 +370,7 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
         kinds.update({itinerary["flight"]["id"]: "not_running" for itinerary in itineraries if itinerary["not_running"]})
         itineraries = [itinerary for itinerary in itineraries if not itinerary["not_running"]]
         built = list(itineraries)   # every itinerary that can be made, for the funnel: a map's estimate is compared with it
+        note_rides_missed(built)
 
         # Reliability comes before price: an itinerary below the minimum grade is only shown when nothing better exists
         reliable = [itinerary for itinerary in itineraries if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
@@ -407,11 +425,13 @@ def build_itineraries(state: dict[str, Any]) -> dict[str, Any]:
                         "breaking at least one requirement. By the order of requirements, option 1 is the closest." + ground_note}
             # No flight at all: the trips without a plane are what is left to offer
             by_ground, _, ground_note = without_a_plane_part(state, None)
-            message = "No itinerary respects the hard constraints. Rejected flights:\n" + "\n".join(rejected[:12]) + ground_note
-            # The reasons are shown to the traveller as the code found them, above whatever the coordinator writes
-            report = "\n".join(([no_flight_fits, ""] if no_flight_fits else [])
-                               + [f"## {tr('no_itinerary')}", "", tr("no_itinerary_reasons"), ""] + [f"- {reason}" for reason in rejected]
-                               + ground_lines(by_ground, 0))
+            message = ("No itinerary respects the hard constraints. Rejected flights:\n" + "\n".join(rejected[:12]) if rejected
+                       else "No flight was found at all.") + ground_note
+            # The reasons are shown to the traveller as the code found them, above whatever the coordinator writes.
+            # Without any flight, the first step already said why: there is no flight to list as rejected
+            rejected_part = ([f"## {tr('no_itinerary')}", "", tr("no_itinerary_reasons"), ""] + [f"- {reason}" for reason in rejected]
+                             if rejected or not no_flight_fits else [])
+            report = "\n".join(([no_flight_fits, ""] if no_flight_fits else []) + rejected_part + ground_lines(by_ground, 0))
             return {
                 "step": 3, "report": report, "rejected": rejected, "warnings": warnings, "recommended": 0, "ground_only": by_ground,
                 "funnel": funnel(state["flights"], checked, kinds, built), "message": message}

@@ -62,14 +62,14 @@ def field(tab, name: str = "dates") -> str:
 
 # ---------------------------------------------------------------- the calendar
 
-def test_the_calendar_opens_on_a_click_and_stays_open_while_its_months_are_turned(tab):
+def test_calendar_stays_open(tab):
     calendar_of(tab)
     assert tab.js("document.querySelectorAll('.calendar .month button')[0].disabled")   # no month before this one
     turn(tab, 13)
     assert tab.js("!!document.querySelector('.calendar')")
     assert tab.js("document.querySelector('.calendar .month span').textContent").endswith(str(date.today().year + 1))
 
-def test_the_calendar_closes_on_a_click_outside_or_escape(tab):
+def test_calendar_closes_outside(tab):
     calendar_of(tab)
     tab.js("document.querySelector('h1').click()")
     assert tab.js("!document.querySelector('.calendar')")
@@ -77,7 +77,7 @@ def test_the_calendar_closes_on_a_click_outside_or_escape(tab):
     tab.js("document.querySelector('input[name=dates]').dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}))")
     assert tab.js("!document.querySelector('.calendar')")
 
-def test_a_click_writes_the_day_and_a_second_one_takes_it_away(tab):
+def test_click_toggles_day(tab):
     calendar_of(tab)
     turn(tab, 1)
     click_day(tab, 10)
@@ -87,14 +87,14 @@ def test_a_click_writes_the_day_and_a_second_one_takes_it_away(tab):
     click_day(tab, 10)
     assert field(tab) == written(first.replace(day=12))
 
-def test_at_most_seven_days_are_chosen(tab):
+def test_seven_days_at_most(tab):
     calendar_of(tab)
     turn(tab, 1)
     for number in range(1, 11):
         click_day(tab, number)
     assert len(field(tab).split(", ")) == 7
 
-def test_days_that_cannot_be_searched_cannot_be_clicked(tab):
+def test_unsearchable_days_disabled(tab):
     calendar_of(tab)
     today = date.today()
     if today.day > 1:
@@ -102,7 +102,7 @@ def test_days_that_cannot_be_searched_cannot_be_clicked(tab):
     turn(tab, 12)   # past the days airlines sell
     assert tab.js("[...document.querySelectorAll('.calendar td button')].pop().disabled")
 
-def test_the_way_back_cannot_start_before_the_way_there(tab):
+def test_return_not_before_outbound(tab):
     going = date.today().replace(day=1) + timedelta(days=62)
     going = going.replace(day=15)
     tab.js(f"document.querySelector('input[name=dates]').value = '{written(going)}'")
@@ -111,7 +111,7 @@ def test_the_way_back_cannot_start_before_the_way_there(tab):
     assert tab.js("[...document.querySelectorAll('.calendar td button')].find(b => b.textContent === '14').disabled")
     assert not tab.js("[...document.querySelectorAll('.calendar td button')].find(b => b.textContent === '15').disabled")
 
-def test_days_written_in_words_are_kept_when_a_day_is_clicked_and_clear_takes_only_the_clicked(tab):
+def test_clear_keeps_worded_days(tab):
     calendar_of(tab, value="sexta")
     turn(tab, 1)
     click_day(tab, 3)
@@ -127,7 +127,7 @@ def start_search(tab, app) -> StandIn:
     assert tab.js("location.pathname") == "/search"
     return app.started[-1]
 
-def test_enter_in_a_field_searches_and_never_restores_the_settings(tab, app):
+def test_enter_searches(tab, app):
     tab.js(f"document.querySelector('input[name=dates]').value = '{written(date.today() + timedelta(days=30))}'")
     tab.js("document.querySelector('input[name=origin]').focus()")
     for kind in ("keyDown", "keyUp"):
@@ -136,7 +136,7 @@ def test_enter_in_a_field_searches_and_never_restores_the_settings(tab, app):
     tab.wait("location.pathname === '/search'")
     assert len(app.started) == 1
 
-def test_a_running_search_is_put_in_place_without_a_reload_and_then_left_alone(tab, app):
+def test_search_shown_without_reload(tab, app):
     search = start_search(tab, app)
     search.lines.append("Flights: 26 found")
     tab.wait("document.querySelector('#live').textContent.includes('Flights: 26 found')")
@@ -150,7 +150,7 @@ def test_a_running_search_is_put_in_place_without_a_reload_and_then_left_alone(t
     assert not tab.js("document.querySelector('#live').textContent.includes('never asked for')")
     assert tab.js("window.sameLoad === true")
 
-def test_the_progress_stays_open_or_closed_as_the_traveller_left_it(tab, app):
+def test_progress_keeps_open_state(tab, app):
     search = start_search(tab, app)
     search.shown.append("# Final result")   # with a result the progress starts closed
     tab.wait("!!document.querySelector('#live article')")
@@ -159,7 +159,7 @@ def test_the_progress_stays_open_or_closed_as_the_traveller_left_it(tab, app):
     tab.wait("document.querySelector('#live').textContent.includes('16 of 16')")
     assert tab.js("document.querySelector('#live details').open")
 
-def test_a_question_asked_by_the_search_appears_without_a_reload(tab, app):
+def test_search_question_appears(tab, app):
     search = start_search(tab, app)
     search.asked = ("airports", {"groups": [{"title": "Arrival", "airports": [
         {"code": "BRU", "km": 36, "name": "Brussels", "city": "Zaventem", "country": "BE"}]}], "notes": []})
@@ -170,12 +170,12 @@ def test_a_question_asked_by_the_search_appears_without_a_reload(tab, app):
 
 # ---------------------------------------------------------------- the language, a browser without scripts, tabs
 
-def test_the_language_chosen_is_used_at_once(tab):
+def test_language_applies_at_once(tab):
     tab.js("const choice = document.querySelector('select[data-submit]'); choice.value = 'en'; choice.dispatchEvent(new Event('change'))")
     tab.loaded()
     assert tab.js("document.documentElement.lang") == "en" and tab.js("document.querySelector('h1').textContent") == "Plan a trip"
 
-def test_without_scripts_the_form_works_and_a_running_search_refreshes_itself(tab, app):
+def test_works_without_scripts(tab, app):
     tab.call("Emulation.setScriptExecutionDisabled", value=True)
     tab.open(app.address)
     assert tab.js("!document.querySelector('.calendar')")
@@ -185,7 +185,7 @@ def test_without_scripts_the_form_works_and_a_running_search_refreshes_itself(ta
     assert tab.js("performance.timeOrigin") != began and "Flights: 26 found" in tab.js("document.body.textContent")
     tab.call("Emulation.setScriptExecutionDisabled", value=False)
 
-def test_a_second_tab_sees_the_search_running_and_can_stop_it(tab, app, browser):
+def test_second_tab_can_stop(tab, app, browser):
     search = start_search(tab, app)
     other = browser.tab()
     try:
@@ -197,7 +197,7 @@ def test_a_second_tab_sees_the_search_running_and_can_stop_it(tab, app, browser)
     finally:
         other.call("Page.close")
 
-def test_back_from_a_running_search_shows_the_form_busy(tab, app):
+def test_back_shows_form_busy(tab, app):
     start_search(tab, app)
     tab.js("history.back()")
     tab.loaded()
@@ -206,13 +206,13 @@ def test_back_from_a_running_search_shows_the_form_busy(tab, app):
 
 # ---------------------------------------------------------------- the form's extras
 
-def test_the_swap_button_swaps_where_from_and_where_to(tab):
+def test_swap_button_swaps(tab):
     tab.js("document.querySelector('input[name=origin]').value = 'Coimbra'; document.querySelector('input[name=destination]').value = 'Ghent'")
     assert tab.js("!document.querySelector('button[data-swap]').hidden")
     tab.js("document.querySelector('button[data-swap]').click()")
     assert tab.js("[document.querySelector('input[name=origin]').value, document.querySelector('input[name=destination]').value]") == ["Ghent", "Coimbra"]
 
-def test_the_settings_changed_are_counted_as_they_are_changed(tab):
+def test_changes_counted_live(tab):
     summary = "document.querySelector('details.advanced summary').textContent"
     assert "(" not in tab.js(summary)
     tab.js("{ const box = document.querySelector('input[name=options_shown]'); box.value = '9'; box.dispatchEvent(new Event('input', {bubbles: true})) }")
@@ -221,7 +221,7 @@ def test_the_settings_changed_are_counted_as_they_are_changed(tab):
     tab.js("{ const box = document.querySelector('input[name=options_shown]'); box.value = box.dataset.default; box.dispatchEvent(new Event('input', {bubbles: true})) }")
     assert "1" in tab.js(summary)
 
-def test_the_kind_of_trip_follows_the_days_to_come_back(tab):
+def test_trip_kind_follows_return(tab):
     kind = "document.querySelector('.trip-kind').textContent"
     one_way = tab.js(kind)
     hidden = "getComputedStyle(document.querySelector('input[name=return_dates]')).display === 'none' || !document.querySelector('input[name=return_dates]').offsetParent"
@@ -237,7 +237,7 @@ def test_the_kind_of_trip_follows_the_days_to_come_back(tab):
 
 # ---------------------------------------------------------------- a Discover map in the app
 
-def test_a_map_in_the_app_runs_no_script_of_its_own_and_its_trip_opens_the_planners_form(tab, app, monkeypatch):
+def test_app_map_opens_form(tab, app, monkeypatch):
     """The one test that needs more than this computer: Leaflet comes from unpkg. The map's tiles are not asked for."""
     from discover import finder
     from discover.view import page
@@ -276,7 +276,7 @@ def test_a_map_in_the_app_runs_no_script_of_its_own_and_its_trip_opens_the_plann
     assert tab.js("document.querySelector('input[name=destination]').value") == "Birmingham"
     assert len(app.started) == 1   # the form filled in, nothing searched
 
-def test_a_limit_of_the_map_can_be_typed_and_its_slider_stays_where_it_is(tab, app, monkeypatch):
+def test_typed_limit_keeps_slider(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the test above."""
     from discover import finder
     from discover.view import page
@@ -318,7 +318,7 @@ def test_a_limit_of_the_map_can_be_typed_and_its_slider_stays_where_it_is(tab, a
     assert tab.js("document.querySelector('#filters .limit input[type=number]').value") == "17"   # and the value typed is the one kept
     assert tab.js(where) == left
 
-def test_the_hours_of_leaving_and_arriving_hide_the_flights_outside_them(tab, app, monkeypatch):
+def test_hour_filters_hide_flights(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the tests above."""
     from discover import finder
     from discover.view import page
@@ -358,7 +358,7 @@ def test_the_hours_of_leaving_and_arriving_hide_the_flights_outside_them(tab, ap
     tab.js(choose.format(3, 23))   # arriving by 23:00: the one landing after midnight is hidden
     tab.wait(f"{shown} === 'BHX'")
 
-def test_a_way_to_the_airport_of_three_vehicles_is_three_parts_on_the_maps_line(tab, app, monkeypatch):
+def test_map_line_three_parts(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the tests above."""
     from discover import finder
     from discover.view import page
@@ -428,7 +428,7 @@ def test_a_way_to_the_airport_of_three_vehicles_is_three_parts_on_the_maps_line(
     tab.wait(f"{shown}[0]")   # close to Coimbra, the train of the way to Porto
     assert tab.js("errors") == []
 
-def test_a_map_made_before_opens_from_the_list_with_its_own_script_and_breaks_no_rule_of_the_page(tab, app, monkeypatch, tmp_path):
+def test_old_map_opens_listed(tab, app, monkeypatch, tmp_path):
     """Leaflet comes from unpkg, as in the tests above."""
     from app import maps
     from app.tests.test_maps import a_saved_map
@@ -450,7 +450,7 @@ def test_a_map_made_before_opens_from_the_list_with_its_own_script_and_breaks_no
     tab.wait("document.querySelectorAll('#rows li').length === 1")
     assert tab.js("violations") == [] and tab.js("errors") == []
 
-def test_the_route_on_the_map_is_the_way_the_filters_show_its_city(tab, app, monkeypatch):
+def test_route_follows_filters(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the tests above."""
     from discover import finder
     from discover.view import page
@@ -491,7 +491,7 @@ def test_the_route_on_the_map_is_the_way_the_filters_show_its_city(tab, app, mon
     tab.wait("document.querySelector('#detail h2').textContent.endsWith('Birmingham') && !!document.querySelector('#detail h4.ground-title')")
     assert tab.js(icons) == "#i-bus" and tab.js("errors") == []
 
-def test_a_map_asked_for_opens_by_itself_once_its_page_is_ready_and_only_then(tab, app):
+def test_map_opens_when_ready(tab, app):
     leaving = date.today() + timedelta(days=30)
     tab.open(app.address + "discover")
     tab.js(f"document.querySelector('input[name=city]').value = 'Coimbra'; document.querySelector('input[name=dates]').value = '{written(leaving)}'")
@@ -506,7 +506,7 @@ def test_a_map_asked_for_opens_by_itself_once_its_page_is_ready_and_only_then(ta
     time.sleep(1)
     assert tab.js("location.pathname") == "/discover" and tab.js("!!document.querySelector('a[data-open-map]')")
 
-def test_a_city_reached_by_train_or_bus_has_a_card_beside_the_flights_by_its_price(tab, app, monkeypatch):
+def test_ground_city_gets_card(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the test above."""
     from discover import finder
     from discover.view import page

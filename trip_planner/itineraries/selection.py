@@ -11,6 +11,7 @@ Two things are assumed, and stated here because the result is only as sure as th
 from typing import Any
 
 from trip_planner import current
+from trip_planner.itineraries.ranking import worth_the_detour
 
 BATCH = 8                       # flights looked up in one round: the timetables are asked for all of them at once
 MAX_FLIGHTS_CHECKED = 40        # however many could still win, no more than this: the search has to end
@@ -20,9 +21,11 @@ AIRLINE_FLOOR = 0.8             # the airline's own site was up to 12% cheaper t
 
 def counted(itineraries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The itineraries the recommendation is chosen among: an itinerary below the reliability asked for only
-    counts when nothing reaches it, as in build_itineraries."""
+    counts when nothing reaches it, as in build_itineraries, and one from a fallback airport that does not save
+    enough is left out, as in rank_itineraries. Weighed against one the ranking drops, a flight that could still
+    win would be taken for beaten."""
     reliable = [itinerary for itinerary in itineraries if itinerary["schedule_grade"] <= current.SETTINGS.min_reliability]
-    return reliable or itineraries
+    return worth_the_detour(reliable or itineraries)[0]
 
 def worth(cost: float, minutes: float, fastest: float) -> float:
     """What an itinerary costs with the value of the time it takes beyond the fastest one, the way rank_itineraries

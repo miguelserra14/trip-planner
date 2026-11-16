@@ -31,7 +31,7 @@ from trip_planner import current
 from trip_planner.itineraries import legs
 from trip_planner.report.icons import mode_of
 from trip_planner.trip.places import airport_from, load_airports, Place, TripPlaces
-from trip_planner.sources import timetables
+from trip_planner.sources import flight_search, timetables
 from trip_planner.texts import tr
 from trip_planner.utils import plain, say, to_minutes, to_time
 
@@ -60,23 +60,11 @@ def planner_flight(leg: dict[str, Any], price: float, airports: dict[str, Any]) 
         return None
     days_later = (lands.date() - leaves.date()).days
     on_the_clocks = to_minutes(leg["arrival_time"]) + days_later * 24 * 60 - to_minutes(leg["time"])
-    return {"id": f"{leg['from']}-{leg['to']}-{leg['date'][8:10]}{leg['date'][5:7]}-{leg['time'].replace(':', '')}",
+    return {"id": flight_search.flight_id(leg["from"], leg["to"], leg["date"], leg["time"]),
             "date": leg["date"], "departure_airport": leg["from"], "departure_time": leg["time"],
             "arrival_airport": leg["to"], "arrival_time": leg["arrival_time"], "arrival_date": leg["arrival_date"],
             "arrival_day_offset": days_later, "stops": leg.get("stops", 0), "airline": leg.get("airline", ""),
             "duration_minutes": minutes, "timezone_shift_minutes": minutes - on_the_clocks, "price_eur": price}
-
-def covered(flight: dict[str, Any], ground: dict[str, Any], to_airport: bool) -> bool:
-    """Whether real timetables or an operator cover a way, as legs.py decides it: then a way that does not fit the
-    flight cannot be made."""
-    side = "to_airport" if to_airport else "from_airport"
-    timetable = (ground.get(flight["id"]) or {}).get(side) or timetables.NOT_COVERED
-    if to_airport:
-        rides = ((ground.get("operators") or {}).get(flight["departure_airport"]) or {}).get(flight["date"])
-        return bool(rides) or timetable["covered"]
-    ready = to_minutes(flight["arrival_time"]) + current.SETTINGS.min_landing_minutes + timetables.MIN_STOP_WALK_MINUTES
-    rides = ((ground.get("operators_from") or {}).get(flight["arrival_airport"]) or {}).get(timetables.landing_day(flight)) or []
-    return timetable["covered"] or any(ready <= ride["leave"] < ride["arrive"] for ride in rides)
 
 def described(leg: dict[str, Any]) -> str:
     """A connection in a few words: each vehicle with its times."""
@@ -126,7 +114,8 @@ def checked_leg(flight: dict[str, Any], ground: dict[str, Any], to_airport: bool
         free = current.SETTINGS.free_trains_at_origin if to_airport else current.SETTINGS.free_trains_at_destination
         legs.price_with_tickets(found, day, free)
     except legs.Rejected as reason:
-        return ("impossible" if covered(flight, ground, to_airport) else "not covered"), None, str(reason)
+        # Impossible only when a real timetable or an operator proves it (legs.PROVEN), as the planner decides
+        return ("impossible" if reason.kind in legs.PROVEN else "not covered"), None, str(reason)
     except Exception as error:   # a price the settings do not allow to estimate, or a mistake: the way stays unknown
         return "not covered", None, f"{type(error).__name__}: {error}"
     if found.get("kind") not in ("timetable", "operator"):

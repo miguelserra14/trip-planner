@@ -18,13 +18,13 @@ def record(request, live, transit):
 def test_1_place_is_located(record):
     check_city(*record)
 
-def test_2_terminal_is_at_the_airport(record):
+def test_2_terminal_at_airport(record):
     check_terminal(*record)
 
 def test_3_airport_has_stops(record):
     check_stops(*record)
 
-def test_4_connections_in_time_for_the_flight(record):
+def test_4_connections_in_time(record):
     """Real connections reach the terminal before the flight closes. They leave that day, or on the evening before."""
     case, found = record
     answer = check_covered(case, found)
@@ -35,7 +35,7 @@ def test_4_connections_in_time_for_the_flight(record):
     at_terminal = take_off - current.SETTINGS.min_airport_minutes
     assert any(option["arrive"] <= at_terminal for option in answer["options"]), "none leaves the time asked for at the airport"
 
-def test_5_leg_of_the_itinerary(record):
+def test_5_itinerary_leg(record):
     """The leg the itinerary gets is a real connection that leaves the time asked for at the airport."""
     case, found = record
     needs(found, "connections")

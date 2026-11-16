@@ -31,7 +31,7 @@ def old_reports(folder: Path, *names: str) -> list[Path]:
         paths.append(path)
     return paths
 
-def test_the_prices_can_only_be_asked_again_when_some_are_too_old(tmp_path):
+def test_refresh_needs_old_prices(tmp_path):
     site, started = site_with()
     assert '<button type="submit" class="quiet" disabled>Refresh prices</button>' in site.get("/program").html
     assert "too long ago" not in site.get("/").html
@@ -43,14 +43,14 @@ def test_the_prices_can_only_be_asked_again_when_some_are_too_old(tmp_path):
     assert started[0].first["task"] == "prices" and "Refresh prices" in site.get("/search").html
     assert [Path(path).stem for path in started[0].first["reports"]] == ["trip_a", "trip_b"]
 
-def test_only_the_reports_ticked_have_their_prices_asked_again_and_only_ones_whose_prices_are_old(tmp_path):
+def test_refresh_only_ticked_reports(tmp_path):
     site, started = site_with(stale=old_reports(tmp_path, "trip_a", "trip_b", "trip_c"))
     sent_reports = lambda *names: urlencode({"token": site.token, "report": list(names)}, doseq=True).encode()
     assert site.post("/prices", sent_reports()).location == "/program" and started == []   # nothing ticked: nothing asked
     assert site.post("/prices", sent_reports("trip_b", "../../settings", "trip_z")).location == "/search"
     assert [Path(path).stem for path in started[0].first["reports"]] == ["trip_b"]   # a name the page did not offer is no report
 
-def test_the_check_runs_as_a_search_does_and_not_while_one_works():
+def test_check_runs_like_search():
     site, started = site_with()
     site.post("/search", sent(site))
     assert site.post("/check", sent(site)).location == "/search" and len(started) == 1   # the search goes on
@@ -62,7 +62,7 @@ def test_the_check_runs_as_a_search_does_and_not_while_one_works():
     started[1].alive, started[1].done = False, "Every service answered."
     assert "Every service answered." in site.get("/search/part").html
 
-def test_a_language_added_is_read_again_once_its_job_ended(monkeypatch):
+def test_added_language_reloaded(monkeypatch):
     read = []
     monkeypatch.setattr(translate, "refresh", lambda: read.append(True))
     site, started = site_with()
@@ -91,7 +91,7 @@ def languages(tmp_path, monkeypatch):
     monkeypatch.undo()
     texts.read_languages()   # the program's own languages again
 
-def test_a_language_is_removed_only_once_confirmed_and_never_the_reference(languages):
+def test_language_removal_confirmed(languages):
     site, _ = site_with()
     asking = site.post("/language/remove", sent(site, code="it"))
     assert asking.status == 200 and "Remove italiano?" in asking.html and (languages / "it.py").exists()
@@ -101,25 +101,25 @@ def test_a_language_is_removed_only_once_confirmed_and_never_the_reference(langu
     assert not (languages / "it.py").exists() and "it" not in texts.LANGUAGES
     assert "italiano was removed." in removed.html and "still asks for the language it" in removed.html
 
-def test_the_language_of_the_pages_falls_back_to_english_when_it_is_removed(languages):
+def test_removed_language_falls_back(languages):
     site, _ = site_with()
     site.post("/language", sent(site, language="it"))
     site.post("/language/remove", sent(site, code="it", confirm="1"))
     assert 'lang="en"' in site.get("/").html and site.values["language"] == "en"
 
-def test_no_text_a_model_wrote_can_become_code_in_a_language_file(languages):
+def test_translation_never_code(languages):
     sneaky = '""" + str(1 / 0) + """'   # run as code, it would raise
     translate.write_language("xx", {"language_name": sneaky, "language_english_name": "X\\", "option_word": sneaky + '\\"'})
     found = texts.load_languages()["xx"]
     assert found["option_word"] == sneaky + '\\"' and found["language_name"] == sneaky
 
-def test_a_translation_keeps_the_line_breaks_of_the_english_and_gains_none():
+def test_translation_keeps_line_breaks():
     assert translate.problem("recommendation_none", "## {heading}\n\nNo option.", "## {heading}\n\nNessuna opzione.") == ""
     assert translate.problem("recommendation_none", "## {heading}\n\nNo option.", "## {heading} Nessuna opzione.") != ""
     assert translate.problem("option_word", "Option", "Opzione\n") != ""
     assert translate.missing("pt-PT", texts.TEXTS) == {}   # the language written by hand is complete
 
-def test_a_text_quoted_with_apostrophes_in_english_is_written_to_a_language_file(languages):
+def test_apostrophes_written_safely(languages):
     translate.write_language("xx", {"progress_round": "Voli: {checked}, {itineraries}.", "option_word": "Opzione"})
     assert texts.load_languages()["xx"] == {"progress_round": "Voli: {checked}, {itineraries}.", "option_word": "Opzione"}
 
@@ -132,7 +132,7 @@ def run(monkeypatch, asked: dict) -> list[dict]:
     job.main(iter([json.dumps(asked)]), events)
     return [json.loads(line) for line in out.getvalue().splitlines()]
 
-def test_the_process_runs_each_job_and_says_how_it_ended(monkeypatch):
+def test_jobs_report_outcome(monkeypatch):
     from trip_planner.tools import check, prices
 
     async def check_setup():
@@ -148,14 +148,14 @@ def test_the_process_runs_each_job_and_says_how_it_ended(monkeypatch):
     run(monkeypatch, {"task": "prices", "reports": ["reports/trip_a/trip_a.json"], "language": "en"})
     assert asked_for == [None, [Path("reports/trip_a/trip_a.json")]]   # every report too old, then only the ones ticked
 
-def test_a_language_the_model_does_not_know_is_said_in_the_travellers_words(monkeypatch):
+def test_unknown_language_explained(monkeypatch):
     async def add(name):
         raise translate.UnknownLanguage(name)
     monkeypatch.setattr(translate, "add", add)
     said = run(monkeypatch, {"task": "language", "name": "klingon", "language": "pt-PT"})
     assert said == [{"kind": "failed", "text": texts.text_in("pt-PT", "ui_language_unknown", name="klingon")}]
 
-def test_the_app_reads_how_a_job_ended():
+def test_app_reads_job_outcome():
     script = 'import json, sys; sys.stdin.readline(); print(json.dumps({"kind": "done", "text": "Done."}))'
     found = search.Job({"task": "check"}, [sys.executable, "-c", script])
     found.reader.join(timeout=20)

@@ -37,13 +37,13 @@ def sells(monkeypatch):
     prices["asked"] = asked
     return prices
 
-def test_a_departure_is_the_same_within_a_few_minutes():
+def test_departure_matches_within_minutes():
     assert trip().matches("2026-10-29T10:28:00.000", "2026-10-29T11:43:00.000")
     assert trip().matches("10:29", "11:47")            # the two sources do not agree on the minute a train gets in
     assert not trip().matches("10:33", "11:43")        # another train
     assert not trip().matches("10:28", "12:10")        # the same departure, a slower way
 
-def test_each_operator_is_recognised_by_its_vehicles():
+def test_operator_recognised_by_vehicle():
     name = lambda s: getattr(fares.source_of(s), "name", None)
     assert name(step("OEBB Personenverkehr AG Kundenservice")) == "ÖBB"
     assert name(step("Trenord")) == name(step("TRENITALIA")) == "Trenitalia"
@@ -61,13 +61,13 @@ def test_each_operator_is_recognised_by_its_vehicles():
     assert name(renfe) == "Movelia" and name({**renfe, "rail": False}) is None                    # a walk out of the station is not a ticket
     assert name(step("Renfe Cercanias", from_id="es-Cercanías-Renfe_18101", to_id="es-Cercanías-Renfe_18000")) is None   # suburban
 
-def test_trains_in_a_row_of_one_railway_are_one_ticket(sells):
+def test_consecutive_trains_one_ticket(sells):
     steps = [step("Rail", time="10:00", arrive="10:30"), step("Rail", time="10:40", arrive="11:30"), step("City bus", rail=False),
              step("Rail", time="12:00", arrive="12:30"), step("Coach", rail=False), step("Coach", rail=False)]
     assert [(source.name, positions) for source, positions in fares.runs(steps)] == [
         ("Rail", [0, 1]), ("Rail", [3]), ("Coach", [4]), ("Coach", [5])]
 
-def test_the_travel_date_is_asked_first_then_the_day_of_the_timetable(sells):
+def test_travel_date_asked_first(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     sells[("Coach", SERVICE, "12:00")] = 7.0
     steps = [step("Rail"), step("Coach", rail=False, time="12:00", arrive="13:00")]
@@ -76,13 +76,13 @@ def test_the_travel_date_is_asked_first_then_the_day_of_the_timetable(sells):
                      {"positions": [1], "operator": "Coach", "price_eur": 7.0, "travel_day": False, "tariff": False, "confirms": False}]
     assert ("Rail", SERVICE, "10:00", "11:00") not in sells["asked"]   # found for the travel date: not asked again
 
-def test_an_operator_is_asked_once_for_the_same_ticket(sells):
+def test_ticket_asked_once(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     fares.tickets([step("Rail")], TRAVEL, SERVICE)
     fares.tickets([step("Rail")], TRAVEL, SERVICE)
     assert len(sells["asked"]) == 1
 
-def test_an_operator_that_fails_leaves_no_ticket(monkeypatch):
+def test_failing_operator_no_ticket(monkeypatch):
     def broken(wanted: Trip) -> float | None:
         raise RuntimeError("the site changed")
     monkeypatch.setattr(fares, "FARE_SOURCES", [FareSource("Rail", "XX", lambda s: True, broken)])
@@ -95,38 +95,38 @@ def leg(steps: list, kind: str = "estimate") -> dict:
 
 FLIGHT = {"date": TRAVEL}
 
-def test_every_vehicle_priced_for_the_travel_date_is_a_confirmed_price(sells):
+def test_travel_date_price_confirmed(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     priced = leg([step("Rail")])
     price_with_tickets(priced, FLIGHT["date"], False)
     assert (priced["price_eur"], priced["price_kind"], priced["confirmed_eur"]) == (20.0, "operator", 20.0)
 
-def test_a_price_of_another_day_is_typical_and_not_confirmed(sells):
+def test_other_day_price_typical(sells):
     sells[("Rail", SERVICE, "10:00")] = 20.0
     priced = leg([step("Rail")])
     price_with_tickets(priced, FLIGHT["date"], False)
     assert (priced["price_eur"], priced["price_kind"], priced["confirmed_eur"]) == (20.0, "operator_typical", 0)
 
-def test_vehicles_nobody_priced_keep_their_estimate(sells):
+def test_unpriced_vehicles_keep_estimate(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     priced = leg([step("Rail"), step("City bus", rail=False, km=10)])
     price_with_tickets(priced, FLIGHT["date"], False)
     assert priced["price_kind"] == "partly" and priced["price_eur"] == 20.0 + estimated_price(10) and priced["confirmed_eur"] == 20.0
 
-def test_free_trains_are_not_asked_for(sells):
+def test_free_trains_not_asked(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     priced = leg([step("Rail")], kind="free")
     price_with_tickets(priced, FLIGHT["date"], True)
     assert sells["asked"] == [] and "tickets" not in priced
 
-def test_a_models_price_for_the_whole_way_is_kept_when_only_part_is_sold(sells):
+def test_model_whole_price_kept(sells):
     sells[("Rail", TRAVEL, "10:00")] = 20.0
     priced = leg([step("Rail"), step("City bus", rail=False)], kind="model")
     before = priced["price_eur"]
     price_with_tickets(priced, FLIGHT["date"], False)
     assert (priced["price_eur"], priced["price_kind"]) == (before, "model")
 
-def test_a_leg_without_vehicles_is_left_alone(sells):
+def test_vehicleless_leg_untouched(sells):
     model_leg = {"kind": "model", "steps": [], "price_kind": "model", "price_eur": 9.0}
     price_with_tickets(model_leg, FLIGHT["date"], False)
     assert model_leg["price_eur"] == 9.0
@@ -157,19 +157,19 @@ def coaches(monkeypatch):
     monkeypatch.setattr(fares.http, "post", post)
     return answer
 
-def test_only_the_rides_of_the_town_asked_are_kept(coaches):
+def test_only_asked_town_rides(coaches):
     coaches["rides"] = [coach("2026-12-17 09:10", "2026-12-17 12:10", "Lagos"), coach("2026-12-17 13:40", "2026-12-17 17:05", "Alvor")]
     rides = rede_expressos.rede_expressos_rides(LAGOS, FARO_AIRPORT, "2026-12-17", to_airport=False)
     assert [ride["steps"][0]["to"] for ride in rides] == ["Lagos"]   # Alvor is 8 km away: another town
     assert rides[0]["grade"] == "A" and rides[0]["price_eur"] == 7.3
 
-def test_a_coach_that_arrives_after_midnight_counts_past_24_hours(coaches):
+def test_after_midnight_past_24h(coaches):
     coaches["rides"] = [coach("2026-12-17 22:10", "2026-12-18 01:30", "Lagos", changes=1)]
     ride = rede_expressos.rede_expressos_rides(LAGOS, FARO_AIRPORT, "2026-12-17", to_airport=False)[0]
     assert (ride["leave"], ride["arrive"]) == (22 * 60 + 10, 25 * 60 + 30)
     assert "1" in ride["steps"][0]["line"]   # the change of coach is said
 
-def test_rede_expressos_is_not_asked_outside_portugal(coaches):
+def test_rede_expressos_portugal_only(coaches):
     madrid = Place("Madrid", "Madrid", "Madrid", "Spain", 40.4168, -3.7038)
     assert rede_expressos.rede_expressos_rides(madrid, {**FARO_AIRPORT, "country": "ES", "latitude": 40.49, "longitude": -3.57}, "2026-12-17") is None
     assert coaches["asked"] == []
@@ -180,7 +180,7 @@ SPANISH_PLACES = {"madrid": "MADRID", "salamanca": "SALAMANCA", "sevilla": "SEVI
 MADRID_AIRPORT = {"code": "MAD", "country": "ES", "name": "Adolfo Suárez Madrid–Barajas Airport", "city": "Madrid", "km": 200,
                   "search_text": "adolfo suarez madrid barajas airport madrid"}
 
-def test_an_airport_is_searched_by_the_name_movelia_gives_it():
+def test_movelia_airport_name():
     alicante = {**MADRID_AIRPORT, "name": "Alicante-Elche Miguel Hernández Airport", "city": "Alicante"}
     seville = {**MADRID_AIRPORT, "name": "Seville Airport", "city": "Seville", "search_text": "seville airport seville sevilla, sevilla airport"}
     assert movelia.movelia_airport(alicante, SPANISH_PLACES) == "AEROPUERTO ALICANTE-ELCHE"   # its own name for the airport
@@ -192,7 +192,7 @@ def combination(leave: str, start: str, direct: str = "1", kind: str = "1", pric
             "departureTime": leave, "arrivalTime": "23:00", "originName": start, "destinationName": "SALAMANCA",
             "companyName": "MONBUS LARGA DISTANCIA S.L.U.", "basicPrice": price}
 
-def test_only_direct_rides_from_a_station_of_the_airport_are_kept(monkeypatch):
+def test_only_direct_airport_rides(monkeypatch):
     answer = [combination("10:15", "Aeropuerto Adolfo Suárez T4"), combination("06:40", "Madrid Estación Sur"),
               combination("11:00", "Aeropuerto Adolfo Suárez T4", direct="0"), combination("12:00", "AEROPUERTO T4 TREN", kind="3", price="18,05"),
               combination("13:00", "Aeropuerto Adolfo Suárez T4", kind="4")]   # a flight
@@ -212,7 +212,7 @@ def test_only_direct_rides_from_a_station_of_the_airport_are_kept(monkeypatch):
     assert [(ride["leave"], ride["price_eur"], ride["steps"][0]["rail"]) for ride in rides] == [(10 * 60 + 15, 22.93, False), (12 * 60, 18.05, True)]
 
 # ---------------------------------------------------------------- Obilet, on a made-up answer
-def test_an_airport_of_obilet_is_the_one_whose_name_shares_most_words(monkeypatch):
+def test_obilet_airport_by_words(monkeypatch):
     istanbul = [{"id": 6664, "text": "İstanbul Havalimanı - İstanbul", "isDomestic": True},
                 {"id": 6746, "text": "İstanbul Sabiha Gökçen Havalimanı - İstanbul", "isDomestic": True},
                 {"id": 350, "text": "İstanbul Anadolu - İstanbul", "isDomestic": True}]
@@ -224,7 +224,7 @@ def test_an_airport_of_obilet_is_the_one_whose_name_shares_most_words(monkeypatc
     assert obilet.obilet_place(["Skopje"], "MK", False)["id"] == 1818                           # its country, written in Turkish
     assert obilet.obilet_place(["Skopje"], "AL", False) is None
 
-def test_a_coach_from_the_airports_city_starts_with_the_way_there_estimated(monkeypatch):
+def test_city_coach_estimates_access(monkeypatch):
     journey = {"journey": {"departure": "2026-11-05T07:05:00", "arrival": "2026-11-05T09:10:00", "internet-price": 11.0, "currency": "EUR",
                            "origin": "Podgorica Central Bus Station", "destination": "Kotor", "kind": "Bus"},
                "partner-name": "Royal Travel", "is-active": True, "available-seats": 30}
@@ -241,7 +241,7 @@ def test_a_coach_from_the_airports_city_starts_with_the_way_there_estimated(monk
     assert ride["grade"] == "C" and ride["confirmed_eur"] == 11.0 and ride["price_eur"] > 11.0   # only the coach is a real price
     assert ride["leave"] == 7 * 60 + 5 - first["minutes"] and coach["time"] == "07:05"
 
-def test_obilet_means_the_city_of_a_district_and_reads_its_turkish_countries(monkeypatch):
+def test_obilet_districts_and_countries(monkeypatch):
     places = {"rethymno": [{"id": 149739, "text": "Agia Triada Rethymno - Resmo, Yunanistan", "display": "Agia Triada Rethymno"}],
               "resmo": [{"id": 9057, "text": "Resmo - Yunanistan", "display": "Resmo"}],
               "novi sad": [{"id": 7309, "text": "Novi Sad - Sırbistan", "display": "Novi Sad"}]}
@@ -249,7 +249,7 @@ def test_obilet_means_the_city_of_a_district_and_reads_its_turkish_countries(mon
     assert obilet.obilet_place(["Ρέθυμνο", "Rethymno"], "GR", False)["id"] == 9057   # another alphabet is not asked, a district is its city
     assert obilet.obilet_place(["Novi Sad"], "RS", False)["id"] == 7309             # Sırbistan, with a Turkish dotless i
 
-def test_obilet_rides_to_the_towns_around_the_one_asked_are_left_out(monkeypatch):
+def test_obilet_nearby_towns_excluded(monkeypatch):
     def journey(destination: str, hour: int) -> dict:
         return {"journey": {"departure": f"2026-11-05T{hour:02d}:00:00", "arrival": f"2026-11-05T{hour + 2:02d}:00:00", "internet-price": 600.0, "currency": "RSD",
                             "sorting-price": 5.11, "origin": "Athens Airport", "destination": destination, "kind": "Bus"},
@@ -265,18 +265,18 @@ def test_obilet_rides_to_the_towns_around_the_one_asked_are_left_out(monkeypatch
     assert [ride["steps"][0]["to"] for ride in rides] == ["Nafplio Tripoleos 30 Bus Stop", "Main Bus Station (Otogar)"]   # Nemea is 45 km away
     assert rides[0]["price_eur"] == 5.11   # its own price in EUR, where the central bank has no rate
 
-def test_flixbus_is_not_asked_from_a_city_to_itself(monkeypatch):
+def test_flixbus_skips_same_city(monkeypatch):
     monkeypatch.setattr(flixbus, "flixbus_city", lambda *args: "innsbruck")   # its airport is a stop of the city
     monkeypatch.setattr(flixbus, "flixbus_search", lambda *args: pytest.fail("asked from Innsbruck to Innsbruck"))
     airport = {"city": "Innsbruck", "name": "Innsbruck Airport", "latitude": 47.26, "longitude": 11.34, "km": 3}
     assert flixbus.flixbus_rides(Place("Innsbruck", "Innsbruck", "Innsbruck", "Austria", 47.27, 11.39), airport, "2026-11-12", False) is None
 
-def test_obilet_takes_no_airport_of_the_same_city_that_shares_no_name(monkeypatch):
+def test_obilet_unnamed_airport_skipped(monkeypatch):
     rome = [{"id": 1, "text": "Giovan Battista Pastine International Airport - Roma, Italya"}]   # Ciampino, not Fiumicino
     monkeypatch.setattr(obilet, "OBILET_SESSION", {"places": {"rome-fiumicino leonardo da vinci international airport": rome, "rome": rome}})
     assert obilet.obilet_place(["Rome-Fiumicino Leonardo da Vinci International Airport", "Rome"], "IT", True) is None
 
-def test_a_coach_from_a_stop_of_the_airport_needs_no_estimated_way(monkeypatch):
+def test_airport_stop_unestimated(monkeypatch):
     journey = {"journey": {"departure": "2026-11-12T08:45:00", "arrival": "2026-11-12T09:55:00", "internet-price": 5.26, "currency": "EUR",
                            "origin": "Naples Airport", "destination": "Salerno Bus Station", "kind": "Bus"},
                "partner-name": "Sita", "is-active": True, "available-seats": 30}
@@ -291,7 +291,7 @@ def test_a_coach_from_a_stop_of_the_airport_needs_no_estimated_way(monkeypatch):
     assert ride["grade"] == "A" and len(ride["steps"]) == 1 and ride["leave"] == 8 * 60 + 45
 
 # ---------------------------------------------------------------- days not on sale yet
-def test_a_day_not_on_sale_says_from_when_it_can_be_known():
+def test_unsold_day_says_when():
     from trip_planner.agents.steps import not_on_sale_warnings
     day = (date.today() + timedelta(days=100)).isoformat()
     ground = {"not_on_sale": [{"source": "Rede Expressos", "airport": "OPO", "day": day, "to_airport": False, "days": 71},
@@ -301,7 +301,7 @@ def test_a_day_not_on_sale_says_from_when_it_can_be_known():
     assert len(warnings) == 1 and "OPO" in warnings[0]   # Istanbul is not in the options shown
     assert (date.fromisoformat(day) - timedelta(days=71)).strftime("%d/%m/%Y") in warnings[0]
 
-def test_days_not_on_sale_are_said_once_per_operator_and_side():
+def test_unsold_days_grouped():
     """Ghent to Lisbon, 2026-10-26: five warnings of Rede Expressos, one per airport and day, were one fact."""
     from trip_planner.agents.steps import not_on_sale_warnings
     first, second = ((date.today() + timedelta(days=days)).isoformat() for days in (100, 101))
@@ -319,7 +319,7 @@ def test_days_not_on_sale_are_said_once_per_operator_and_side():
     assert f"{day_text(first)} and {day_text(second)}" in from_airports
     assert f"{day_text(first, 71)} and {day_text(second, 71)} respectively" in from_airports
 
-def test_movelia_says_when_a_day_is_not_on_sale_and_when_nothing_runs(monkeypatch):
+def test_movelia_unsold_versus_cancelled(monkeypatch):
     answers = []
 
     class Refusal:
@@ -340,7 +340,7 @@ def test_movelia_says_when_a_day_is_not_on_sale_and_when_nothing_runs(monkeypatc
     with pytest.raises(fares.NotOnSale):
         movelia.movelia_rides(salamanca, MADRID_AIRPORT, "2027-03-05", to_airport=False)
 
-def test_movelia_knows_a_stop_by_the_longest_start_of_its_name():
+def test_movelia_stop_by_prefix():
     places = {"madrid": "MADRID", "barcelona": "BARCELONA", "san sebastian": "SAN SEBASTIAN / DONOSTIA"}
     assert movelia.movelia_town("Madrid-Puerta de Atocha-Almudena Grandes", places) == ("MADRID", {"puerta", "de", "atocha", "almudena", "grandes"})
     assert movelia.movelia_town("Barcelona El Clot", places)[0] == "BARCELONA"

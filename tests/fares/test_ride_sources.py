@@ -99,17 +99,17 @@ def sold(request, live):
                                    ensure_ascii=False, indent=0), encoding="utf-8")
     return name, rides, to_airport
 
-def test_the_operator_sells_rides_on_the_day(sold):
+def test_operator_sells_rides(sold):
     name, rides, to_airport = sold
     assert rides, f"{name}: no ride read out of its answers"
 
-def test_every_ride_is_complete_and_believable(sold):
+def test_rides_complete_and_believable(sold):
     name, rides, to_airport = sold
     for ride in rides:
         assert ride["grade"] in ("A", "C") and ride["leave"] < ride["arrive"] and 0 < ride["price_eur"] < 200, ride
         assert all(step["from"] and step["to"] and step["time"] and step["arrive"] for step in ride["steps"]), ride
 
-def test_an_estimated_way_is_only_where_the_airport_is_not_a_stop(sold):
+def test_estimate_only_off_stop(sold):
     """Obilet's coaches from Podgorica start from the city's station, with the way there estimated; Istanbul's
     airport is a stop of its own."""
     name, rides, to_airport = sold

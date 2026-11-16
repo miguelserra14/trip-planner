@@ -224,6 +224,7 @@ discover/
 | `resources/timezones.json` | Cache of time zones, filled as trips are planned |
 | `reports/` | One folder for each of the last 5 trips, older ones deleted. In it the Markdown report (result, sources, reasoning and timings), its log (`.log`) and the vehicles and prices of its options for `--verify` and `--prices` (`.json`). A round trip is one folder with both ways. Not in the repository |
 | `reports/saved/` | The trips you chose to keep, with **Keep this report**, a folder each as above. Never deleted, and not in the repository either |
+| `reports/verify/` | The vehicles of the trips deleted to make room (`.json`), kept for `--verify` alone: whether a connection ran can only be known near its day, after newer searches have pushed its report out. Not in the repository |
 
 ## Tests
 

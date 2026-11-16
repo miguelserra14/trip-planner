@@ -52,13 +52,13 @@ class Timetables:
         return [ride("BlaBlaCar Bus", "2026-11-16T07:00:00Z", 1340), ride("BlaBlaCar Bus", "2026-11-16T09:00:00Z", 1500, changes=1),
                 ride("FlixBus-eu", "2026-11-16T12:40:00Z", 1100)]   # a change, and another operator: neither is straight back
 
-def test_the_stations_a_train_or_coach_calls_at_after_the_city_are_the_ones_it_reaches():
+def test_stations_after_city_reached():
     found = ground.reached(TRIP, PATTERN)
     assert [(stop["stop"], stop["minutes"]) for stop in found] == [("Salamanca", 269), ("Paris - Bercy-Seine Bus Station", 1335),
                                                                     ("Metz - Bus Station", 1664)]   # not Lisbon: it was before Coimbra
     assert found[0]["mode"] == "bus" and found[0]["from_stop_id"] == "eu-blablacar-bus_AHX"
 
-def test_the_operators_read_and_where_code_reads_their_prices():
+def test_operators_and_price_readers():
     assert ground.operator_of("DB Fernverkehr AG") == ("Deutsche Bahn", "https://int.bahn.de", "")   # its timetable only
     assert ground.operator_of("NMBS/SNCB")[0] == "SNCB" and ground.operator_of("SNCF VOYAGEURS")[0] == "SNCF"
     assert ground.operator_of("FlixBus-eu") == ("FlixBus", "https://global.flixbus.com", "EU") and ground.operator_of("FlixBus-gb")[0] == "FlixBus"
@@ -69,7 +69,7 @@ def test_the_operators_read_and_where_code_reads_their_prices():
     assert ground.operator_of("Rede Expressos", "COACH", "pt-rede_1") is None
     assert ground.operator_of("Österreichische Bundesbahnen", "LONG_DISTANCE", "sk-zsr_1") == ("ÖBB", "", "AT")
 
-def test_the_long_distance_trains_of_any_other_operator_are_read_by_their_timetable():
+def test_other_long_trains_read():
     assert ground.operator_of("Schweizerische Bundesbahnen SBB", "LONG_DISTANCE", "ch-x_1") == ("SBB", "https://www.sbb.ch", "")
     assert ground.operator_of("České dráhy, a.s.", "HIGHSPEED_RAIL", "sk-zsr_1")[0] == ground.operator_of("Ceske Drahy", "LONG_DISTANCE")[0] == "České dráhy"
     assert ground.operator_of("Dänische Staatsbahnen", "NIGHT_RAIL", "no-Entur_1")[0] == "DSB"
@@ -77,7 +77,7 @@ def test_the_long_distance_trains_of_any_other_operator_are_read_by_their_timeta
     assert ground.operator_of("Some Railway AB", "REGIONAL_RAIL", "se-x_1") is None   # a local train is no trip
     assert ground.operator_of("Some Coaches", "COACH", "pl-x_1") is None
 
-def test_one_train_named_after_several_railways_is_shown_once():
+def test_shared_train_shown_once():
     train = {"lat": 52.52, "lon": 13.37, "mode": "train", "stop": "Berlin Hbf"}
     stops = [{**train, "operator": "DSB", "minutes": 238, "times": ["06:28", "10:28"], "sold": ""},
              {**train, "operator": "České dráhy", "minutes": 238, "times": ["06:28", "08:28", "10:28"], "sold": ""},
@@ -86,17 +86,17 @@ def test_one_train_named_after_several_railways_is_shown_once():
              {**train, "operator": "SBB", "minutes": 240, "times": ["08:28", "09:00", "11:00", "13:00"], "sold": ""}]   # one in common only
     assert [option["operator"] for option in ground.to_city(stops, 52.52, 13.40)] == ["České dráhy", "SBB", "European Sleeper", "FlixBus"]
 
-def test_the_trains_and_coaches_read_are_shared_out_between_the_operators():
+def test_rides_split_by_operator():
     found = [{"operator": "SBB", "n": n} for n in range(100)] + [{"operator": "FlixBus", "n": 0}]
     taken = ground.shared(found)
     assert len(taken) == ground.MAX_TRIPS and {"operator": "FlixBus", "n": 0} in taken
 
-def test_a_city_read_before_flixbus_was_added_is_read_again(monkeypatch):
+def test_pre_flixbus_city_reread(monkeypatch):
     ground.write({ground.place_key(COIMBRA): {"checked": TODAY.isoformat(), "place": "Coimbra", "reached": []}})
     transitous = Timetables()
     assert ground.from_city(COIMBRA, TODAY, say=lambda text: None, transitous=transitous) and transitous.asked[0] == "stops"
 
-def test_one_train_or_coach_of_each_pattern_is_read_and_kept_for_the_next_maps():
+def test_one_ride_per_pattern():
     transitous = Timetables()
     found = ground.from_city(COIMBRA, TODAY, say=lambda text: None, transitous=transitous)
     assert transitous.asked == ["stops", "departures", "trip a"]   # the bus of the 14th is the same one
@@ -107,7 +107,7 @@ def test_one_train_or_coach_of_each_pattern_is_read_and_kept_for_the_next_maps()
 def stations() -> list[dict]:
     return ground.from_city(COIMBRA, TODAY, say=lambda text: None, transitous=Timetables())
 
-def test_a_city_of_the_map_gets_the_quickest_of_each_operator_with_nothing_asked_and_no_price():
+def test_quickest_ride_as_hint():
     beauvais = {"to": "BVA", "total_eur": 70.0}
     paris, rome = {"to": "ORY", "total_eur": 60.0, "also": [beauvais]}, {"to": "FCO", "total_eur": 80.0}
     centres = {"ORY": Place("Paris", "Paris", "Paris", "France", 48.86, 2.35)}
@@ -120,7 +120,7 @@ def test_a_city_of_the_map_gets_the_quickest_of_each_operator_with_nothing_asked
     assert "ground" not in rome
     assert ground.look_up(COIMBRA, None, [rome], centres, airports, say=lambda text: None) == []   # Transitous failed: none
 
-def test_the_way_back_is_asked_once_the_map_is_open_and_not_for_a_way_priced_already():
+def test_way_back_asked_later():
     transitous = Timetables()
     days = Days("2026-11-12", "2026-11-12", "2026-11-16", "2026-11-20")
     salamanca, paris, metz = [{**stop, "grade": "B"} for stop in ground.reached(TRIP, PATTERN)]
@@ -132,7 +132,7 @@ def test_the_way_back_is_asked_once_the_map_is_open_and_not_for_a_way_priced_alr
     assert "back" not in paris   # sold for the day already
     assert ground.ways_back([[metz]], Days("2026-11-12", "2026-11-12"), transitous=transitous) == 0   # one way: none
 
-def test_the_last_stop_is_marked_and_the_site_is_the_one_the_timetable_gives():
+def test_last_stop_and_site():
     found = ground.reached(TRIP, PATTERN)
     assert [stop.get("last") for stop in found] == [None, None, True] and found[0]["site"] == "https://www.blablacar.com"
     sold = {"legs": [{**TRIP["legs"][0], "agencyUrl": "http://www.blablacar.pt"}]}
@@ -141,7 +141,7 @@ def test_the_last_stop_is_marked_and_the_site_is_the_one_the_timetable_gives():
 def city(name: str, country: str, latitude: float, longitude: float, population: int) -> dict:
     return {"name": name, "country": country, "lat": latitude, "lon": longitude, "population": population}
 
-def test_a_city_no_flight_goes_to_is_a_destination_by_coach_only_with_no_price(monkeypatch):
+def test_coach_only_destination(monkeypatch):
     monkeypatch.setattr(ground, "cities", lambda: [city("Salamanca", "ES", 40.96, -5.66, 144_000)])
     paris = {"to": "ORY", "total_eur": 60.0}
     centres = {"ORY": Place("Paris", "Paris", "Paris", "France", 48.86, 2.35)}
@@ -150,7 +150,7 @@ def test_a_city_no_flight_goes_to_is_a_destination_by_coach_only_with_no_price(m
     assert (metz["name"], metz["country"], metz["modes"]) == ("Metz", "", ["bus"])   # the end of the line: no city known, its station
     assert "price_eur" not in metz and "total_eur" not in metz
 
-def test_a_stop_on_the_way_is_shown_only_when_it_is_a_city(monkeypatch):
+def test_only_city_stops_shown(monkeypatch):
     stops = ground.reached(TRIP, PATTERN)
     monkeypatch.setattr(ground, "cities", lambda: [city("Salamanca", "ES", 40.96, -5.66, 30_000), city("Metz", "FR", 49.12, 6.18, 117_000)])
     assert [found["name"] for found in ground.only_by_ground(stops, COIMBRA, [], {})] == ["Metz"]   # a town, and a stop with no city near
@@ -158,27 +158,27 @@ def test_a_stop_on_the_way_is_shown_only_when_it_is_a_city(monkeypatch):
     paris, metz = ground.only_by_ground(stops, COIMBRA, [], {})
     assert paris["name"] == "Paris" and metz["name"] == "Metz"   # the largest city near the station; Salamanca is no city: left out
 
-def test_a_stop_in_a_suburb_is_the_large_city_next_to_it_and_a_station_in_a_city_is_that_city():
+def test_suburb_stop_is_city():
     grid = ground.city_grid([city("Amsterdam", "NL", 52.37, 4.89, 741_000), city("Diemen", "NL", 52.34, 4.96, 25_000),
                              city("The Hague", "NL", 52.08, 4.30, 474_000), city("Delft", "NL", 52.01, 4.36, 101_000)])
     assert ground.city_of({"lat": 52.335, "lon": 4.98}, grid)["name"] == "Amsterdam"   # 7 km out, in Diemen
     assert ground.city_of({"lat": 52.007, "lon": 4.357}, grid)["name"] == "Delft"      # The Hague is 9 km away
 
-def test_a_city_of_a_million_people_is_shown_even_closer_than_the_trips_are(monkeypatch):
+def test_big_close_city_shown(monkeypatch):
     near = lambda name, latitude: {**ground.reached(TRIP, PATTERN)[0], "stop": name, "lat": latitude, "lon": -8.43, "minutes": 30}
     stops = [near("Big", 40.58), near("Middle", 40.60), near("Home", 40.30)]   # 41 km, 43 km and 10 km from Coimbra
     monkeypatch.setattr(ground, "cities", lambda: [city("Big", "PT", 40.58, -8.43, 1_200_000), city("Middle", "PT", 40.60, -8.43, 500_000),
                                                    city("Home", "PT", 40.30, -8.43, 2_000_000)])
     assert [found["name"] for found in ground.only_by_ground(stops, COIMBRA, [], {})] == ["Big"]   # Home is the traveller's own city
 
-def test_a_station_near_the_traveller_or_near_a_city_flown_to_is_no_destination_of_its_own():
+def test_nearby_station_not_destination():
     near = {**ground.reached(TRIP, PATTERN)[0], "stop": "Mealhada", "lat": 40.38, "lon": -8.45}   # 19 km from Coimbra
     found = ground.only_by_ground([near, *ground.reached(TRIP, PATTERN)], COIMBRA, [(48.86, 2.35)], {})
     assert [city["name"] for city in found] == ["Salamanca", "Metz"]   # Paris is flown to: its bus is shown with the flight
     at_airport = ground.only_by_ground(ground.reached(TRIP, PATTERN), COIMBRA, [], {"SLM": {"latitude": 40.95, "longitude": -5.67}})
     assert [city["name"] for city in at_airport] == ["Paris", "Metz"]   # a station by an airport is the way to a flight
 
-def test_a_city_is_named_after_its_station_without_the_words_for_a_station():
+def test_city_named_from_station():
     name = lambda stop: ground.station_name({"stop": stop})
     assert [name("Liège, Guillemins Bf"), name("Praha hl.n."), name("Köln Hbf"), name("Rotterdam Centraal"), name("Hbf")] == [
         "Liège", "Praha", "Köln", "Rotterdam", "Hbf"]
@@ -205,7 +205,7 @@ TWO_CHANGES = by_train("05:54", (CENTRAAL, MIDI, "05:54", "06:29"), (MIDI, FRANK
 ONE_CHANGE = by_train("07:37", (CENTRAAL, MIDI, "07:37", "08:11"), (MIDI, MUNCHEN, "08:25", "14:40"), agencies=("NS International", "Eurostar"))
 FOUR_CHANGES = by_train("09:00", *[(CENTRAAL, MIDI, "09:00", "09:30")] * 5, agencies=("NMBS/SNCB",) * 5)
 
-def test_a_trip_by_train_with_changes_is_kept_with_each_change_and_its_wait():
+def test_train_changes_kept():
     option = ground.changes_option([FOUR_CHANGES, ONE_CHANGE, TWO_CHANGES], "2026-11-20")
     assert option["stop"] == "München Hbf" and option["from_stop"] == "Antwerpen-Centraal" and option["minutes"] == 423   # the quickest
     assert option["changes"] == [{"at": "Bruxelles-Midi", "wait": 14}] and option["operator"] == "NS International + Eurostar"
@@ -227,7 +227,7 @@ class Plans:
         assert walk_minutes == ground.CHANGE_WALK_MINUTES   # from a city's centre, not a station
         return self.answer
 
-def test_only_the_cities_no_train_reaches_straight_are_asked_the_nearest_first_with_the_way_back():
+def test_changes_asked_nearest_first():
     straight = {"to": "AMS", "ground": [{"operator": "NS International"}]}
     munich, faraway, nearby = {"to": "MUC"}, {"to": "TFS"}, {"to": "BRU"}
     airports = {"MUC": {"latitude": 48.35, "longitude": 11.79}, "TFS": {"latitude": 28.04, "longitude": -16.57},
@@ -244,7 +244,7 @@ def test_only_the_cities_no_train_reaches_straight_are_asked_the_nearest_first_w
     assert munich["ground"][0]["back"] == {"day": "2026-11-23", "days": 1, "times": [], "minutes": 0}   # no train that day: said so
     assert straight["ground"] == [{"operator": "NS International"}] and "ground" not in faraway
 
-def test_cp_s_long_distance_trains_are_read_although_its_feed_calls_them_regional(monkeypatch):
+def test_cp_long_trains_read(monkeypatch):
     asked = []
 
     def get(self, path, **params):
@@ -260,7 +260,7 @@ def test_cp_s_long_distance_trains_are_read_although_its_feed_calls_them_regiona
     transitous.departures("eu-flixbus_c9e8bf88", ground.datetime(2026, 11, 23))
     assert "REGIONAL_RAIL" not in asked[1][1]   # nowhere else: Germany's regional trains would fill MAX_TRIPS
 
-def test_a_regional_station_of_cp_is_one_of_the_city_s_stations(monkeypatch):
+def test_cp_regional_station_city(monkeypatch):
     stops = [{"name": "Coimbra-B", "stopId": "pt-Comboios-de-Portugal(CP)_94_36004", "lat": 40.22, "lon": -8.44, "modes": ["REGIONAL_RAIL", "SUBURBAN"]},
              {"name": "Köln Messe", "stopId": "de-DELFI_1", "lat": 40.21, "lon": -8.43, "modes": ["REGIONAL_RAIL"]}]
     monkeypatch.setattr(ground.Transitous, "get", lambda self, path, **params: stops)

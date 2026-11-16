@@ -191,7 +191,6 @@ TEXTS = {
     "keep_report_prompt": "Guardar este relatório? Caso contrário é apagado quando houver {limit} mais recentes (s/N):",
     # ---- preços perguntados de novo (tools/prices.py)
     "ui_prices": "Atualizar preços",
-    "ui_prices_count": "Atualizar preços ({count})",
     "prices_title": "Preços perguntados de novo em {when}",
     "prices_intro": "Os preços do transporte terrestre das opções mostradas, perguntados de novo aos sistemas de reservas dos operadores: tinham sido lidos em {read}, há mais de {hours} horas, e os operadores mudam os preços de hora a hora. Os voos não são perguntados de novo.",
     "prices_none": "Nenhum relatório tem preços do transporte terrestre lidos há mais de {hours} horas para uma viagem que ainda está para vir.",
@@ -250,6 +249,7 @@ TEXTS = {
     "reject_not_worth_it": "{total} EUR no total, parte de um aeroporto distante e não compensa: poupa {saving} EUR e demora mais {extra} do que a opção de {reference} (poupança mínima exigida: {required} EUR)",
     "reject_below_minimum": "os horários são {grade}, abaixo do mínimo {minimum} pedido",
     "note_impossible_duration": "Duração até {airport}: o modelo indicou {minutes} min para {km} km, o que é impossível; foram usados {used} min, estimados pela distância.",
+    "note_rides_missed": "{operators} vende viagens em {airport} nesse dia, mas nenhuma serve para este voo: este percurso é uma estimativa de um modelo, não verificada.",
     # ---- warnings
     "warnings": "Avisos",
     "warn_below_minimum": "Nenhum itinerário atinge a fiabilidade {minimum}. As opções abaixo NÃO ESTÃO VERIFICADAS: confirma todas as ligações antes de comprar o que quer que seja.",
@@ -270,6 +270,7 @@ TEXTS = {
     "claim_light_none": "Aviso de integridade: o texto acima diz que nenhuma parte de que fala na opção {options} é {said}, mas no relatório são: {report}. Confia na tabela.",
     "claim_unknown_durations": "Aviso de integridade: o texto acima cita {values}, que não aparece no relatório. Confia no relatório.",
     "claim_unknown_times": "Aviso de integridade: o texto acima cita a hora {values}, que não aparece no relatório. Confia no relatório.",
+    "claim_unknown_prices": "Aviso de integridade: o texto acima cita o preço {values}, que não aparece no relatório. Confia no relatório.",
     "claim_flight": "voo,voos,avião,companhia aérea",
     "claim_to": "até ao aeroporto,para o aeroporto,ao aeroporto de partida",
     "claim_from": "do aeroporto,ao destino,no destino,depois de aterrar,após a aterragem,desde o aeroporto",

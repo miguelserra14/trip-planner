@@ -41,7 +41,7 @@ def check(**changes) -> dict | None:
     return transfers.checked_option(option(**changes), SOURCES, BEAUVAIS, 80, lambda amount, currency: amount if currency == "EUR" else amount * 1.2)
 
 # ---------------------------------------------------------------- reading a price
-def test_a_price_is_read_by_the_code_in_its_currency():
+def test_price_read_in_currency():
     assert transfers.read_price("€19,90", "FR") == (19.9, "EUR")
     assert transfers.read_price("£ 19", "GB") == (19.0, "GBP")
     assert transfers.read_price("49 kr", "SE") == (49.0, "SEK") and transfers.read_price("49 kr", "NO") == (49.0, "NOK")
@@ -49,24 +49,24 @@ def test_a_price_is_read_by_the_code_in_its_currency():
     assert transfers.read_price("platform 4", "ES") is None
     assert transfers.read_minutes("1 hour 15 minutes") == 75 and transfers.read_minutes("1h15") == 75 and transfers.read_minutes("500 m") is None
 
-def test_a_price_quoted_word_for_word_is_kept_with_its_source():
+def test_quoted_price_kept():
     kept = check()
     assert (kept["price_eur"], kept["minutes"], kept["url"], kept["from_price"]) == (17.9, 75, SOURCES[0]["url"], False)
 
-def test_a_price_the_model_changed_or_moved_is_dropped():
+def test_altered_price_dropped():
     assert check(price_text="€15,90") is None                        # not in the quote
     assert check(quote="Adult one way €15,90.", price_text="€15,90") is None   # not in the source
     assert check(source=3) is None and check(mode="helicopter") is None
     assert check(quote="child (4-11 years) one way €9,90.", price_text="€9,90", minutes_text="2 hours") is not None   # a real sentence...
     assert check(quote="child (4-11 years) one way €9,90.", price_text="€9,90", minutes_text="2 hours")["minutes"] is None   # ...but not its time
 
-def test_a_price_not_plausible_for_the_distance_is_dropped():
+def test_implausible_price_dropped():
     page = [{"name": "x", "url": "https://x.example", "text": "A private transfer costs €900 per car."}]
     found = transfers.checked_option(option(quote="A private transfer costs €900 per car.", price_text="€900"), page, BEAUVAIS, 80,
                                      lambda amount, currency: amount)
     assert found is None
 
-def test_the_way_in_is_public_transport_a_single_ticket_and_a_usual_price_first():
+def test_public_single_usual_first():
     options = [{"mode": "taxi", "one_way": True, "from_price": False, "price_eur": 5.0},
                {"mode": "bus", "one_way": True, "from_price": True, "price_eur": 9.9},
                {"mode": "shuttle", "one_way": False, "from_price": False, "price_eur": 12.0},
@@ -94,14 +94,14 @@ A one-way ticket costs €16.
 
 Trains arrive at Sants."""
 
-def test_only_the_airports_own_part_of_the_article_is_read():
+def test_only_airport_section_read():
     el_prat = {"code": "BCN", "name": "Josep Tarradellas Barcelona-El Prat Airport"}
     part = transfers.by_plane(ARTICLE, el_prat)
     assert "Aerobus" in part and "Girona" not in part and "Sants" not in part
     alone = transfers.by_plane("### By plane\n\nThe bus costs €3.\n\n### By bus\n\nNo.", {"code": "XXX", "name": "Somewhere Airport"})
     assert "€3" in alone and "No." not in alone
 
-def test_an_airports_published_ways_are_looked_for_once_and_kept(monkeypatch):
+def test_published_ways_cached(monkeypatch):
     asked = []
     found = transfers.look_for(BEAUVAIS, PARIS, "", search=lambda query: asked.append(query) or list(SOURCES),
                                model=lambda airport, city, sources: [option()], convert=lambda amount, currency: amount)
@@ -113,7 +113,7 @@ def test_an_airports_published_ways_are_looked_for_once_and_kept(monkeypatch):
     assert transfers.look_up(["BVA"], {"BVA": BEAUVAIS}, centres, {}, TODAY, say=lambda text: None)["BVA"]["best"]["price_eur"] == 17.9
 
 # ---------------------------------------------------------------- on the map
-def test_the_map_shows_a_published_price_with_its_source_before_an_estimate(monkeypatch):
+def test_published_price_before_estimate(monkeypatch):
     monkeypatch.setattr(access, "ask_wikidata", lambda codes: [])
     access.write(access.CENTRES, {"BVA": {"name": "Paris", "latitude": PARIS.latitude, "longitude": PARIS.longitude, "voyage": "", "country": "FR"}})
     found = transfers.look_for(BEAUVAIS, PARIS, "", search=lambda query: list(SOURCES), model=lambda airport, city, sources: [option()],
@@ -124,7 +124,7 @@ def test_the_map_shows_a_published_price_with_its_source_before_an_estimate(monk
     far = Place("Lyon", "Lyon", "Lyon", "FR", 45.76, 4.84)
     assert access.leg("BVA", False, far, TODAY)["price_grade"] == "C"   # the price into Paris says nothing about the way to Lyon
 
-def test_an_airports_city_is_the_one_travellers_go_to():
+def test_airport_city_is_real():
     rabat = {"code": "RBA", "name": "Rabat–Salé Airport", "city": "Rabat", "country": "MA", "latitude": 34.05, "longitude": -6.75}
     rows = [{"iata": "RBA", "cityLabel": "Salé", "coord": "Point(-6.81 34.05)", "population": "945101"},
             {"iata": "RBA", "cityLabel": "Rabat", "coord": "Point(-6.84 34.02)", "population": "515619", "voyage": "https://en.wikivoyage.org/wiki/Rabat"}]
@@ -133,7 +133,7 @@ def test_an_airports_city_is_the_one_travellers_go_to():
     assert access.served([{"iata": "MRS", "cityLabel": "Marseille", "coord": "Point(5.37 43.30)"}], marseille)["name"] == "Marseille"
     assert access.served([{"iata": "MRS", "cityLabel": "Marseille", "coord": "Point(-70.0 10.0)"}], marseille) is None   # too far
 
-def test_wikidata_gives_the_cities_and_nominatim_only_the_ones_it_lacks(monkeypatch):
+def test_wikidata_then_nominatim(monkeypatch):
     monkeypatch.setattr(access, "ask_wikidata", lambda codes: [{"iata": "MRS", "cityLabel": "Marseille", "coord": "Point(5.37 43.30)"}])
     monkeypatch.setattr(access, "find_centre", lambda name, country: None)
     airports = {"MRS": {"code": "MRS", "name": "Marseille Provence Airport", "city": "Marignane", "country": "FR", "latitude": 43.44, "longitude": 5.22},
@@ -142,7 +142,7 @@ def test_wikidata_gives_the_cities_and_nominatim_only_the_ones_it_lacks(monkeypa
     assert found["MRS"].english_name == "Marseille" and "XXX" not in found
 
 # ---------------------------------------------------------------- the traveller's side
-def test_the_ride_to_the_airport_arrives_in_time_and_the_ride_home_leaves_after_landing():
+def test_rides_fit_the_flight():
     found = [{"leave": 6 * 60, "arrive": 8 * 60, "price_eur": 5.0, "source": "FlixBus", "urls": ["https://shop.flixbus.pt/x"]},
              {"leave": 9 * 60, "arrive": 11 * 60, "price_eur": 3.0, "source": "FlixBus", "urls": []},
              {"leave": 17 * 60, "arrive": 19 * 60, "price_eur": 4.0, "source": "Rede Expressos", "urls": []}]
@@ -155,12 +155,12 @@ def test_the_ride_to_the_airport_arrives_in_time_and_the_ride_home_leaves_after_
     way = access.leg("OPO", True, Place("Coimbra", "Coimbra", "Coimbra", "PT", 40.21, -8.43), TODAY, ride=out)
     assert way["looked_up"] and way["grade"] == way["price_grade"] == "A" and way["price_eur"] == 5.0
 
-def test_the_rides_are_asked_once_per_airport_day_and_direction():
+def test_rides_asked_once():
     flights = [{"from": "OPO", "date": "2026-11-12", "back": {"to": "LIS", "date": "2026-11-15", "arrival_date": "2026-11-15"}},
                {"from": "OPO", "date": "2026-11-12", "back": None}, {"from": "XXX", "date": "2026-11-13", "back": None}]
     assert rides.wanted_for(flights, [{"code": "OPO"}, {"code": "LIS"}]) == {("OPO", "2026-11-12", True), ("LIS", "2026-11-15", False)}
 
-def test_a_night_bus_a_range_and_a_forum_are_not_the_way_in():
+def test_bad_sources_rejected():
     way = lambda **changes: {"mode": "bus", "operator": "Aerobus", "quote": "The Aerobus costs 7.45.", "price_text": "€7.45", "one_way": True,
                              "from_price": False, "price_eur": 7.45, "url": "https://www.aerobusbcn.com"} | changes
     night = way(operator="NitBus N17", quote="The NitBus N17 costs 2.90.", price_eur=2.9)
@@ -173,7 +173,7 @@ def test_a_night_bus_a_range_and_a_forum_are_not_the_way_in():
     page = [{"name": "reddit.com", "url": "https://www.reddit.com/r/x", "text": "I paid €2 for the bus."}]
     assert transfers.checked_option(option(quote="I paid €2 for the bus.", price_text="€2"), page, BEAUVAIS, 80, lambda amount, currency: amount) is None
 
-def test_a_connection_found_in_the_timetables_takes_the_published_price_of_its_kind():
+def test_connection_takes_published_price():
     from discover import confirm
     published = {"options": [
         {"mode": "bus", "operator": "Aerobus", "quote": "Aerobus costs €7.45.", "price_text": "€7.45", "one_way": True, "from_price": False,
@@ -185,12 +185,12 @@ def test_a_connection_found_in_the_timetables_takes_the_published_price_of_its_k
     assert confirm.published_fare({"steps": [{"mode": "TRAM", "km": 9}]}, published) is None   # nothing published for the tram
     assert confirm.published_fare(by_train, None) is None
 
-def test_a_much_earlier_ride_to_save_a_euro_is_not_the_one_taken():
+def test_earlier_cheaper_ride_skipped():
     found = [{"leave": 3 * 60, "arrive": 4 * 60 + 35, "price_eur": 5.0, "source": "Rede Expressos", "urls": []},
              {"leave": 7 * 60, "arrive": 8 * 60 + 40, "price_eur": 6.0, "source": "Rede Expressos", "urls": []}]
     assert rides.best_ride(found, {"time": "11:00"}, True)["leave_time"] == "07:00"
 
-def test_an_airport_where_nothing_usable_was_found_is_looked_for_again_a_week_later(monkeypatch):
+def test_empty_airport_retried_weekly(monkeypatch):
     transfers.write(transfers.TRANSFERS, {"BVA": {"options": [], "best": None, "city": "Paris", "checked": (TODAY - timedelta(days=8)).isoformat()}})
     asked = []
     monkeypatch.setattr(transfers, "look_for", lambda *arguments: asked.append(arguments[0]["code"]) or {"options": [], "best": None, "city": "Paris"})
@@ -199,7 +199,7 @@ def test_an_airport_where_nothing_usable_was_found_is_looked_for_again_a_week_la
     transfers.look_up(["BVA"], {"BVA": BEAUVAIS}, {"BVA": PARIS}, {}, TODAY, say=lambda text: None)
     assert asked == ["BVA"]   # not again the same week
 
-def test_the_published_price_of_the_very_line_found_comes_before_a_cheaper_one():
+def test_exact_line_price_first():
     from discover import confirm
     published = {"options": [
         {"mode": "shuttle", "operator": "AMTS", "quote": "The AMTS bus costs €1.", "price_text": "€1", "one_way": True, "from_price": False,

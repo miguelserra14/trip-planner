@@ -61,7 +61,7 @@ def priced(request, live, transit):
         found = json.loads(path.read_text(encoding="utf-8"))
     return operator, found
 
-def test_the_operator_sold_a_ticket(priced):
+def test_operator_sold_ticket(priced):
     operator, found = priced
     tickets = found["leg"].get("tickets") or []
     assert operator in [ticket["operator"] for ticket in tickets], f"no ticket from {operator}: {tickets}"
@@ -76,7 +76,7 @@ def test_the_price_is_believable(priced):
         if not operator.startswith("Luxembourg"):
             assert ticket["price_eur"] > 0 or ticket["operator"].startswith("Luxembourg")
 
-def test_the_same_total_from_the_same_tickets(priced, monkeypatch):
+def test_same_tickets_same_total(priced, monkeypatch):
     """Today's code, given the tickets that were read, makes the total and the kind of price that were saved."""
     operator, found = priced
     saved = found["leg"]

@@ -123,7 +123,8 @@ def failed(entry: dict) -> bool:
     return not entry["result"].startswith("ok")
 
 # What the checks of the current trip did to what the models wrote, counted where it happens: the claims corrected or
-# pointed out (agents/claims.py), the links left out (sources/web.py). Saved with the report (report/metrics.py).
+# pointed out (agents/claims.py), the links left out (sources/web.py), the ways estimated where an operator's rides did
+# not fit (agents/steps.py). Saved with the report (report/metrics.py).
 COUNTS: Counter = Counter()
 
 def count(what: str, times: int = 1) -> None:

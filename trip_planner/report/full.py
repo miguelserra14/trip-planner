@@ -245,7 +245,20 @@ def remove_old_reports(keep: set = frozenset()) -> None:
     folders = sorted(trip_folders(REPORTS), key=lambda folder: folder.stat().st_mtime)
     for old in folders[:-current.SETTINGS.recent_reports]:
         if old.resolve() not in {folder.resolve() for folder in keep}:
+            for vehicles in old.glob("trip_*.json"):
+                (verify_later() / old.name).mkdir(parents=True, exist_ok=True)
+                shutil.copy2(vehicles, verify_later() / old.name / vehicles.name)
             shutil.rmtree(old, ignore_errors=True)
+
+def verify_later() -> Path:
+    """Where the vehicles of the trips deleted to make room are kept (.json), for --verify alone: whether a connection
+    ran can only be known near its day, long after newer searches pushed its report out. Neither the prices nor the
+    app read them."""
+    return REPORTS / "verify"
+
+def verify_files() -> list[Path]:
+    """The vehicles --verify asks about again: those of every report there is, then those of the trips deleted."""
+    return report_files("trip_*.json") + sorted(verify_later().glob("trip_*/trip_*.json"))
 
 def keep_report(path: Path, keep: bool) -> Path:
     """Move the folder of a report to saved/ to keep it, or back among the recent ones, with every file of the trip.

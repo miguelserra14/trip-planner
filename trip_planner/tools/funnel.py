@@ -224,7 +224,8 @@ def checks_part(reports: list[dict[str, Any]]) -> list[str]:
     calls = sum(models["calls"] for models in with_models)
     by = Counter(models["recommendation_by"] or "no model (fixed text)" for models in with_models)
     return [f"What code did to the models' text ({len(kept)} trips): {checks['claims_corrected']} colours put right, "
-            f"{checks['claims_contradicted']} claims pointed out, {checks['numbers_unknown']} times or durations no step gave, "
+            f"{checks['claims_contradicted']} claims pointed out, {checks['numbers_unknown']} times or durations and {checks['prices_unknown']} prices no step gave, "
+            f"{checks['rides_missed']} ways estimated where an operator's rides did not fit, "
             f"{checks['links_dropped']} links left out.",
             f"Models ({len(with_models)} trips): {calls} calls, {sum(models['failed'] for models in with_models)} failed, "
             f"{sum(models['plan_b'] for models in with_models)} answered by plan B. Recommendation written by: "

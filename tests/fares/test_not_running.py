@@ -28,19 +28,19 @@ def flixbus_answers(monkeypatch):
     monkeypatch.setattr(flixbus, "flixbus_search", lambda *args, **options: (rides, {}))
     return rides
 
-def test_flixbus_selling_that_departure_gives_its_price(flixbus_answers):
+def test_flixbus_sale_gives_price(flixbus_answers):
     flixbus_answers += [ride("00:20", "02:30"), ride("00:55", "03:05")]
     assert flixbus.flixbus_fare(flixbus_trip()) == 9.99
 
-def test_flixbus_running_other_rides_that_day_says_this_one_does_not_run(flixbus_answers):
+def test_flixbus_proves_not_running(flixbus_answers):
     flixbus_answers += [ride("00:20", "02:30"), ride("01:45", "04:10")]
     with pytest.raises(NotRunning):
         flixbus.flixbus_fare(flixbus_trip())
 
-def test_flixbus_with_no_ride_that_day_says_nothing(flixbus_answers):
+def test_flixbus_silent_without_rides(flixbus_answers):
     assert flixbus.flixbus_fare(flixbus_trip()) is None   # not on sale yet, or no ride at all: nothing is known
 
-def test_a_sold_out_ride_still_runs(flixbus_answers):
+def test_sold_out_still_runs(flixbus_answers):
     flixbus_answers += [ride("00:20", "02:30"), ride("00:55", "03:05", status="full")]
     assert flixbus.flixbus_fare(flixbus_trip()) is None   # no price, but it is not said not to run
 
@@ -69,18 +69,18 @@ def runs_only(monkeypatch):
     monkeypatch.setattr(fares, "NOT_RUNNING", set())
     return running
 
-def test_a_connection_that_does_not_run_that_day_gives_way_to_the_next(runs_only):
+def test_next_replaces_cancelled(runs_only):
     runs_only.append("09:00")
     early, later = candidate("07:00", "09:00", 10.0), candidate("09:00", "11:00", 11.0)
     best = best_on_real_prices([early, later], lambda c: c["price_eur"], TRAVEL, False)
     assert best is later and best["grade"] == "A"
     assert early["not_running"] == ["Coach"]
 
-def test_no_connection_running_that_day_rejects_the_flight(runs_only):
+def test_no_running_connection_rejects(runs_only):
     with pytest.raises(Rejected, match="Coach"):
         best_on_real_prices([candidate("07:00", "09:00", 10.0)], lambda c: c["price_eur"], TRAVEL, False)
 
-def test_a_leg_across_midnight_is_not_judged_on_one_day(runs_only):
+def test_midnight_leg_not_judged(runs_only):
     night = candidate("23:30", "01:10", 10.0) | {"arrive": 24 * 60 + 70}
     legs.price_with_tickets(night, TRAVEL, False)
     assert "not_running" not in night   # its vehicles after midnight run on the next day
@@ -88,17 +88,17 @@ def test_a_leg_across_midnight_is_not_judged_on_one_day(runs_only):
 def itinerary(total: float, guessed: float) -> dict:
     return {"total_cost": total, "guessed_eur": guessed}
 
-def test_a_guessed_price_may_be_half_or_double(settings):
+def test_guess_half_or_double(settings):
     settings.unverified_price_factor = 2.0
     assert price_range(itinerary(78, 38)) == (59, 116)
     assert price_range(itinerary(83, 0)) == (83, 83)
 
-def test_options_whose_guesses_overlap_the_cheapest_are_tied(settings):
+def test_overlapping_guesses_tied(settings):
     settings.unverified_price_factor = 2.0
     # The cheapest may really cost up to 116: 82 with 6 guessed may cost 79, 160 with 20 guessed no less than 150
     options = [itinerary(78, 38), itinerary(82, 6), itinerary(150, 0), itinerary(160, 20)]
     assert tied_on_price(options) == [1, 2]
 
-def test_a_cheapest_option_that_stands_out_is_not_tied(settings):
+def test_clear_cheapest_not_tied(settings):
     settings.unverified_price_factor = 2.0
     assert tied_on_price([itinerary(50, 0), itinerary(90, 10)]) == []

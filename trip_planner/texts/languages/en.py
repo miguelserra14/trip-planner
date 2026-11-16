@@ -191,7 +191,6 @@ TEXTS = {
     "keep_report_prompt": "Keep this report? Otherwise it is deleted once there are {limit} newer ones (y/N):",
     # ---- prices asked again (tools/prices.py)
     "ui_prices": "Refresh prices",
-    "ui_prices_count": "Refresh prices ({count})",
     "prices_title": "Prices asked again on {when}",
     "prices_intro": "The ground prices of the options shown, asked again of the operators' booking systems: they were read on {read}, more than {hours} hours ago, and operators change their prices by the hour. The flights are not asked again.",
     "prices_none": "No report has ground prices read more than {hours} hours ago for a trip still to come.",
@@ -250,6 +249,7 @@ TEXTS = {
     "reject_not_worth_it": "{total} EUR in total, from a distant airport and not worth it: saves {saving} EUR and takes {extra} longer than the option from {reference} (minimum saving required: {required} EUR)",
     "reject_below_minimum": "its schedules are {grade}, below the minimum {minimum} asked for",
     "note_impossible_duration": "Travel time to {airport}: the model said {minutes} min for {km} km, which is impossible; {used} min were used, estimated from the distance.",
+    "note_rides_missed": "{operators} sells rides at {airport} that day, but none fits this flight: this way is a model's estimate, not verified.",
     # ---- warnings
     "warnings": "Warnings",
     "warn_below_minimum": "No itinerary reaches reliability {minimum}. The options below are NOT VERIFIED: confirm every connection before buying anything.",
@@ -270,6 +270,7 @@ TEXTS = {
     "claim_light_none": "Integrity warning: the text above says that no part it speaks of in option {options} is {said}, but in the report they are: {report}. Trust the table.",
     "claim_unknown_durations": "Integrity warning: the text above mentions {values}, which the report does not show. Trust the report.",
     "claim_unknown_times": "Integrity warning: the text above mentions the time {values}, which the report does not show. Trust the report.",
+    "claim_unknown_prices": "Integrity warning: the text above mentions the price {values}, which the report does not show. Trust the report.",
     "claim_flight": "flight,flights,plane,airline",
     "claim_to": "to the airport,towards the airport,to the departure airport",
     "claim_from": "from the airport,to the destination,at the destination,after landing,from the arrival airport",

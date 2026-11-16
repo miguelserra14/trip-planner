@@ -31,12 +31,12 @@ def failing_with(monkeypatch, error: Exception) -> None:
     monkeypatch.setattr(steps, "check_itinerary", check)
 
 # ---------------------------------------------------------------- rejections and mistakes
-def test_a_flight_that_does_not_fit_is_rejected_with_its_reason(monkeypatch):
+def test_misfit_rejected_with_reason(monkeypatch):
     failing_with(monkeypatch, Rejected("no connection reaches the airport in time"))
     assert steps.itinerary_or_reason(FLIGHT, {}, {}, {}) == (None, "no connection reaches the airport in time")
     assert steps.FAULTS == {} and utils.REQUESTS == []
 
-def test_a_mistake_of_the_program_is_not_a_rejection(monkeypatch):
+def test_program_error_not_rejection(monkeypatch):
     failing_with(monkeypatch, KeyError("to_airport"))
     said = []
     monkeypatch.setitem(utils.LISTENERS, "say", said.append)
@@ -46,7 +46,7 @@ def test_a_mistake_of_the_program_is_not_a_rejection(monkeypatch):
     logged = utils.REQUESTS[0]
     assert logged["service"] == "program" and "check" in logged["what"] and utils.failed(logged)   # where it happened
 
-def test_a_mistake_is_said_once_however_often_the_flight_is_looked_at(monkeypatch):
+def test_program_error_said_once(monkeypatch):
     failing_with(monkeypatch, TypeError("unsupported operand"))
     said = []
     monkeypatch.setitem(utils.LISTENERS, "say", said.append)
@@ -54,7 +54,7 @@ def test_a_mistake_is_said_once_however_often_the_flight_is_looked_at(monkeypatc
         steps.itinerary_or_reason(FLIGHT, {}, {}, {})
     assert len(said) == 1 and len(utils.REQUESTS) == 1
 
-def test_the_report_counts_the_flights_the_program_failed_on(monkeypatch):
+def test_report_counts_program_errors(monkeypatch):
     failing_with(monkeypatch, KeyError("to_airport"))
     monkeypatch.setitem(utils.LISTENERS, "say", lambda text: None)
     found = steps.build_itineraries({"flights": [FLIGHT], "checked": ["F1"], "ground": {}, "transfers": [], "trains": []})
@@ -62,7 +62,7 @@ def test_the_report_counts_the_flights_the_program_failed_on(monkeypatch):
     assert any("1" in warning and "program" in warning for warning in found["warnings"])
 
 # ---------------------------------------------------------------- the log of the run
-def test_a_request_is_logged_with_how_it_ended():
+def test_request_logged_with_outcome():
     with utils.logged("Transitous", "plan a -> b") as entry:
         entry["result"] = "ok: 3 rides"
     with pytest.raises(TimeoutError):
@@ -72,7 +72,7 @@ def test_a_request_is_logged_with_how_it_ended():
     assert not utils.failed(answered) and utils.failed(timed_out) and timed_out["result"].startswith("TimeoutError")
     assert answered["seconds"] >= 0 and timed_out["service"] == "FlixBus"
 
-def test_a_request_given_up_on_is_logged_too():
+def test_abandoned_request_logged():
     async def slow():
         with utils.logged("model", "coordinator"):
             await asyncio.sleep(5)
@@ -80,7 +80,7 @@ def test_a_request_given_up_on_is_logged_too():
         asyncio.run(asyncio.wait_for(slow(), 0.01))
     assert utils.failed(utils.REQUESTS[0])
 
-def test_the_log_is_saved_with_the_report_and_goes_with_it(tmp_path, monkeypatch):
+def test_log_saved_with_report(tmp_path, monkeypatch):
     monkeypatch.setattr(full, "REPORTS", tmp_path)
     monkeypatch.setattr(full, "SAVED_REPORTS", tmp_path / "saved")
     monkeypatch.setattr(full, "render_full_report", lambda response, recommendation: "the report")
@@ -95,7 +95,7 @@ def test_the_log_is_saved_with_the_report_and_goes_with_it(tmp_path, monkeypatch
     kept = full.keep_report(report, True)
     assert full.log_of(kept).exists() and not log.exists()
 
-def test_the_services_of_a_run_are_summed_up(settings):
+def test_services_summed_up(settings):
     for seconds, result in ((0.2, "ok"), (6.0, "ok"), (1.0, "429")):
         utils.REQUESTS.append({"at": "", "service": "Transitous", "what": "plan", "seconds": seconds, "result": result})
     row = full.services_table()[-1]
@@ -118,14 +118,14 @@ def stops_file(tmp_path, monkeypatch):
     monkeypatch.setattr(airport_stops, "AIRPORT_STOPS_FILE", tmp_path / "airport_stops.json")
     monkeypatch.setattr(airport_stops, "AIRPORT_STOPS", {})
 
-def test_the_stops_of_an_airport_are_asked_for_once(stops_file):
+def test_airport_stops_asked_once(stops_file):
     transit = Asked()
     first = asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
     again = asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
     assert first == again == [("station", 5)] and transit.times == 1
     assert '"XXX"' in airport_stops.AIRPORT_STOPS_FILE.read_text(encoding="utf-8")
 
-def test_old_stops_and_stops_of_another_terminal_are_asked_for_again(stops_file):
+def test_stale_stops_asked_again(stops_file):
     transit = Asked()
     asyncio.run(transit.airport_stops(AIRPORT, TERMINAL))
     airport_stops.AIRPORT_STOPS["XXX"]["read"] = (date.today() - timedelta(days=airport_stops.AIRPORT_STOPS_DAYS + 1)).isoformat()

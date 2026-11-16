@@ -33,7 +33,7 @@ def connection(leave: int, arrive: int, *modes: str) -> dict:
             "source": "timetable", "service_day": DAY, "price_eur": None}
 
 # ---------------------------------------------------------------- the settings
-def test_the_choices_are_checked_and_default_to_any():
+def test_choices_default_to_any():
     settings = TripSettings(origin="Antwerp", destination="Conegliano", dates=[f"{date.fromisoformat(DAY):%d/%m/%Y}"])
     assert (settings.to_airport_by, settings.from_airport_by) == ("any", "any")
     assert not ground_choice.restricted(True) and not ground_choice.restricted(False)
@@ -44,20 +44,20 @@ def test_the_choices_are_checked_and_default_to_any():
         TripSettings(origin="Antwerp", destination="Conegliano", dates=settings.dates, max_changes_to_airport=10)
 
 # ---------------------------------------------------------------- what is accepted
-def test_the_city_transport_counts_with_either_choice():
+def test_city_transport_always_counts():
     choose(to_airport_by="train", from_airport_by="bus")
     assert ground_choice.accepts(connection(600, 700, "SUBWAY", "REGIONAL_RAIL"), True)
     assert not ground_choice.accepts(connection(600, 700, "BUS", "REGIONAL_RAIL"), True)
     assert ground_choice.accepts(connection(600, 700, "TRAM", "COACH"), False)
     assert not ground_choice.accepts(connection(600, 700, "COACH", "HIGHSPEED_RAIL"), False)
 
-def test_changes_are_counted_and_limited_on_each_side():
+def test_changes_limited_per_side():
     choose(max_changes_to_airport=1)
     assert ground_choice.accepts(connection(600, 700, "RAIL", "BUS"), True)
     assert not ground_choice.accepts(connection(600, 700, "RAIL", "RAIL", "BUS"), True)
     assert ground_choice.accepts(connection(600, 700, "RAIL", "RAIL", "BUS"), False)   # the other side has no limit
 
-def test_steps_kept_before_their_kind_was_saved_are_read_from_what_they_say():
+def test_old_steps_kind_inferred():
     choose(to_airport_by="train")
     old = connection(600, 700, "RAIL")
     old["steps"][0].pop("mode")
@@ -65,7 +65,7 @@ def test_steps_kept_before_their_kind_was_saved_are_read_from_what_they_say():
     old["steps"][0].update(rail=False, coach=True)
     assert not ground_choice.accepts(old, True)
 
-def test_only_what_is_accepted_is_asked_for():
+def test_only_accepted_modes_asked():
     choose(to_airport_by="train", from_airport_by="bus")
     assert ground_choice.allowed_modes(timetables.GROUND_MODES, True) == "RAIL,SUBURBAN,SUBWAY,TRAM,FERRY,FUNICULAR,AERIAL_LIFT,OTHER"
     assert ground_choice.allowed_modes(timetables.GROUND_MODES, False) == "SUBWAY,TRAM,BUS,COACH,FERRY,FUNICULAR,AERIAL_LIFT,OTHER"
@@ -90,11 +90,11 @@ def ask(to_airport: bool) -> tuple:
                                      terminal_known=True))
     return transit.asked[0], found
 
-def test_without_a_choice_the_question_is_the_same_as_ever():
+def test_no_choice_same_question():
     asked, found = ask(True)
     assert asked["transitModes"] == timetables.GROUND_MODES and "maxTransfers" not in asked and len(found) == 2
 
-def test_the_question_carries_the_choice_and_the_answer_is_checked():
+def test_choice_sent_and_checked():
     choose(to_airport_by="train", max_changes_to_airport=0)
     asked, found = ask(True)
     assert "BUS" not in asked["transitModes"] and asked["maxTransfers"] == 1   # Transitous counts one more (ground_choice.py)
@@ -114,27 +114,27 @@ TRANSFER = {"airport": "XXX", "reachable": True, "duration_minutes": 40, "price_
 def ground(side: str, *options: dict) -> dict:
     return {"F": {side: {"covered": True, "service_day": DAY, "grade": "B", "options": list(options)}}}
 
-def test_a_leg_by_bus_is_rejected_for_a_trip_by_train_saying_why(trip):
+def test_bus_rejected_for_train(trip):
     choose(to_airport_by="train")
     with pytest.raises(Rejected, match="by train"):
         to_airport_leg(FLIGHT, ground("to_airport", connection(600, 700, "BUS")), TRANSFER)
     leg = to_airport_leg(FLIGHT, ground("to_airport", connection(600, 700, "BUS"), connection(610, 690, "REGIONAL_RAIL")), TRANSFER)
     assert leg["steps"][0]["mode"] == "REGIONAL_RAIL" and leg["price_kind"] == "estimate"   # the model's price was for its own way
 
-def test_one_change_too_many_from_the_airport_is_rejected(trip):
+def test_extra_change_rejected(trip):
     choose(max_changes_from_airport=1)
     with pytest.raises(Rejected, match="1"):
         from_airport_leg(FLIGHT, ground("from_airport", connection(600, 700, "BUS", "RAIL", "TRAM")), None)
     assert from_airport_leg(FLIGHT, ground("from_airport", connection(600, 700, "BUS", "RAIL")), None)["arrive"] == 700
 
-def test_a_model_estimate_is_not_used_when_the_traveller_chose(trip):
+def test_choice_excludes_model_estimate(trip):
     choose(to_airport_by="bus")
     with pytest.raises(Rejected, match="estimate"):
         to_airport_leg(FLIGHT, {}, TRANSFER)
     choose(to_airport_by="any")
     assert to_airport_leg(FLIGHT, {}, TRANSFER)["kind"] == "model"   # without a choice, as before
 
-def test_an_airport_reached_only_another_way_is_said_to_be_covered_but_not_that_way(trip):
+def test_covered_only_another_way(trip):
     """Charleroi airport is reached by train to Charleroi and then a bus: by train only it cannot be reached, and the
     reason says that, not that no timetable covers it."""
     choose(to_airport_by="train")
@@ -142,7 +142,7 @@ def test_an_airport_reached_only_another_way_is_said_to_be_covered_but_not_that_
     with pytest.raises(Rejected, match="but none by train"):
         to_airport_leg(FLIGHT, excluded, TRANSFER)
 
-def test_whether_a_route_is_covered_is_asked_by_any_vehicle():
+def test_coverage_asked_any_vehicle():
     choose(to_airport_by="train", max_changes_to_airport=0)
     transit = Asked()
     transit.probes = {}

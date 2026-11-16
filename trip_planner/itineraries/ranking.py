@@ -154,14 +154,13 @@ def price_itineraries(itineraries: list[dict[str, Any]]) -> None:
     for itinerary in itineraries:
         price_itinerary(itinerary)
 
-def rank_itineraries(itineraries: list[dict[str, Any]]) -> tuple:
-    """Apply the traveller's two preferences, both expressed as EUR per extra hour.
-    Returns (itineraries worth showing sorted by cost, the recommended one, reasons for the ones not worth it)."""
+def worth_the_detour(itineraries: list[dict[str, Any]]) -> tuple:
+    """(the itineraries kept, the reasons for the others): an itinerary from a fallback airport is only kept if it
+    saves enough for every extra hour it takes, compared with the cheapest itinerary from a primary airport. The
+    flight selection (selection.py) weighs the flights left against the same itineraries the ranking keeps."""
     primary = {airport["code"] for airport in current.TRIP.primary}
     from_primary = [itinerary for itinerary in itineraries if itinerary["flight"]["departure_airport"] in primary]
     kept, not_worth_it = [], []
-    # A fallback airport is only worth it if it saves enough for every extra hour it takes,
-    # compared with the cheapest itinerary from a primary airport.
     reference = min(from_primary, key=lambda itinerary: itinerary["total_cost"], default=None)
     for itinerary in itineraries:
         flight = itinerary["flight"]
@@ -176,6 +175,12 @@ def rank_itineraries(itineraries: list[dict[str, Any]]) -> tuple:
                     required=f"{required:.0f}"))
                 continue
         kept.append(itinerary)
+    return kept, not_worth_it
+
+def rank_itineraries(itineraries: list[dict[str, Any]]) -> tuple:
+    """Apply the traveller's two preferences, both expressed as EUR per extra hour.
+    Returns (itineraries worth showing sorted by cost, the recommended one, reasons for the ones not worth it)."""
+    kept, not_worth_it = worth_the_detour(itineraries)
     kept.sort(key=lambda itinerary: (itinerary["total_cost"], itinerary["total_minutes"]))
     # The recommended itinerary is the cheapest once the hours it takes beyond the fastest one are priced.
     # Those hours cost more and more, so one extra hour is easily accepted and three or four rarely are.

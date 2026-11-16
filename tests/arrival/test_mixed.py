@@ -37,7 +37,7 @@ def lookup(road_km: float, monkeypatch) -> dict:
     monkeypatch.setattr(client, "reference_day", lambda day: day)
     return asyncio.run(work())
 
-def test_the_published_part_goes_to_the_station_and_the_rest_is_estimated(monkeypatch):
+def test_mixed_leg_estimates_rest(monkeypatch):
     answer = lookup(11, monkeypatch)
     option = answer["options"][0]
     assert answer["covered"] and option["grade"] == "C" and option["estimated_km"] == 11
@@ -47,6 +47,6 @@ def test_the_published_part_goes_to_the_station_and_the_rest_is_estimated(monkey
     assert stretch["minutes"] == 15 + 20, "the road's time and the time getting a bus or a taxi"
     assert option["notes"] and "11 km" in option["notes"][0]
 
-def test_no_mixed_leg_when_the_station_is_too_far_by_road(monkeypatch):
+def test_far_station_no_mixed(monkeypatch):
     answer = lookup(current.SETTINGS.max_estimate_km + 1, monkeypatch)
     assert not answer["covered"] and answer["options"] == []

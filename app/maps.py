@@ -18,6 +18,7 @@ from urllib.parse import quote
 from app.fields import calendar_data
 from discover import confirm
 from discover.view.page import page_texts, SCRIPT, STYLE
+from trip_planner.sources import flight_search
 from trip_planner.texts import tr
 
 SOURCES = ("light", "full", "fast", "ground")   # the ways to search the flights, as python -m discover has them (discover_win_source_...)
@@ -261,7 +262,7 @@ def estimate_of(state: dict[str, Any], key: str, trip: list[str], address: str) 
     ends = ((flight["from"], True), (flight["to"], False))   # the way to its first airport, and from its last
     legs = [leg for end in ends for leg in point.get("access") or [] if (leg.get("airport"), leg.get("to_airport")) == end]
     return {"map": address, "key": key, "trip": trip, "clicked": datetime.now().isoformat(timespec="minutes"),
-            "flight_id": f"{flight['from']}-{flight['to']}-{flight['date'][8:10]}{flight['date'][5:7]}-{flight['time'].replace(':', '')}",
+            "flight_id": flight_search.flight_id(flight["from"], flight["to"], flight["date"], flight["time"]),
             "round_trip": bool(point.get("back")), "flight_eur": point.get("price_eur"), "total_eur": point.get("total_eur"),
             "ground_eur": round(sum(leg.get("price_eur") or 0 for leg in legs), 2), "looked_up": bool(legs) and all(leg.get("looked_up") for leg in legs),
             "legs": [{key: leg.get(key) for key in ("airport", "to_airport", "price_eur", "grade", "price_grade", "looked_up")} for leg in legs]}

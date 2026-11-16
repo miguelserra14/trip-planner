@@ -46,18 +46,18 @@ def read_back(settings):
 
 IN_TABS = [name for title, names in form.TABS for name in names]
 
-def test_every_setting_is_somewhere_on_the_form_and_once_in_the_tabs():
+def test_every_setting_on_form():
     shown_anywhere = set(IN_TABS) | set(form.MAIN_SETTINGS) | set(form.CHANGES) | set(form.NOT_IN_TABS)
     assert {setting.name for setting in dataclasses.fields(TripSettings)} == shown_anywhere
     assert len(IN_TABS) == len(set(IN_TABS))
 
-def test_every_label_and_hint_has_its_text():
+def test_labels_and_hints_exist():
     keys = [form.LABELS.get(name, f"set_{name}") for name in IN_TABS] + list(form.HINTS.values())
     keys += [title for title, names in form.TABS]
     for language in (REFERENCE, "pt-PT"):
         assert [key for key in keys if key not in TEXTS[language]] == [], language
 
-def test_what_the_form_shows_is_read_back_as_the_same_setting():
+def test_form_round_trips_settings():
     settings = TripSettings(origin="Coimbra", destination="Antwerp", dates=[DAY], exclude_airports=["LIS", "Faro"],
                             earliest_leave="", latest_leave="", tiebreak_eur_per_hour=7.5)
     values = {setting.name: form.shown(setting.name, getattr(settings, setting.name))
@@ -65,7 +65,7 @@ def test_what_the_form_shows_is_read_back_as_the_same_setting():
     assert values["exclude_airports"] == "LIS, Faro" and values["earliest_leave"] == "" and values["tiebreak_eur_per_hour"] == "7.5"
     assert dataclasses.replace(settings, **values) == settings
 
-def test_every_setting_of_the_form_is_changed_by_it():
+def test_form_changes_every_setting():
     assert set(CHANGED) == {*fields.ADVANCED, *fields.SCALES_TICKED}   # a setting added to the form is added here
     wanted = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=[DAY, NEXT], return_dates=[BACK],
                                  language="en", **CHANGED)
@@ -73,25 +73,25 @@ def test_every_setting_of_the_form_is_changed_by_it():
     assert vars(read_back(wanted)) == vars(wanted)
 
 @pytest.mark.parametrize("stopovers", [0, 1, 3])
-def test_the_stopovers_are_read_whether_direct_flights_are_ticked_or_not(stopovers):
+def test_stopovers_read_from_tick(stopovers):
     wanted = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=[DAY], max_stopovers=stopovers)
     assert read_back(wanted).max_stopovers == stopovers
 
 @pytest.mark.parametrize("ground_only", [True, False])
-def test_the_tick_for_no_plane_is_read_ticked_or_not(ground_only):
+def test_no_plane_tick_read(ground_only):
     wanted = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=[DAY], ground_only=ground_only)
     assert read_back(wanted).ground_only is ground_only
 
-def test_unticking_direct_flights_allows_a_stopover():
+def test_unticked_direct_allows_stopover():
     assert fields.stopovers({"max_stopovers": "0"}) == 1 and fields.stopovers({"max_stopovers": "0", fields.DIRECT: "on"}) == 0
 
-def test_no_limit_of_changes_is_kept_as_no_limit():
+def test_unlimited_changes_kept():
     wanted = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=[DAY],
                                  max_changes_to_airport=NO_CHANGE_LIMIT, max_changes_from_airport=NO_CHANGE_LIMIT)
     settings = read_back(wanted)
     assert settings.max_changes_to_airport == settings.max_changes_from_airport == NO_CHANGE_LIMIT
 
-def test_days_written_in_words_are_read_as_the_window_reads_them():
+def test_worded_days_read_alike():
     sent = as_browser_sends(fields.values_of(SETTINGS))
     sent.update(origin="Coimbra", destination="Antwerp", dates="17-19/12")
     settings = job.settings_for(fields.read(sent, SETTINGS), SETTINGS)
@@ -99,7 +99,7 @@ def test_days_written_in_words_are_read_as_the_window_reads_them():
 
 @pytest.mark.parametrize("name, value", [("min_airport_minutes", "10"), ("max_stopovers", "9"), ("earliest_leave", "25:00"),
                                          ("max_road_hours", "many"), ("min_reliability", "Z")])
-def test_a_value_out_of_range_is_refused_by_the_settings_with_the_reason(name, value):
+def test_out_of_range_refused(name, value):
     sent = as_browser_sends(fields.values_of(SETTINGS))
     sent.update(origin="Coimbra", destination="Antwerp", dates=DAY, **{name: value})
     sent.pop(fields.DIRECT, None)

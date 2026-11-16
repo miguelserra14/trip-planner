@@ -25,7 +25,7 @@ def ride(leaves: str, arrives: str, price: float, transfer: str = "Direct") -> d
             "departure": {"date": leaves, "city_id": "antwerp-city", "station_id": "home"},
             "arrival": {"date": arrives, "city_id": "paris-city", "station_id": "paris"}}
 
-def test_flixbus_gives_its_cheapest_direct_ride_of_the_day_and_the_shop_page_of_it(monkeypatch):
+def test_flixbus_cheapest_direct_ride(monkeypatch):
     rides = [ride("2026-11-12T10:30:00+01:00", "2026-11-12T17:15:00+01:00", 15.0, "Transfer"),   # cheaper, with a change: not straight
              ride("2026-11-12T16:50:00+01:00", "2026-11-12T22:25:00+01:00", 20.99),
              ride("2026-11-12T22:05:00+01:00", "2026-11-13T05:30:00+01:00", 24.99)]
@@ -49,7 +49,7 @@ class Timetables:
         self.asked.append((start, end, day))
         return self.itineraries
 
-def test_an_operator_of_the_planner_is_asked_for_a_few_direct_departures_of_the_day_and_the_cheapest_kept(monkeypatch):
+def test_planner_operator_cheapest_kept(monkeypatch):
     times = [("2026-11-12T05:00:00Z", "2026-11-12T07:50:00Z"), ("2026-11-12T08:00:00Z", "2026-11-12T10:50:00Z"),
              ("2026-11-12T11:00:00Z", "2026-11-12T13:50:00Z"), ("2026-11-12T14:00:00Z", "2026-11-12T16:50:00Z"),
              ("2026-11-12T17:00:00Z", "2026-11-12T19:50:00Z")]
@@ -65,7 +65,7 @@ def test_an_operator_of_the_planner_is_asked_for_a_few_direct_departures_of_the_
     assert asked == ["06:00", "12:00", "18:00"]   # MAX_DEPARTURES, spread over the day: the first, the middle and the last, local time
     assert (found["price_eur"], found["leave"], found["seller"], found["url"]) == (19.9, "12:00", "ÖBB", "https://www.oebb.at")
 
-def test_a_return_trip_has_a_total_only_with_both_ways_and_comes_back_after_it_leaves(monkeypatch):
+def test_return_total_needs_both(monkeypatch):
     asked = []
 
     def flixbus_day(start, end, day, towns=None):
@@ -80,7 +80,7 @@ def test_a_return_trip_has_a_total_only_with_both_ways_and_comes_back_after_it_l
     price = ground_fares.price_of(bus, RETURN, TODAY, Timetables([]))
     assert price["total_eur"] is None and price["out"]["price_eur"] == 10.0   # no way back sold: no total
 
-def test_the_way_back_leaves_after_the_way_out_arrives_and_the_time_in_the_city_is_counted(monkeypatch):
+def test_return_after_arrival(monkeypatch):
     days = Days("2026-11-12", "2026-11-12", "2026-11-12", "2026-11-14")   # coming back may be the same day
 
     def flixbus_day(start, end, day, towns=None):
@@ -94,7 +94,7 @@ def test_the_way_back_leaves_after_the_way_out_arrives_and_the_time_in_the_city_
     one_way = ground_fares.price_of(option("FlixBus", "Paris", 48.85, 2.35), ONE_WAY, TODAY, Timetables([]))
     assert one_way["stay"] is None and one_way["back"] is None
 
-def test_an_operator_of_one_country_is_asked_only_for_a_trip_from_or_to_it():
+def test_national_operator_scoped():
     assert ground_fares.sellable(option("MÁV", "Budapest", 47.5, 19.0, sold="HU"), {"AT", "HU"})
     assert not ground_fares.sellable(option("MÁV", "Zürich", 47.4, 8.5, sold="HU"), {"AT", "CH"})   # MÁV's feed has Vienna to Zürich
     assert ground_fares.sellable(option("FlixBus", "Zürich", 47.4, 8.5), {"AT", "CH"})
@@ -118,7 +118,7 @@ def priced_by(monkeypatch) -> list:
     monkeypatch.setattr(ground_fares, "price_of", price_of)
     return asked
 
-def test_the_cities_that_cannot_be_among_the_cheapest_are_not_priced(monkeypatch):
+def test_hopeless_cities_unpriced(monkeypatch):
     monkeypatch.setattr(ground_fares, "ROUND", 1)
     asked = priced_by(monkeypatch)
     cities = [city("Warsaw", option("FlixBus", "Warsaw", 52.23, 21.01)), city("Paris", option("FlixBus", "Paris", 48.85, 2.35)),
@@ -130,14 +130,14 @@ def test_the_cities_that_cannot_be_among_the_cheapest_are_not_priced(monkeypatch
     assert [city.get("fare_eur") for city in cities] == [110.0, 35.0, 6.0, None, None]   # Köln: Deutsche Bahn's price is not read
     assert found.fare_stop.startswith("no city left could be among the 10 cheapest")
 
-def test_a_round_prices_several_cities_at_once(monkeypatch):
+def test_round_prices_several_cities(monkeypatch):
     asked = priced_by(monkeypatch)
     cities = [city(name, option("FlixBus", name, *at)) for name, at in (("Warsaw", (52.23, 21.01)), ("Berlin", (52.52, 13.40)), ("Paris", (48.85, 2.35)))]
     found = Found(ANTWERP, ONE_WAY, [], TEN_FLIGHTS, [], [], by_ground=cities)
     ground_fares.price(found, say=lambda text: None, transitous=Timetables([]), today=TODAY)
     assert sorted(asked) == ["Berlin", "Paris", "Warsaw"] and len(found.fare_lookups) == 3   # one round: no price per km known yet
 
-def test_the_prices_per_km_of_a_map_choose_what_the_next_one_asks(monkeypatch):
+def test_km_prices_guide_next(monkeypatch):
     asked = priced_by(monkeypatch)
     warsaw = city("Warsaw", option("FlixBus", "Warsaw", 52.23, 21.01))
     ground_fares.price(Found(ANTWERP, ONE_WAY, [], TEN_FLIGHTS, [], [], by_ground=[warsaw]), say=lambda text: None,
@@ -150,7 +150,7 @@ def test_the_prices_per_km_of_a_map_choose_what_the_next_one_asks(monkeypatch):
     assert cities[0].get("fare_eur") is None and cities[1]["fare_eur"] == 6.0
     assert ground_fares.read_rates(date(2026, 12, 1)) == {"FlixBus": []}   # too old to choose anything
 
-def test_a_city_a_flight_goes_to_is_priced_only_when_it_can_beat_that_flight(monkeypatch):
+def test_flight_city_priced_conditionally(monkeypatch):
     monkeypatch.setattr(ground_fares, "ROUND", 1)
     asked = priced_by(monkeypatch)
     near, far = option("FlixBus", "Lille", 50.63, 3.06), option("FlixBus", "Lyon", 45.76, 4.84)
@@ -165,7 +165,7 @@ def test_a_city_a_flight_goes_to_is_priced_only_when_it_can_beat_that_flight(mon
     ground_fares.price(found, say=lambda text: None, transitous=Timetables([]), today=TODAY)
     assert found.fare_stop == "stopped after 1 cities, the most a map prices at once"
 
-def test_flixbus_is_asked_while_the_flights_are_looked_up_and_the_rounds_take_its_answers(monkeypatch):
+def test_flixbus_prefetch_used(monkeypatch):
     searched = []
     monkeypatch.setattr(ground_fares, "flixbus_search_day", lambda start, end, day: searched.append((end, day)) or
                         {"price_eur": 9.0, "day": day, "leave": "08:00", "arrive": "09:00", "arrive_day": day})
@@ -185,7 +185,7 @@ class NoTrip:
     def __getattr__(self, name):
         raise AssertionError(f"the trip being planned was read: {name}")
 
-def test_flixbus_asked_beside_the_timetables_never_reads_the_trip_they_are_looking_up(monkeypatch):
+def test_prefetch_ignores_current_trip(monkeypatch):
     """prefetch runs in a thread while confirm.py makes each destination the planner's trip (current.trip): it must
     not read that trip, which is not its own. Its whole way is run, FlixBus's own module included, with no network."""
     from trip_planner import current
@@ -203,12 +203,12 @@ def test_flixbus_asked_beside_the_timetables_never_reads_the_trip_they_are_looki
     found = Found(ANTWERP, ONE_WAY, [], TEN_FLIGHTS, [], [], by_ground=cities)
     assert ground_fares.prefetch(found, threading.Event(), TODAY) == 2
 
-def test_the_days_priced_are_the_first_ones_of_each_way_and_none_past():
+def test_first_days_priced():
     assert ground_fares.days_of(Days("2026-10-20", "2026-11-30"), False, TODAY) == ["2026-10-24", "2026-10-25", "2026-10-26", "2026-10-27"]
     assert ground_fares.days_of(Days.clicked(["2026-11-12", "2026-11-14"], ["2026-11-13", "2026-11-20"]), True, TODAY, "2026-11-14") == ["2026-11-20"]
 
 
-def test_a_city_the_traveller_asks_for_is_priced_even_when_it_cannot_be_among_the_cheapest(monkeypatch):
+def test_requested_city_priced(monkeypatch):
     asked = priced_by(monkeypatch)
     berlin = city("Berlin", option("FlixBus", "Berlin", 52.52, 13.40))
     flown = {"to": "LIL", "total_eur": 20.0, "ground": [option("FlixBus", "Lille", 50.63, 3.06)]}
@@ -222,7 +222,7 @@ def test_a_city_the_traveller_asks_for_is_priced_even_when_it_cannot_be_among_th
     assert flown["ground"][0]["price"]["total_eur"] == 30.0 and "fare_eur" not in flown   # a flight's city: by its airport, its total stays the flight's
     assert ground_fares.price_asked(found, "~Berlin", transitous=Timetables([]), today=TODAY)[1] == []   # priced already: not asked again
 
-def test_a_train_asked_for_on_the_map_waits_for_the_timetables_and_flixbus_does_not(monkeypatch):
+def test_train_price_waits(monkeypatch):
     asked = priced_by(monkeypatch)
     monkeypatch.setitem(FARES, "Wien", 40.0)
     both = city("Wien", option("ÖBB", "Wien", 48.20, 16.37, sold="AT", mode="train"), option("FlixBus", "Wien", 48.20, 16.37))
@@ -232,7 +232,7 @@ def test_a_train_asked_for_on_the_map_waits_for_the_timetables_and_flixbus_does_
     ground_fares.price_asked(found, "~Wien", before_trains=lambda: waited.append(list(asked)), transitous=Timetables([]), today=TODAY)
     assert waited == [["Wien"]] and asked == ["Wien", "Wien"]   # FlixBus first, the train once the timetables are free
 
-def test_the_session_tells_the_page_a_price_asked_for_is_on_its_way_then_what_came(monkeypatch):
+def test_price_request_progress(monkeypatch):
     from discover import session as discover_session
     states = []
     monkeypatch.setattr(discover_session, "map_state", lambda found, sections, running, version, **more:
@@ -249,7 +249,7 @@ def test_the_session_tells_the_page_a_price_asked_for_is_on_its_way_then_what_ca
                       {"~Lille": "priced", "~Nowhere": "none"}]
     assert session.live["state"]["version"] == 4 and len(saved) == 2   # saved: the lookups had ended
 
-def test_flixbus_is_asked_city_to_city_when_its_stations_in_the_timetables_give_nothing(monkeypatch):
+def test_flixbus_city_fallback(monkeypatch):
     searched = []
 
     def flixbus_search(start, end, day, by):
@@ -268,7 +268,7 @@ def test_flixbus_is_asked_city_to_city_when_its_stations_in_the_timetables_give_
     assert ground_fares.flixbus_day("eu-flixbus_home", "eu-flixbus_x", "2026-11-12", towns=(towns[0], ("Nowhere", 0, 0))) is None
     assert ground_fares.flixbus_day("eu-flixbus_home", "eu-flixbus_x", "2026-11-12") is None   # no towns: stations only
 
-def test_a_city_sold_on_none_of_the_days_can_be_asked_again_and_one_with_a_price_is_not(monkeypatch):
+def test_unsold_city_reaskable(monkeypatch):
     asked = priced_by(monkeypatch)
     unsold = option("FlixBus", "Berlin", 52.52, 13.40)
     unsold["price"] = {"out": None, "back": None, "total_eur": None, "stay": None}
@@ -278,7 +278,7 @@ def test_a_city_sold_on_none_of_the_days_can_be_asked_again_and_one_with_a_price
     assert [option["stop"] for option, _ in ground_fares.price_asked(found, "~Berlin", transitous=Timetables([]), today=TODAY)[1]] == ["Berlin"]
     assert ground_fares.price_asked(found, "~Paris", transitous=Timetables([]), today=TODAY)[1] == [] and asked == ["Berlin"]
 
-def test_a_trip_with_changes_of_coach_is_taken_only_up_to_the_setting_and_each_change_is_said(monkeypatch):
+def test_coach_changes_limited(monkeypatch):
     def leg(leaves, arrives, station):
         return {"departure": {"date": leaves}, "arrival": {"date": arrives, "station_id": station}}
     changed = ride("2026-11-12T18:00:00+01:00", "2026-11-13T05:35:00+00:00", 30.0, transfer="Transfer")

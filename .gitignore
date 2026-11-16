@@ -2,7 +2,8 @@
 .venv/
 __pycache__/
 .ipynb_checkpoints/
-# Reports are the traveller's own trips, the kept ones in reports/saved/ too: none belongs in a public repository
+# Reports are the traveller's own trips, the kept ones in reports/saved/ too: none belongs in a public repository.
+# The few in demo/ are there on purpose, chosen for main.py --demo
 /reports/
 # The state of the Claude Code sessions that worked on the project
 .claude/

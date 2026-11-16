@@ -60,33 +60,33 @@ def sent(site, **changes) -> bytes:
     form.update({"token": site.token, "origin": "Coimbra", "destination": "Antwerp", "dates": DAY, **changes})
     return urlencode({name: value for name, value in form.items() if value is not None}, doseq=True).encode()
 
-def test_the_form_as_it_starts_gives_the_settings_of_settings_py():
+def test_form_starts_from_settings():
     site, started = site_and_searches()
     assert site.post("/search", sent(site)).location == "/search"
     settings = job.settings_for(started[0].values, SETTINGS)
     expected = dataclasses.replace(SETTINGS, origin="Coimbra", destination="Antwerp", dates=DAY)
     assert vars(settings) == vars(expected)
 
-def test_an_unticked_box_and_no_limit_of_changes_are_read_as_the_window_reads_them():
+def test_unticked_and_unlimited_read():
     read = fields.read({"max_changes_to_airport": "any", "max_changes_from_airport": "2", fields.DIRECT: "on"}, SETTINGS)
     assert read["max_changes_to_airport"] == NO_CHANGE_LIMIT and read["max_changes_from_airport"] == 2
     assert read["max_stopovers"] == 0 and read["confirm_airports"] is False and read["departure_scale"] == "near"
 
-def test_a_request_without_the_token_of_the_page_changes_nothing():
+def test_tokenless_request_ignored():
     site, started = site_and_searches()
     for path in ("/search", "/stop", "/place", "/airports", "/ask", "/keep", "/language"):
         assert site.post(path, sent(site, token="another")).status == 403
         assert site.post(path, b"origin=Coimbra").status == 403
     assert started == [] and site.token in site.get("/").html
 
-def test_the_first_page_says_when_the_models_key_is_missing(monkeypatch):
+def test_missing_key_shown(monkeypatch):
     site, started = site_and_searches()
     monkeypatch.setenv("GOOGLE_API_KEY", "x")
     assert tr("app_no_key") not in site.get("/").html
     monkeypatch.delenv("GOOGLE_API_KEY")
     assert tr("app_no_key") in site.get("/").html
 
-def test_a_setting_that_is_not_valid_is_answered_on_the_form_as_it_was_sent():
+def test_invalid_setting_answered():
     site, started = site_and_searches()
     reply = site.post("/search", sent(site, destination="Coimbra", extra_wishes="a window seat"))
     assert reply.status == 400 and 'role="alert"' in reply.html and started == []
@@ -95,7 +95,7 @@ def test_a_setting_that_is_not_valid_is_answered_on_the_form_as_it_was_sent():
     # The setting is named as the form names it, not as settings.py does
     assert "«" + form.label("fallback_radius_km") + "»" in reply.html and "`" not in reply.html
 
-def test_one_search_works_at_a_time_and_one_waiting_for_questions_gives_way():
+def test_one_search_at_once():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     assert site.post("/search", sent(site, destination="Ghent")).location == "/search" and len(started) == 1
@@ -103,7 +103,7 @@ def test_one_search_works_at_a_time_and_one_waiting_for_questions_gives_way():
     site.post("/search", sent(site, destination="Ghent"))
     assert len(started) == 2 and started[0].stopped and started[1].values["destination"] == "Ghent"
 
-def test_the_traveller_chooses_the_place_and_the_airports_when_asked_and_only_then():
+def test_places_chosen_when_asked():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     search_job = started[0]
@@ -118,7 +118,7 @@ def test_the_traveller_chooses_the_place_and_the_airports_when_asked_and_only_th
     site.post("/airports", urlencode({"token": site.token, "keep": ["ANR", "OPO"]}, doseq=True).encode())
     assert search_job.answers == [{"index": 1}, {"dropped": ["BRU"]}]
 
-def test_a_question_is_passed_on_once_the_trip_is_planned():
+def test_question_after_planning():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     site.post("/ask", sent(site, question="Is there an earlier train?"))
@@ -128,7 +128,7 @@ def test_a_question_is_passed_on_once_the_trip_is_planned():
     assert site.post("/ask", sent(site, question="Is there an earlier train?")).location == "/search#conversation"
     assert started[0].answers == [{"question": "Is there an earlier train?"}]
 
-def test_a_question_is_seen_at_once_with_its_answer_under_the_result_and_apart_from_it():
+def test_question_shown_at_once():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     search_job = started[0]
@@ -148,7 +148,7 @@ def test_a_question_is_seen_at_once_with_its_answer_under_the_result_and_apart_f
     assert "Yes, at 06:10." in conversation and "Yes, at 06:10." not in result and search_job.shown == ["# Final result"]
     assert 'action="/ask"' in conversation and thinking_words not in answered
 
-def test_what_the_planner_says_after_the_result_is_shown_with_it_not_folded_away():
+def test_closing_lines_shown():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     search_job = started[0]
@@ -160,7 +160,7 @@ def test_what_the_planner_says_after_the_result_is_shown_with_it_not_folded_away
     status = site.get("/search/part").html.split("<article>")[0]
     assert "did not answer (HTTPStatusError)" in status and "Flights: 26 found" not in status
 
-def test_a_question_the_model_did_not_answer_says_so():
+def test_unanswered_question_said():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     started[0].asked = ("ready", "")
@@ -170,7 +170,7 @@ def test_a_question_the_model_did_not_answer_says_so():
     part = site.get("/search/part").html
     assert 'role="alert">The model did not answer this question.' in part and 'action="/ask"' in part
 
-def test_the_part_of_a_working_search_is_marked_to_be_asked_again_until_it_waits_or_ends():
+def test_running_part_refreshes():
     site, started = site_and_searches()
     assert site.get("/search").location == "/"   # no search yet
     site.post("/search", sent(site))
@@ -181,7 +181,7 @@ def test_the_part_of_a_working_search_is_marked_to_be_asked_again_until_it_waits
     started[0].alive = False
     assert "data-working" not in site.get("/search/part").html and 'http-equiv="refresh"' not in site.get("/search").html
 
-def test_a_report_is_kept_and_put_back_with_its_folder(tmp_path):
+def test_report_kept_and_restored(tmp_path):
     path = reports.REPORTS / "trip_coimbra_antwerp_2026-11-02_1310" / "trip_coimbra_antwerp_2026-11-02_1310.md"
     path.parent.mkdir(parents=True)
     path.write_text("# Trip plan: Coimbra → Antwerp", encoding="utf-8")
@@ -196,14 +196,14 @@ def test_a_report_is_kept_and_put_back_with_its_folder(tmp_path):
     assert back.location == "/report/recent/trip_coimbra_antwerp_2026-11-02_1310" and path.exists()
     assert site.post("/keep", sent(site, report="../settings", keep="1")).status == 404
 
-def test_the_pages_follow_the_language_chosen():
+def test_pages_follow_language():
     site, _ = site_and_searches()
     site.post("/language", sent(site, language="pt-PT"))
     assert 'lang="pt-PT"' in site.get("/").html and "Planear uma viagem" in site.get("/").html
     site.post("/language", sent(site, language="xx"))
     assert 'lang="pt-PT"' in site.get("/").html
 
-def test_the_only_script_is_the_apps_own_file():
+def test_single_app_script():
     site, _ = site_and_searches()
     script = site.get("/page.js")
     assert script.status == 200 and script.kind.startswith("text/javascript") and "innerHTML" not in script.html
@@ -228,7 +228,7 @@ def wait_until(condition, seconds: float = 20) -> bool:
         time.sleep(0.05)
     return False
 
-def test_the_app_and_the_process_talk_line_by_line():
+def test_process_talks_by_line():
     found = search.Job({"origin": "Nazaré"}, [sys.executable, "-c", TALKING])
     assert wait_until(lambda: found.waiting("unclear"))
     assert found.lines == ["Locating"] and not found.working
@@ -236,16 +236,16 @@ def test_the_app_and_the_process_talk_line_by_line():
     assert wait_until(lambda: not found.running)
     assert found.lines == ["Locating", '{"index": 1}', "a warning of a library"] and found.failure == ""
 
-def test_a_process_that_ends_badly_without_saying_why_is_a_failure():
+def test_silent_crash_is_failure():
     found = search.Job({}, [sys.executable, "-c", "import sys; sys.exit(3)"])
     assert wait_until(lambda: not found.running) and "3" in found.failure
 
-def test_a_stopped_search_is_not_a_failure():
+def test_stopped_search_not_failure():
     found = search.Job({}, [sys.executable, "-c", "import time; time.sleep(60)"])
     found.stop()
     assert found.stopped and not found.running and found.failure == ""
 
-def test_a_search_starts_in_the_spare_process_and_another_waits_once_it_has_searched(monkeypatch):
+def test_spare_process_used(monkeypatch):
     said = "import json, sys; line = sys.stdin.readline(); print(json.dumps({'kind': 'done', 'text': line.strip()}), flush=True)"
     monkeypatch.setattr(search, "COMMAND", [sys.executable, "-c", said])
     monkeypatch.setattr(search, "SPARE", {"keep": False, "process": None})
@@ -261,13 +261,13 @@ def test_a_search_starts_in_the_spare_process_and_another_waits_once_it_has_sear
     search.close_spare()
     assert following.wait(timeout=10) is not None and search.SPARE == {"keep": False, "process": None}
 
-def test_the_process_refuses_a_trip_that_is_not_valid_before_it_searches():
+def test_process_refuses_invalid_trip():
     asked = json.dumps({"settings": {"origin": "Coimbra", "destination": "Antwerp", "dates": "01/01/2020"}}) + "\n"
     done = subprocess.run(search.COMMAND, cwd=search.ROOT, input=asked, capture_output=True, encoding="utf-8", timeout=60)
     events = [json.loads(line) for line in done.stdout.splitlines()]
     assert done.returncode == 1 and [event["kind"] for event in events] == ["failed"] and "2020" in events[0]["text"]
 
-def test_the_process_asks_plans_reports_and_answers(monkeypatch, tmp_path):
+def test_process_full_cycle(monkeypatch, tmp_path):
     from trip_planner import planner
     from trip_planner.sources import flight_search
     from trip_planner.trip import places as where
@@ -318,7 +318,7 @@ def test_the_process_asks_plans_reports_and_answers(monkeypatch, tmp_path):
     assert [airport["code"] for group in said[1]["text"]["groups"] for airport in group["airports"]] == ["LIS", "ANR"]
     assert said[6]["text"] == "printed by a library" and said[9]["text"] == "**Earlier?**"
 
-def test_the_form_counts_the_advanced_settings_changed_and_says_the_kind_of_trip():
+def test_form_counts_advanced_changes():
     site, _ = site_and_searches()
     assert "Advanced settings</summary>" in site.get("/").html and "One way" in site.get("/").html
     site.values = {**site.values, "options_shown": "9", "allow_estimated_prices": not SETTINGS.allow_estimated_prices,
@@ -328,7 +328,7 @@ def test_the_form_counts_the_advanced_settings_changed_and_says_the_kind_of_trip
     assert 'name="options_shown" value="9" min="1" max="10" step="1" data-default="' + str(SETTINGS.options_shown) + '"' in home
     assert 'data-swap hidden' in home   # shown by the script only: without it there is nothing to swap with
 
-def test_restore_brings_every_setting_back_but_the_places_and_the_days():
+def test_restore_keeps_places_days():
     site, started = site_and_searches()
     site.values = {**site.values, "options_shown": "9"}
     restored = site.post("/restore", sent(site, origin="Porto", destination="Ghent", options_shown="9"))
@@ -336,14 +336,14 @@ def test_restore_brings_every_setting_back_but_the_places_and_the_days():
     assert site.values["options_shown"] == fields.values_of(SETTINGS)["options_shown"]
     assert site.values["origin"] == "Porto" and site.values["destination"] == "Ghent" and site.values["dates"] == DAY
 
-def test_quit_stops_what_runs_and_then_the_server_and_only_from_the_app():
+def test_quit_stops_everything():
     site, started = site_and_searches()
     site.post("/search", sent(site))
     assert site.post("/quit", sent(site, token="another")).status == 403 and not site.quitting.is_set()
     closed = site.post("/quit", sent(site))
     assert closed.status == 200 and started[0].stopped and site.quitting.is_set()
 
-def test_what_no_one_foresaw_is_told_in_a_line_and_its_trace_goes_with_the_progress(monkeypatch):
+def test_unexpected_error_reported(monkeypatch):
     import trip_planner.tools.check as check
 
     async def broken():
@@ -357,7 +357,7 @@ def test_what_no_one_foresaw_is_told_in_a_line_and_its_trace_goes_with_the_progr
     assert said[-1] == {"kind": "failed", "text": tr("ui_failed", error="RuntimeError: boom")}
     assert said[0] == {"kind": "say", "text": "Traceback (most recent call last):"} and {event["kind"] for event in said[:-1]} == {"say"}
 
-def test_an_answer_to_a_process_that_has_ended_is_dropped_quietly():
+def test_late_answer_dropped():
     found = search.Job({}, [sys.executable, "-c", "pass"])
     assert wait_until(lambda: not found.running)
     found.answer({"question": "Still there?"})   # its pipe is closed: nothing to tell, nothing raised

@@ -50,8 +50,9 @@ async def ground_transport_for(flights: list[dict[str, Any]], timetables: Timeta
         used = {flight["departure_airport"] for flight in flights} | {flight["arrival_airport"] for flight in flights}
         airports = {code: current.TRIP.airport(code) for code in used}
         terminals = await asyncio.to_thread(find_terminals, list(airports.values()))
-        known = {code: terminals.get(code) is not None for code in airports}
-        spots = {code: tuple(terminals[code]) if known[code] else (airport["latitude"], airport["longitude"])
+        # Not named known: that is what earlier rounds found, read below for the operators' rides
+        has_terminal = {code: terminals.get(code) is not None for code in airports}
+        spots = {code: tuple(terminals[code]) if has_terminal[code] else (airport["latitude"], airport["longitude"])
                  for code, airport in airports.items()}
         zone_list = await asyncio.gather(
             timetables.zone(*origin), timetables.zone(*destination), *(timetables.zone(*spots[code], airport["country"]) for code, airport in airports.items()),
@@ -74,9 +75,9 @@ async def ground_transport_for(flights: list[dict[str, Any]], timetables: Timeta
         async def one(flight: dict[str, Any]) -> tuple:
             departure, arrival = flight["departure_airport"], flight["arrival_airport"]
             to_airport, from_airport = await asyncio.gather(
-                leg(lambda: timetables.to_airport(origin, spots[departure], flight, (zones["origin"], zones[departure]), known[departure], stops[departure]),
+                leg(lambda: timetables.to_airport(origin, spots[departure], flight, (zones["origin"], zones[departure]), has_terminal[departure], stops[departure]),
                     not zones["origin"] or not zones[departure]),
-                leg(lambda: timetables.from_airport(spots[arrival], destination, flight, (zones[arrival], zones["destination"]), known[arrival], stops[arrival]),
+                leg(lambda: timetables.from_airport(spots[arrival], destination, flight, (zones[arrival], zones["destination"]), has_terminal[arrival], stops[arrival]),
                     not zones["destination"] or not zones[arrival]),
             )
             return flight["id"], {"to_airport": to_airport, "from_airport": from_airport}
@@ -121,7 +122,7 @@ async def ground_transport_for(flights: list[dict[str, Any]], timetables: Timeta
             if rides_found is not None:
                 ground["operators" if to_airport else "operators_from"].setdefault(code, {}).setdefault(day, []).extend(rides_found)
         ground["not_on_sale"] = not_on_sale
-        await join_published_ends(timetables, ground, flights, spots, zones, known, airports)
+        await join_published_ends(timetables, ground, flights, spots, zones, has_terminal, airports)
         ground["requests"] = timetables.requests
         return ground
     finally:

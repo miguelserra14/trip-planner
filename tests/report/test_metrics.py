@@ -32,21 +32,21 @@ def failing_with(monkeypatch, errors: dict[str, Exception]) -> None:
     monkeypatch.setattr(steps, "check_itinerary", check)
 
 # ---------------------------------------------------------------- the funnel of a search
-def test_a_flight_left_out_keeps_the_kind_of_its_reason(monkeypatch):
+def test_rejection_keeps_kind(monkeypatch):
     failing_with(monkeypatch, {"CHEAP": Rejected("lands too late", "timetable"), "DEAR": KeyError("to_airport")})
     kinds = {}
     steps.itinerary_or_reason(CHEAP, {}, {}, {}, kinds=kinds)
     steps.itinerary_or_reason(DEAR, {}, {}, {}, kinds=kinds)
     assert kinds == {"CHEAP": "timetable", "DEAR": "program"}
 
-def test_the_search_keeps_its_funnel_with_the_cheapest_ticket(monkeypatch):
+def test_funnel_keeps_cheapest_ticket(monkeypatch):
     failing_with(monkeypatch, {"CHEAP": Rejected("the coach does not run that day", "not_running")})
     found = steps.build_itineraries({"flights": [DEAR, CHEAP], "checked": ["CHEAP"], "ground": {}, "transfers": [], "trains": []})
     assert found["funnel"] == {"found": 2, "checked": 1, "cheapest_flight": "CHEAP", "cheapest_ticket_eur": 20.0,
                                "left_out": [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "not_running"}], "itineraries": {}}
     assert tool.cheapest_was_impossible(found["funnel"])
 
-def test_a_rejection_by_the_travellers_limits_is_not_proven_impossible():
+def test_limit_rejection_not_proven():
     funnel = metrics.funnel([CHEAP, DEAR], {"CHEAP", "DEAR"}, {"CHEAP": "ground_choice"})
     assert "ground_choice" not in PROVEN and not tool.cheapest_was_impossible(funnel)
 
@@ -60,7 +60,7 @@ def searched(itineraries: dict, left_out: list, checked=("CHEAP", "DEAR")) -> di
     return {"flights": [CHEAP, DEAR], "checked": list(checked), "shown": [{"total_cost": 40.0}, {"total_cost": 95.0}],
             "funnel": {"left_out": left_out, "itineraries": itineraries}}
 
-def test_the_planner_says_what_it_made_of_the_flight_a_map_opened_it_on():
+def test_planner_reports_map_flight():
     made = metrics.watched(ESTIMATE, searched({"CHEAP": {"total_eur": 38.0, "flight_eur": 21.0}}, []))
     assert made == {"found": True, "cheapest_eur": 40.0, "ticket_eur": 20.0, "checked": True, "total_eur": 38.0, "flight_eur": 21.0, "left_out": None}
     gone = metrics.watched(ESTIMATE, searched({}, [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "timetable"}]))
@@ -71,7 +71,7 @@ def test_the_planner_says_what_it_made_of_the_flight_a_map_opened_it_on():
 def opened(planner: dict, written: str = "2026-11-10T10:20", **estimate) -> dict:
     return {"from_map": {**ESTIMATE, **estimate, "planner": planner}, "written": written}
 
-def test_the_map_is_measured_against_the_planner_only_for_searches_run_soon_after_the_click():
+def test_only_prompt_searches_measured():
     reports = [opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0}),                        # 3 EUR dearer: within 10%
                opened({"found": True, "total_eur": 50.0, "flight_eur": 20.0}, looked_up=False),       # 15 EUR dearer
                opened({"found": True, "left_out": "timetable"}),                                       # the map's flight cannot be made
@@ -86,14 +86,14 @@ def test_the_map_is_measured_against_the_planner_only_for_searches_run_soon_afte
     assert "estimated ways (2)" in groups[2]
     assert tool.map_part([]) == ["Discover against the planner: no search opened from a map yet."]
 
-def test_each_search_a_map_opened_has_a_line_with_what_the_planner_made_of_it():
+def test_one_line_per_search():
     lines = tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0, "cheapest_eur": 40.0}),
                            opened({"found": True, "left_out": "timetable", "cheapest_eur": 70.0}),
                            opened({"found": False, "cheapest_eur": 70.0})])
     assert lines[2].split() == ["Porto", "Brussels", "ring", "35", "38", "+9%", "shown", "40"]
     assert lines[3].split()[-2:] == ["timetable", "70"] and "flight not found" in lines[4]
 
-def test_a_map_trip_the_planner_hides_by_its_own_rules_is_counted_with_what_it_showed_instead():
+def test_hidden_trip_compared():
     hidden = {"found": True, "total_eur": 35.0, "flight_eur": 20.0, "left_out": "below_minimum", "cheapest_eur": 70.0}
     lines = tool.map_part([opened(hidden), opened({"found": True, "total_eur": 36.0, "flight_eur": 20.0, "cheapest_eur": 36.0})])
     every = lines[4]
@@ -101,7 +101,7 @@ def test_a_map_trip_the_planner_hides_by_its_own_rules_is_counted_with_what_it_s
     # The map said 35 EUR: the planner showed 70 (+100%) in one search and 36 (+3%) in the other
     assert "The planner's cheapest option against the map's price: median +51%, 50% at most 20% dearer" in every
 
-def test_the_pairs_where_the_planner_only_guessed_its_ground_prices_are_told_apart():
+def test_guessed_pairs_told_apart():
     fares = opened({"found": True, "total_eur": 36.0, "flight_eur": 20.0, "guessed_eur": 2.0})
     guess = opened({"found": True, "total_eur": 50.0, "flight_eur": 20.0, "guessed_eur": 18.0})
     older = opened({"found": True, "total_eur": 40.0, "flight_eur": 20.0})   # made before guessed_eur was kept: in neither
@@ -109,18 +109,18 @@ def test_the_pairs_where_the_planner_only_guessed_its_ground_prices_are_told_apa
     assert any(line.startswith("  planner's ways priced from fares (a guess of at most 5 EUR) (1)") for line in groups)
     assert any(line.startswith("  planner's ways partly a guess (over 5 EUR) (1)") for line in groups)
 
-def test_an_itinerary_keeps_how_much_of_its_ground_price_is_a_guess():
+def test_itinerary_keeps_guessed_part():
     built = {"flight": CHEAP, "total_cost": 41.0, "flight_price": 20.0,
              "to": {"price_eur": 18.0, "price_kind": "model"}, "from": {"price_eur": 3.0, "price_kind": "operator"}}
     assert metrics.funnel([CHEAP], {"CHEAP"}, {}, [built])["itineraries"]["CHEAP"] == {"total_eur": 41.0, "flight_eur": 20.0, "guessed_eur": 18.0}
 
-def test_a_map_there_and_back_is_compared_on_its_ways_to_the_airports_only():
+def test_round_map_compares_access():
     lines = tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0, "cheapest_eur": 40.0}, round_trip=True)])
     assert "To and from the airports" in lines[3] and "Door to door" not in lines[3] and "cheapest option" not in lines[3]
     assert "Door to door, one-way maps: median +8%" in tool.map_part([opened({"found": True, "total_eur": 38.0, "flight_eur": 21.0})])[3]
 
 # ---------------------------------------------------------------- the models
-def test_plan_b_and_the_failed_calls_are_counted_from_the_log():
+def test_fallbacks_counted_from_log():
     log = [{"service": "model call", "what": "gemini-3.1-flash-lite", "result": "error: 429"},
            {"service": "model call", "what": "ministral-14b-latest", "result": "ok"},
            {"service": "model", "what": "coordinator, google_genai:gemini-3-pro", "result": "error: timeout"},
@@ -129,20 +129,20 @@ def test_plan_b_and_the_failed_calls_are_counted_from_the_log():
            {"service": "Kiwi", "what": "OPO -> BRU", "result": "ok: 15 flights"}]
     assert metrics.model_use(log) == {"calls": 4, "failed": 2, "plan_b": 2, "recommendation_by": "mistralai:ministral-14b-latest"}
 
-def test_the_checks_of_the_models_text_are_kept_with_the_report(monkeypatch):
+def test_claim_checks_kept(monkeypatch):
     monkeypatch.setattr(metrics, "COUNTS", Counter(links_dropped=2, claims_corrected=1))
     assert metrics.of({"funnel": None})["checks"] == {"links_dropped": 2, "claims_corrected": 1}
 
 # ---------------------------------------------------------------- older reports, in words
 @pytest.mark.parametrize("language", ["en", "pt-PT"])
-def test_a_connection_a_real_timetable_rules_out_is_read_in_every_language(language):
+def test_timetable_rejection_any_language(language):
     assert tool.kind_of(text_in(language, "reject_no_connection_after_landing", **LANDING_TOO_LATE)) == "timetable"
 
-def test_a_connection_ruled_out_by_a_models_timetable_is_not_proven():
+def test_model_rejection_not_proven():
     said = text_in("en", "unverified_basis") + " " + text_in("en", "reject_no_connection_after_landing", **LANDING_TOO_LATE)
     assert tool.kind_of(said) == "estimate"
 
-def test_the_funnel_of_an_older_report_is_read_from_its_words(tmp_path):
+def test_old_funnel_from_words(tmp_path):
     report = tmp_path / "trip_coimbra_antuerpia_2026-10-08_1845.md"
     reason = text_in("pt-PT", "reject_no_connection_after_landing", **LANDING_TOO_LATE)
     report.write_text("\n".join([

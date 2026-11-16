@@ -2,11 +2,13 @@
 tests replay them through the map's own code, with no network. `pytest --live discover -k Coimbra` records
 one case again. Only the fields the code reads are kept, so a checkpoint stays small enough for the repository.
 
-Three kinds of case:
+Five kinds of case:
 - ground: the trains and buses straight from a city (ground.from_city), every request to Transitous it made;
 - sold: the coaches Rede Expressos or Movelia sell straight from a city (sold.from_city), every search it made and
   the GeoNames cities it asked about;
-- ryanair: the cheapest fare to each destination from an airport, one way (sources.ryanair_destinations)."""
+- ryanair: the cheapest fare to each destination from an airport, one way (sources.ryanair_destinations);
+- flown: the routes flown from an airport (flown.routes), its Wikipedia table as Tavily read it and Wikidata's answers;
+- wikidata: the cities Wikidata says some airports serve (access.ask_wikidata)."""
 import json
 from datetime import date, timedelta
 from pathlib import Path
@@ -15,7 +17,8 @@ from typing import Any
 
 import httpx
 
-from discover.flights import sources
+from discover.airports import access
+from discover.flights import flown, sources
 from discover.overland import ground, sold
 from trip_planner.trip.places import distance_km
 from trip_planner.utils import plain
@@ -227,6 +230,62 @@ def replay_sold(record: dict[str, Any], monkeypatch) -> None:
     monkeypatch.setattr(sold, "rede_expressos_schedules", answering("rede-expressos"))
     monkeypatch.setattr(sold, "movelia_search", answering("movelia"))
     monkeypatch.setattr(sold, "movelia_places", lambda: record["movelia_places"])
+
+def article_table(text: str) -> str:
+    """The part of a Wikipedia article flown.table_rows reads: from its "Airlines and destinations" heading to
+    the end of the table. The whole article when there is no such table, so a test says what was read instead."""
+    heading = text.find("Airlines and destinations")
+    start = text.find("| Airlines", heading) if heading >= 0 else -1
+    if start < 0:
+        return text
+    lines = text[start:].splitlines()
+    end = next((at for at, line in enumerate(lines) if at >= 2 and not line.startswith("|")), len(lines))
+    return text[heading:start] + "\n".join(lines[:end]) + "\n"
+
+def keeping_sparql(monkeypatch) -> list[list]:
+    """Wikidata's real answers, each [query, rows], kept as access.sparql makes them."""
+    answers: list[list] = []
+    real = access.sparql
+
+    def kept(query: str) -> list[dict[str, str]]:
+        rows = real(query)
+        answers.append([" ".join(query.split()), rows])
+        return rows
+    monkeypatch.setattr(access, "sparql", kept)
+    return answers
+
+def replay_sparql(answers: list[list], monkeypatch) -> None:
+    saved = {query: rows for query, rows in answers}
+
+    def answer(query: str) -> list[dict[str, str]]:
+        if " ".join(query.split()) not in saved:
+            raise AssertionError(f"not asked when recorded: {' '.join(query.split())[:200]}. Record again with pytest --live")
+        return saved[" ".join(query.split())]
+    monkeypatch.setattr(access, "sparql", answer)
+
+def record_flown(case, monkeypatch) -> dict[str, Any]:
+    """The routes flown from one airport (flown.routes): its Wikipedia article as Tavily read it, cut to the table,
+    and Wikidata's answers. One Tavily credit."""
+    from discover.airports.transfers import tavily_extract
+    answers = keeping_sparql(monkeypatch)
+    articles: dict[str, str] = {}
+
+    def extract(url: str) -> str:
+        articles[url] = article_table(tavily_extract(url))
+        return articles[url]
+    today = date.today()
+    found = flown.routes([case.airport], today, say=lambda *_: None, extract=extract)
+    record = {"case": case.name, "recorded": today.isoformat(), "routes": found, "articles": articles, "answers": answers}
+    save("flown", case.name, record)
+    return record
+
+def record_wikidata(case, monkeypatch) -> dict[str, Any]:
+    """The cities Wikidata says some airports serve (access.ask_wikidata): one query."""
+    answers = keeping_sparql(monkeypatch)
+    access.ask_wikidata(sorted(case.serves))
+    record = {"case": case.name, "recorded": date.today().isoformat(), "answers": answers}
+    save("wikidata", case.name, record)
+    return record
 
 class Answer:
     """A response of httpx with a saved body, for code that calls raise_for_status and json."""

@@ -1,9 +1,12 @@
 """Discover: from one city, where can the traveller fly cheaply? A map of every destination with the cheapest flight
 found to it from the airports around the city, like the "discover" pages of the low-cost companies.
 
-A feature apart from the trip planner, and a draft. It uses much of the planner's code (places, Kiwi, the
-timetables, the operators' prices, the legs and their estimates) without changing anything in it, and the planner
-never imports it. What it makes stays in this folder.
+A feature apart from the trip planner, in beta: it is for exploring, and the planner checks the trip chosen. Measured
+against the planner on 31 trips of six maps (app/sample.py, `main.py --funnel reports/sample`, 2026-11-16), 85% of
+the map's prices from door to door were within 20% of the planner's, and no trip looked up in the timetables (a
+dark ring) was proven impossible. It uses much of the planner's code (places, Kiwi, the timetables, the operators'
+prices, the legs and their estimates) without changing anything in it, and the planner never imports it. What it
+makes stays in this folder.
 
     TripPlanner.bat, then "Discover" at the top of the page   the form: a city, the days; the map opens as it is made
     python -m discover Coimbra 12/11/2026 19/11/2026          the map as a file, from the terminal, in the repository's folder

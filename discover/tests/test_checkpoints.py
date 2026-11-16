@@ -3,7 +3,8 @@ with `pytest --live discover -k <case>`. The other tests of discover give made-u
 changes what it answers is caught here, on the next recording, and nowhere else.
 
 Each case holds a fact of the real world a sound answer must show: Coimbra has trains to Lisbon and Porto, Antwerp
-to Brussels and Amsterdam; Ryanair flies from Porto and Charleroi to many places."""
+to Brussels and Amsterdam; Ryanair flies from Porto and Charleroi to many places; Marignane's airport serves
+Marseille. OpenFlights (routes.py) has none: its files were last changed in 2014, and rows_of checks each one."""
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -11,10 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from discover.flights import sources
+from discover.airports import access
+from discover.flights import flown, sources
 from discover.overland import ground, sold
 from discover.tests import recorder
-from trip_planner.trip.places import distance_km, Place
+from trip_planner.trip.places import distance_km, load_airports, Place
 
 LISBON, PORTO = (38.72, -9.14), (41.15, -8.61)
 BRUSSELS, AMSTERDAM = (50.85, 4.35), (52.37, 4.90)
@@ -55,6 +57,26 @@ class RyanairCase:
 
 RYANAIR_CASES = [RyanairCase("OPO", "OPO", 15), RyanairCase("CRL", "CRL", 20)]
 
+@dataclass(frozen=True)
+class FlownCase:
+    name: str
+    airport: str
+    at_least: int      # destinations of the table: both airports fly to dozens
+    flies_to: tuple    # routes flown for years, by the airline that flies them
+    airlines: tuple
+
+FLOWN_CASES = [FlownCase("OPO_routes", "OPO", 40, (("LIS", "TAP Air Portugal"), ("STN", "Ryanair")), ("Ryanair", "TAP Air Portugal")),
+               FlownCase("CRL_routes", "CRL", 60, (("FCO", "Ryanair"), ("OPO", "Ryanair")), ("Ryanair", "Wizz Air"))]
+
+@dataclass(frozen=True)
+class WikidataCase:
+    name: str
+    serves: dict       # IATA code: the city travellers go to from that airport
+    not_cities: dict   # IATA code: a place Wikidata gives that is not a city and must be left out
+
+WIKIDATA_CASES = [WikidataCase("airport_cities", {"MRS": "Marseille", "BGY": "Bergamo", "STN": "London", "OPO": "Porto", "RBA": "Rabat"},
+                               {"HHN": "Rhineland-Palatinate"})]
+
 TIME = re.compile(r"^\d\d:\d\d$")
 
 RECORDED: dict[tuple, dict] = {}   # the cases recorded in this run: each is asked of the services once, not once per test
@@ -92,6 +114,27 @@ def sold_case(request, monkeypatch):
     sold.SOLD.unlink(missing_ok=True)   # what a recording kept: the replay must read the answers, not that
     reached = sold.from_city(case.place, date.fromisoformat(record["recorded"]), say=lambda *_: None)
     return case, record, reached
+
+@pytest.fixture(params=FLOWN_CASES, ids=lambda case: case.name)
+def flown_case(request, monkeypatch, tmp_path):
+    """The routes flown from the case's airport, read from its Wikipedia table: replayed, or read again with --live."""
+    case = request.param
+    monkeypatch.setattr(flown, "ROUTES", tmp_path / "airport_routes.json")
+    record = recorded(request, "flown", case.name, lambda: recorder.record_flown(case, monkeypatch))
+    recorder.replay_sparql(record["answers"], monkeypatch)
+    flown.ROUTES.unlink(missing_ok=True)   # what a recording kept: the replay must read the answers, not that
+    extract = lambda url: record["articles"][url]
+    found = flown.routes([case.airport], date.fromisoformat(record["recorded"]), say=lambda *_: None, extract=extract)
+    return case, record, found.get(case.airport, {}).get("routes", [])
+
+@pytest.fixture(params=WIKIDATA_CASES, ids=lambda case: case.name)
+def wikidata_case(request, monkeypatch):
+    """Wikidata's answer about the case's airports: replayed, or asked again with --live."""
+    case = request.param
+    record = recorded(request, "wikidata", case.name, lambda: recorder.record_wikidata(
+        WikidataCase(case.name, {**case.serves, **case.not_cities}, {}), monkeypatch))
+    recorder.replay_sparql(record["answers"], monkeypatch)
+    return case, access.ask_wikidata(sorted({**case.serves, **case.not_cities}))
 
 @pytest.fixture(params=RYANAIR_CASES, ids=lambda case: case.name)
 def ryanair_case(request, monkeypatch):
@@ -147,6 +190,30 @@ def test_every_coach_sold_says_when_and_by_whom(sold_case):
         assert stop["mode"] == "bus" and stop["operator"] and stop["source"] in sold.OPERATORS, where
         assert 0 < stop["minutes"] <= 24 * 60 and stop["times"] and all(TIME.match(time) for time in stop["times"]), where
         assert stop["weekdays"] and set(stop["weekdays"]) <= set(ground.WEEKDAYS), where
+
+def test_the_routes_of_an_airport_are_read_from_its_wikipedia_table(flown_case):
+    case, record, routes = flown_case
+    assert routes == record["routes"][case.airport]["routes"], "the replay reads the table otherwise than the recording did"
+    assert len({route["to"] for route in routes}) >= case.at_least
+    airlines = {route["airline"] for route in routes}
+    assert set(case.airlines) <= airlines, f"airlines read: {sorted(airlines)[:20]}"
+    for code, airline in case.flies_to:
+        assert any(route["to"] == code and route["airline"] == airline for route in routes), f"{case.airport} -> {code} by {airline}"
+
+def test_every_route_read_is_an_airport_of_the_database(flown_case):
+    case, record, routes = flown_case
+    airports = load_airports()
+    assert all(route["to"] in airports and route["to"] != case.airport for route in routes)
+    assert any(route["seasonal"] for route in routes) and not all(route["seasonal"] for route in routes)
+
+def test_the_city_an_airport_serves_is_the_one_travellers_go_to(wikidata_case):
+    case, rows = wikidata_case
+    airports = load_airports()
+    for code, city in case.serves.items():
+        chosen = access.served([row for row in rows if row["iata"] == code], airports[code])
+        assert chosen and chosen["name"] == city, f"{code} serves {chosen and chosen['name']}"
+    for code, region in case.not_cities.items():
+        assert region not in {row["cityLabel"] for row in rows if row["iata"] == code}, f"{code}: {region} is no city"
 
 def test_ryanair_flies_from_its_bases_to_many_places(ryanair_case):
     case, days, flights = ryanair_case

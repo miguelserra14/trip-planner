@@ -1,0 +1,7 @@
+{
+"case": "airport_cities",
+"recorded": "2026-11-16",
+"answers": [
+  ["SELECT ?iata ?cityLabel ?population ?coord ?voyage WHERE { VALUES ?iata { \"BGY\" \"HHN\" \"MRS\" \"OPO\" \"RBA\" \"STN\" } ?airport wdt:P238 ?iata ; wdt:P931 ?city . ?city wdt:P625 ?coord . # A state or a region is no city: Frankfurt-Hahn \"serves\" Rhineland-Palatinate FILTER NOT EXISTS { ?city wdt:P31/wdt:P279* wd:Q10864048 } OPTIONAL { ?city wdt:P1082 ?population } OPTIONAL { ?voyage schema:about ?city ; schema:isPartOf <https://en.wikivoyage.org/> } SERVICE wikibase:label { bd:serviceParam wikibase:language \"en\". } }", [{"voyage": "https://en.wikivoyage.org/wiki/London", "iata": "STN", "coord": "Point(-0.1275 51.507222222)", "population": "8799728", "cityLabel": "London"}, {"voyage": "https://en.wikivoyage.org/wiki/Bergamo", "iata": "BGY", "coord": "Point(9.67 45.695)", "population": "119534", "cityLabel": "Bergamo"}, {"voyage": "https://en.wikivoyage.org/wiki/Marseille", "iata": "MRS", "coord": "Point(5.376388888 43.296666666)", "population": "886040", "cityLabel": "Marseille"}, {"voyage": "https://en.wikivoyage.org/wiki/Rabat", "iata": "RBA", "coord": "Point(-6.841388888 34.021111111)", "population": "515619", "cityLabel": "Rabat"}, {"iata": "RBA", "coord": "Point(-6.816667 34.05)", "population": "945101", "cityLabel": "Salé"}, {"voyage": "https://en.wikivoyage.org/wiki/Porto", "iata": "OPO", "coord": "Point(-8.610833333 41.15)", "population": "231800", "cityLabel": "Porto"}]]
+]
+}

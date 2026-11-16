@@ -250,7 +250,8 @@ whose buses are in no published timetable.
 
 Discover's tests give made-up answers, except `discover/tests/test_checkpoints.py`: what Transitous answered for the
 trains and buses straight from Coimbra and Antwerp, the coaches Rede Expressos sells from Coimbra and Movelia from
-Madrid, and Ryanair's fares from Porto and Charleroi, saved in
+Madrid, Ryanair's fares from Porto and Charleroi, the routes of the Wikipedia tables of those two airports and
+the cities Wikidata says some airports serve, saved in
 `discover/tests/checkpoints/` with only the fields the code reads (`discover/tests/recorder.py`). They are replayed
 through the map's own code and checked against facts a sound answer shows (Antwerp has trains to Brussels and
 Amsterdam). `pytest --live discover/tests -k Antwerp` records one case again: two minutes of Transitous.

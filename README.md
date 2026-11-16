@@ -21,7 +21,7 @@ Two tools share the same code:
 
 - **The trip planner**: from A to B on the dates you give, one way or there and back. Up to five options, compared
   side by side, each with its timeline, its sources and the links to book every part.
-- **Discover** (a draft): from your city, on the free days you give, a map of every place you can reach cheaply, by
+- **Discover** (beta): from your city, on the free days you give, a map of every place you can reach cheaply, by
   plane, train or bus, with the way to and from the airports counted in the price. A click on a destination opens
   the planner on that trip, to check it in the real timetables.
 

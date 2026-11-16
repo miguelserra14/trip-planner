@@ -243,3 +243,25 @@ def test_only_the_cities_no_train_reaches_straight_are_asked_the_nearest_first_w
     assert backs == [("50.9,4.48", "2026-11-23"), ("48.14,11.56", "2026-11-23")] and {modes for *_, modes in plans.asked} == {"RAIL"}
     assert munich["ground"][0]["back"] == {"day": "2026-11-23", "days": 1, "times": [], "minutes": 0}   # no train that day: said so
     assert straight["ground"] == [{"operator": "NS International"}] and "ground" not in faraway
+
+def test_cp_s_long_distance_trains_are_read_although_its_feed_calls_them_regional(monkeypatch):
+    asked = []
+
+    def get(self, path, **params):
+        asked.append((params["stopId"], params["mode"]))
+        train = lambda route: {"tripId": route, "mode": "REGIONAL_RAIL", "routeShortName": route, "place": {}}
+        return {"stopTimes": [train("AP"), train("IC"), train("IR"), train("R"),
+                              {"tripId": "flix", "mode": "COACH", "place": {}}]}
+    monkeypatch.setattr(ground.Transitous, "get", get)
+    transitous = ground.Transitous()
+    found = transitous.departures("pt-Comboios-de-Portugal(CP)_94_36004", ground.datetime(2026, 11, 23))
+    assert [each["tripId"] for each in found] == ["AP", "IC", "IR", "flix"]   # the R trains stop everywhere: left out
+    assert "REGIONAL_RAIL" in asked[0][1]
+    transitous.departures("eu-flixbus_c9e8bf88", ground.datetime(2026, 11, 23))
+    assert "REGIONAL_RAIL" not in asked[1][1]   # nowhere else: Germany's regional trains would fill MAX_TRIPS
+
+def test_a_regional_station_of_cp_is_one_of_the_city_s_stations(monkeypatch):
+    stops = [{"name": "Coimbra-B", "stopId": "pt-Comboios-de-Portugal(CP)_94_36004", "lat": 40.22, "lon": -8.44, "modes": ["REGIONAL_RAIL", "SUBURBAN"]},
+             {"name": "Köln Messe", "stopId": "de-DELFI_1", "lat": 40.21, "lon": -8.43, "modes": ["REGIONAL_RAIL"]}]
+    monkeypatch.setattr(ground.Transitous, "get", lambda self, path, **params: stops)
+    assert [stop["name"] for stop in ground.Transitous().stops(COIMBRA)] == ["Coimbra-B"]

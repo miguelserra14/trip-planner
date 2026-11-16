@@ -70,12 +70,16 @@ RAIL_OPERATORS = {
 }
 COMPANY = re.compile(r",?\s+(a\.\s?s\.|s\.r\.o\.|ab|ag|gmbh\b.*|zrt\.|s\.?a\.?|s\.p\.a\.|s\.?\s?l\.?(\s?u\.?)?)$", re.IGNORECASE)
 LONG_MODES = ("HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "COACH")   # the departures read: no local ones
+# The feeds that call their long-distance trains REGIONAL_RAIL, and the route names of those trains: CP's Alfa
+# Pendular, Intercidades and Inter-regional (2026-11-16). Their stations are asked for REGIONAL_RAIL too, and of
+# those departures only these routes are kept: the R trains stop everywhere and would fill MAX_TRIPS.
+REGIONAL_LONG = {"pt-Comboios-de-Portugal(CP)_": ("AP", "IC", "IR")}
 # The bus stops read. FlixBus's are also in a "gb-flixbus_" feed, under the same ids and with the same buses;
 # a "Waypoint" of FlixBus is where its buses pass, not where travellers get on or off ("Kornwestheim Pre Waypoint").
 COACH_FEEDS = ("eu-blablacar-bus_", "eu-flixbus_", ALSA_STOP)
 GROUND = Path(__file__).parents[1] / "cache" / "ground.json"   # the way out found for each city
 GROUND_DAYS = 30           # a city's trains and buses are looked for again after this long...
-GROUND_VERSION = 5         # ... or when what is read changes: 5, the long-distance trains of every operator (2026-11-09)
+GROUND_VERSION = 6         # ... or when what is read changes: 6, CP's long-distance trains (REGIONAL_LONG, 2026-11-16)
 STOP_KM = 12               # the stations this close to the traveller's city are its stations
 MATCH_KM = 20              # a station this close to the centre of a city of the map reaches that city
 # A city no flight of the map goes to is shown when a train or bus reaches it straight, farther than this (Antwerp
@@ -163,6 +167,10 @@ def operator_of(agency: str, mode: str = "", stop_id: str = "") -> tuple[str, st
     shown = " ".join(word.title() if word.isupper() and len(word) > 3 else word for word in agency.split())
     return (shown if source.name == "Movelia" else source.name), "", source.country
 
+def regional_long(stop_id: str) -> tuple[str, ...]:
+    """The route names of the long-distance trains a station's feed calls REGIONAL_RAIL (REGIONAL_LONG), else ()."""
+    return next((routes for feed, routes in REGIONAL_LONG.items() if stop_id.startswith(feed)), ())
+
 def mode_of(modes: str) -> str:
     return "bus" if modes == "COACH" else "train"
 
@@ -186,14 +194,16 @@ class Transitous:
         degrees = STOP_KM / 111
         found = self.get("map/stops", min=f"{place.latitude + degrees},{place.longitude - degrees * 1.6}",
                          max=f"{place.latitude - degrees},{place.longitude + degrees * 1.6}")
-        rail = lambda stop: set(stop.get("modes") or []) & (set(LONG_MODES) - {"COACH"})
+        rail = lambda stop: set(stop.get("modes") or []) & (set(LONG_MODES) - {"COACH"} | ({"REGIONAL_RAIL"} if regional_long(stop.get("stopId", "")) else set()))
         return [stop for stop in found if (rail(stop) or stop.get("stopId", "").startswith(COACH_FEEDS))
                 and not waypoint(stop.get("name", ""))
                 and distance_km(place.latitude, place.longitude, stop["lat"], stop["lon"]) <= STOP_KM]
 
     def departures(self, stop_id: str, start: datetime) -> list[dict[str, Any]]:
-        return self.get("stoptimes", stopId=stop_id, time=start.strftime("%Y-%m-%dT%H:%M:%SZ"), n=MAX_DEPARTURES,
-                        window=WEEK_SECONDS, mode=",".join(LONG_MODES)).get("stopTimes") or []
+        routes = regional_long(stop_id)
+        found = self.get("stoptimes", stopId=stop_id, time=start.strftime("%Y-%m-%dT%H:%M:%SZ"), n=MAX_DEPARTURES,
+                         window=WEEK_SECONDS, mode=",".join(LONG_MODES + (("REGIONAL_RAIL",) if routes else ()))).get("stopTimes") or []
+        return [each for each in found if each.get("mode") != "REGIONAL_RAIL" or each.get("routeShortName") in routes]
 
     def trip(self, trip_id: str) -> dict[str, Any]:
         return self.get("trip", tripId=trip_id)

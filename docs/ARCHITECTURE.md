@@ -248,6 +248,13 @@ one file per place, so a failure says at which stage a country breaks and the st
 code without asking anyone. A route that cannot work is marked with `known_gap` and its reason, such as Malta,
 whose buses are in no published timetable.
 
+Discover's tests give made-up answers, except `discover/tests/test_checkpoints.py`: what Transitous answered for the
+trains and buses straight from Coimbra and Antwerp, the coaches Rede Expressos sells from Coimbra and Movelia from
+Madrid, and Ryanair's fares from Porto and Charleroi, saved in
+`discover/tests/checkpoints/` with only the fields the code reads (`discover/tests/recorder.py`). They are replayed
+through the map's own code and checked against facts a sound answer shows (Antwerp has trains to Brussels and
+Amsterdam). `pytest --live discover/tests -k Antwerp` records one case again: two minutes of Transitous.
+
 ## What can and cannot be reproduced
 
 The **environment** is reproducible: the Python version and every package are pinned, and the airport database is a

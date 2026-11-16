@@ -15,6 +15,14 @@ from discover import finder
 from discover.overland import ground, ground_fares, sold
 from trip_planner import current
 
+def pytest_addoption(parser):
+    """--live, as tests/conftest.py gives it, for `pytest --live discover/tests -k Coimbra` alone: run with the
+    planner's tests, it is added there already."""
+    try:
+        parser.addoption("--live", action="store_true", help="ask the real services and save new checkpoints")
+    except ValueError:
+        pass
+
 @pytest.fixture(autouse=True)
 def no_ground(monkeypatch, tmp_path):
     monkeypatch.setattr(current, "SETTINGS", dataclasses.replace(current.SETTINGS or SETTINGS, language="en"))

@@ -154,3 +154,35 @@ def test_old_funnel_from_words(tmp_path):
     assert (funnel["found"], funnel["checked"], funnel["cheapest_ticket_eur"]) == (40, 12, 20.0)
     assert funnel["left_out"] == [{"flight": "OPO-BRU-1", "ticket_eur": 20.0, "why": "timetable"}]
     assert tool.cheapest_was_impossible(funnel)
+
+# ---------------------------------------------------------------- the cheapest ticket against the cheapest trip
+def made(left_out: list[dict], **totals: float) -> dict:
+    """A funnel whose cheapest ticket is CHEAP, with an itinerary of each total given, by flight."""
+    return {"cheapest_flight": "CHEAP", "left_out": left_out,
+            "itineraries": {flight: {"total_eur": total} for flight, total in totals.items()}}
+
+def test_cheapest_trip_other_flight():
+    assert tool.cheapest_trip(made([], CHEAP=120.0, DEAR=95.0)) == {"outcome": "dearer", "saving_eur": 25.0}
+
+def test_cheapest_trip_within_tie():
+    assert tool.cheapest_trip(made([], CHEAP=95.5, DEAR=95.0)) == {"outcome": "same"}
+
+def test_impossible_ticket_keeps_kind():
+    left_out = [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "timetable"}]
+    assert tool.cheapest_trip(made(left_out, DEAR=95.0)) == {"outcome": "timetable"}
+
+def test_hidden_trip_not_compared():
+    left_out = [{"flight": "DEAR", "ticket_eur": 90.0, "why": "below_minimum"}]
+    assert tool.cheapest_trip(made(left_out, CHEAP=120.0, DEAR=95.0)) == {"outcome": "same"}
+
+def test_slow_trip_still_compared():
+    left_out = [{"flight": "CHEAP", "ticket_eur": 20.0, "why": "not_worth_it"}]
+    assert tool.cheapest_trip(made(left_out, CHEAP=80.0, DEAR=95.0)) == {"outcome": "same"}
+
+def test_hypothesis_counted_by_origin():
+    reports = [{"report": "trip_lisboa_paris_2026-12-05_1000", "funnel": made([], CHEAP=120.0, DEAR=95.0)},
+               {"report": "trip_lisboa_roma_2026-12-05_1100", "funnel": made([], CHEAP=60.0)},
+               {"report": "trip_coimbra_paris_2026-12-05_1200", "funnel": {"left_out": [], "cheapest_flight": "CHEAP"}}]
+    lines = tool.hypothesis_part(reports)
+    assert "(2 trips, 1 older ones keep no itineraries)" in lines[0] and "in 1 (50%)" in lines[0]
+    assert "median 25 EUR less" in lines[0] and lines[1] == "  By origin: lisboa 1/2."

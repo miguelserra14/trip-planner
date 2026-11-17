@@ -223,7 +223,6 @@ def tavily_search(query: str) -> list[dict[str, str]]:
 
 def ask_model(airport: dict[str, Any], city: str, sources: list[dict[str, str]]) -> list[dict[str, Any]]:
     """What the model points at in the texts: the options, as it wrote them, to be checked."""
-    from langchain.chat_models import init_chat_model
     from trip_planner.agents import models
     texts = "\n\n".join(f"=== Text {number} ({source['name']})\n{source['text']}" for number, source in enumerate(sources))
     asked = [("system", MODEL_INSTRUCTIONS), ("user", f"The airport: {airport['name']} ({airport['code']}). Its city: {city}.\n\n{texts}")]
@@ -231,7 +230,7 @@ def ask_model(airport: dict[str, Any], city: str, sources: list[dict[str, str]])
     for name in [models.SUBAGENT_MODEL, *models.backup_models()]:
         try:
             with logged(models.CALL_SERVICE, name.split(":", 1)[-1]):   # as the planner's calls: plan B shows by its name
-                answer = message_text(init_chat_model(name, max_retries=2, temperature=0).invoke(asked))
+                answer = message_text(models.chat_model(name, "discover", max_retries=2, temperature=0).invoke(asked))
             found = json.loads(re.sub(r"^```(?:json)?|```$", "", answer.strip(), flags=re.MULTILINE))
             return [option for option in found.get("options") or [] if isinstance(option, dict)]
         except Exception as error:

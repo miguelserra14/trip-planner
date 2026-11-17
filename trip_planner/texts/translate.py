@@ -183,9 +183,8 @@ async def add(name: str) -> dict[str, int]:
     languages = load_languages()
     name = find_language(name, languages) or name.strip()
     # Only translating needs a model: listing and removing languages work without the API keys
-    from langchain.chat_models import init_chat_model
-    from trip_planner.agents.models import SUBAGENT_MODEL   # not from subagents.py, which builds its agents on import
-    model = init_chat_model(SUBAGENT_MODEL, max_retries=4)
+    from trip_planner.agents.models import chat_model, SUBAGENT_MODEL   # not from subagents.py, which builds its agents on import
+    model = chat_model(SUBAGENT_MODEL, "translate", max_retries=4)
     if name == "all":
         codes = [code for code in languages if code != REFERENCE]
     elif re.fullmatch(CODE, name):

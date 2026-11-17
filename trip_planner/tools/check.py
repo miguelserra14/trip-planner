@@ -6,7 +6,6 @@ from datetime import date, timedelta
 from urllib.parse import urlparse
 
 import httpx
-from langchain.chat_models import init_chat_model
 
 from trip_planner.agents import models, subagents
 from trip_planner.agents.coordinator import COORDINATOR_MODELS
@@ -124,7 +123,7 @@ async def check_setup() -> int:
 
     def model(name: str):
         async def ask_model() -> str:
-            answer = await init_chat_model(name, max_retries=1).ainvoke("Answer with the single word: ready")
+            answer = await models.chat_model(name, "check", max_retries=1).ainvoke("Answer with the single word: ready")
             answering.append(name)
             return web.clean_text(message_text(answer), 40) or "answered"
         return ask_model

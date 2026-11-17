@@ -120,7 +120,7 @@ def airport_transfer_prompt(request: ModelRequest) -> str:
     """
 
 airport_transfer_agent = create_agent(
-    model=SUBAGENT_MODEL,
+    model=models.chat_model(SUBAGENT_MODEL, "subagent"),
     tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TransferPlan),
@@ -171,7 +171,7 @@ def destination_transport_prompt(request: ModelRequest) -> str:
     """
 
 destination_transport_agent = create_agent(
-    model=SUBAGENT_MODEL,
+    model=models.chat_model(SUBAGENT_MODEL, "subagent"),
     tools=[web.web_search],
     state_schema=SearchState,
     response_format=ToolStrategy(TrainPlan),

@@ -1,6 +1,7 @@
 """Plan B for the two services the agents depend on. No network.
 
-- The models: Mistral takes over when the Gemini models fail, and only when its key is there.
+- The models: Mistral takes over when the Gemini models fail, and only when its key is there. Both are asked
+  through the Cloudflare AI Gateway only when its address is set, and its cache never outlives a price.
 - The web search: when Tavily does not answer, the timetables are read first and the specialists are only asked
   about the airports no timetable covers, without searching."""
 import asyncio
@@ -25,6 +26,35 @@ def test_mistral_tried_last(monkeypatch):
     names = models.coordinator_models()
     assert names == [*models.GEMINI_COORDINATOR_MODELS, models.BACKUP_MODEL]
     assert len(models.subagent_guards()) == 2 and models.subagent_guards()[-1] is models.give_up_slow_calls
+
+GATEWAY = "https://gateway.ai.cloudflare.com/v1/account/trips"
+
+def test_no_gateway_asks_directly(monkeypatch):
+    monkeypatch.delenv(models.GATEWAY_KEY, raising=False)
+    assert models.gateway_options("google_genai:gemini-3.1-flash-lite", "subagent") == {}
+
+def test_gemini_through_gateway(monkeypatch):
+    monkeypatch.setenv(models.GATEWAY_KEY, GATEWAY + "/")
+    monkeypatch.delenv(models.GATEWAY_TOKEN_KEY, raising=False)
+    options = models.gateway_options("google_genai:gemini-3.1-flash-lite", "coordinator")
+    assert options["base_url"] == GATEWAY + "/google-ai-studio"
+    assert '"part": "coordinator"' in options["additional_headers"]["cf-aig-metadata"]
+    assert "cf-aig-authorization" not in options["additional_headers"]
+    model = models.chat_model("google_genai:gemini-3.1-flash-lite", "coordinator")
+    assert model.base_url == GATEWAY + "/google-ai-studio"
+
+def test_mistral_keeps_its_key(monkeypatch):
+    monkeypatch.setenv(models.GATEWAY_KEY, GATEWAY)
+    monkeypatch.setenv(models.GATEWAY_TOKEN_KEY, "gateway token")
+    monkeypatch.setenv(models.BACKUP_KEY, "mistral key")
+    client = models.gateway_options(models.BACKUP_MODEL, "plan_b")["async_client"]
+    assert str(client.base_url).rstrip("/") == GATEWAY + "/mistral/v1"
+    assert client.headers["Authorization"] == "Bearer mistral key"
+    assert client.headers["cf-aig-authorization"] == "Bearer gateway token"
+
+def test_cache_never_outlives_prices():
+    from trip_planner.tools.prices import PRICE_VALID_HOURS
+    assert models.CACHE_SECONDS <= PRICE_VALID_HOURS * 3600
 
 def test_failed_subagent_falls_back():
     """The fallback of the agent library, as the subagents use it: the first model fails, the second answers."""

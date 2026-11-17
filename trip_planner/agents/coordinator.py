@@ -8,7 +8,6 @@ import asyncio
 import warnings
 from typing import Any
 
-from langchain.chat_models import init_chat_model
 from langchain.messages import SystemMessage
 
 from trip_planner import current
@@ -27,7 +26,7 @@ COORDINATOR_MODELS = models.coordinator_models()
 
 # A model that fails is not insisted with: the next one is asked at once, and the list is gone through again
 # after a short pause. Insisting on one busy model cost over a minute; the others answer in a second or two.
-coordinator_models = {name: init_chat_model(name, max_retries=0) for name in COORDINATOR_MODELS}
+coordinator_models = {name: models.chat_model(name, "coordinator", max_retries=0) for name in COORDINATOR_MODELS}
 EXHAUSTED_MODELS: set = set()   # models out of daily quota, skipped for the rest of this session
 ANSWER_SECONDS = 30             # a model that has not answered by then is given up, for this round
 ROUNDS = 2                      # times the list of models is gone through

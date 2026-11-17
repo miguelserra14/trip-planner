@@ -1,10 +1,17 @@
 """The models the agents run on, and the one that takes over when they fail.
 
 Gemini is the first choice everywhere. Mistral is plan B, from another company: it is only used when
-MISTRAL_API_KEY is in env/.env, and only after the Gemini models failed. Without that key nothing changes."""
+MISTRAL_API_KEY is in env/.env, and only after the Gemini models failed. Without that key nothing changes.
+
+Both can be asked through a Cloudflare AI Gateway, when AI_GATEWAY_URL is in env/.env: the gateway keeps a log of
+every call with its tokens and time, can answer a request it has seen from its cache, and can limit the requests
+of a day. Plan B stays here in code: the gateway's own fallback needs requests in its Universal or OpenAI format,
+which the clients of LangChain do not send. Without that address the providers are asked directly."""
 import asyncio
+import json
 import os
 
+import httpx
 from langchain.agents.middleware import ModelFallbackMiddleware, wrap_model_call
 from langchain.chat_models import init_chat_model
 
@@ -27,6 +34,38 @@ BACKUP_KEY = "MISTRAL_API_KEY"
 # A subagent's call to its model, retries of the client included, is given up after this long: one call to Gemini
 # took 26 minutes on 2026-10-26 and held the whole search. Then plan B is asked, with the same limit.
 MODEL_CALL_SECONDS = 240
+# Cloudflare AI Gateway, optional: https://gateway.ai.cloudflare.com/v1/<account id>/<gateway name>
+GATEWAY_KEY = "AI_GATEWAY_URL"
+GATEWAY_TOKEN_KEY = "AI_GATEWAY_TOKEN"   # only for a gateway set to authenticated
+# Where each provider is behind the gateway, by the prefix of the model's name (read on 2026-11-17 in its docs)
+GATEWAY_PATHS = {"google_genai": "google-ai-studio", "mistralai": "mistral/v1"}
+# An answer kept in the gateway's cache, when the cache is turned on there, is given again for at most this long: a
+# price a model found is no longer believed after a day, as an operator's (tools/prices.PRICE_VALID_HOURS)
+CACHE_SECONDS = 24 * 3600
+MISTRAL_SECONDS = 120   # the time limit of the Mistral client, as it sets it when it makes its own
+
+def gateway_options(name: str, part: str) -> dict:
+    """What a model's client needs to be asked through the gateway, or nothing without AI_GATEWAY_URL or for a
+    provider the gateway is not set up for here. part names, in the gateway's log, the part of the program asking."""
+    url = os.environ.get(GATEWAY_KEY, "").strip().rstrip("/")
+    provider = name.split(":", 1)[0]
+    if not url or provider not in GATEWAY_PATHS:
+        return {}
+    base = f"{url}/{GATEWAY_PATHS[provider]}"
+    headers = {"cf-aig-metadata": json.dumps({"app": "trip-planner", "part": part}), "cf-aig-cache-ttl": str(CACHE_SECONDS)}
+    if token := os.environ.get(GATEWAY_TOKEN_KEY, "").strip():
+        headers["cf-aig-authorization"] = f"Bearer {token}"
+    if provider == "google_genai":
+        return {"base_url": base, "additional_headers": headers}
+    # The Mistral client takes no headers of its own: it is given its clients, made as it makes them
+    headers = {"Content-Type": "application/json", "Accept": "application/json",
+               "Authorization": f"Bearer {os.environ.get(BACKUP_KEY, '')}", **headers}
+    return {"base_url": base, "client": httpx.Client(base_url=base, headers=headers, timeout=MISTRAL_SECONDS),
+            "async_client": httpx.AsyncClient(base_url=base, headers=headers, timeout=MISTRAL_SECONDS)}
+
+def chat_model(name: str, part: str, **options):
+    """A chat model by its name, as init_chat_model makes it, through the gateway when there is one."""
+    return init_chat_model(name, **options, **gateway_options(name, part))
 
 def backup_models() -> list[str]:
     """The plan B model, when its key is there."""
@@ -56,5 +95,5 @@ def is_backup(name: str) -> bool:
 def subagent_guards() -> list:
     """The middlewares around a subagent's calls to its model: plan B when its own model fails, when it has a key, and
     the time limit inside it, so that each model tried gets its own MODEL_CALL_SECONDS."""
-    fallback = [ModelFallbackMiddleware(*(init_chat_model(name, max_retries=2) for name in backup_models()))] if backup_models() else []
+    fallback = [ModelFallbackMiddleware(*(chat_model(name, "plan_b", max_retries=2) for name in backup_models()))] if backup_models() else []
     return [*fallback, give_up_slow_calls]

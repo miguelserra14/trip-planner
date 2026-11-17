@@ -6,6 +6,8 @@ A flight search site stops at the airport. Each report keeps, with its options a
 - the funnel: how many of the flights looked up a real timetable or an operator proved impossible to connect
   (legs.PROVEN), apart from the other reasons; in how many trips the cheapest ticket was one of those; what the
   recommended trip cost, door to door, against the cheapest ticket found;
+- how often the cheapest ticket was not the cheapest trip door to door, and by how much: the claim the planner
+  rests on;
 - how much of the recommended trip's price was confirmed for the travel date (grade A);
 - what code did to what the models wrote: colours put right, claims pointed out, times no step gave, links left out;
 - the models: calls, failures, calls answered by plan B, which model wrote the recommendation;
@@ -41,6 +43,10 @@ PROVEN_KEYS = {"reject_not_running": "not_running", "reject_no_real_connection":
 OTHER_KEYS = {"reject_below_minimum": "below_minimum", "reject_not_worth_it": "not_worth_it", "reject_program_error": "program"}
 # A guess this small in the planner's ways to and from the airports (a metro ticket) still counts as priced from fares
 GUESS_EUR = TripSettings.small_estimate_eur
+# Two trips door to door this close in price count as the same price: a rounding, not a cheaper trip
+TIE_EUR = 1.0
+# A trip left out only because it takes too long for what it saves is still a trip one can take: it counts in price
+SLOW_ONLY = "not_worth_it"
 
 def pattern(key: str) -> re.Pattern:
     """A text of every language as a regular expression, each {value} matching anything."""
@@ -205,6 +211,52 @@ def funnel_part(reports: list[dict[str, Any]]) -> list[str]:
                      f"median +{statistics.median(total - ticket for ticket, total in paired):.0f} EUR.")
     return lines
 
+def cheapest_trip(funnel: dict[str, Any]) -> dict[str, Any] | None:
+    """Whether the cheapest ticket of a search was also its cheapest trip door to door, among the itineraries the
+    planner made and did not leave out, or left out only as too slow (SLOW_ONLY): "same", "dearer" (another flight
+    was cheaper door to door, by saving_eur), or the kind of reason the cheapest ticket made no trip. None when the
+    report does not keep its itineraries (made before 2026-11-10) or the planner showed no flight at all."""
+    left_out = {entry["flight"]: entry["why"] for entry in funnel["left_out"] if entry["why"] != SLOW_ONLY}
+    trips = {flight: itinerary["total_eur"] for flight, itinerary in (funnel.get("itineraries") or {}).items() if flight not in left_out}
+    cheapest = funnel.get("cheapest_flight")
+    if not trips or cheapest is None:
+        return None
+    best = min(trips.values())
+    if cheapest not in trips:
+        return {"outcome": left_out.get(cheapest, "not looked up")}
+    saving = trips[cheapest] - best
+    return {"outcome": "dearer", "saving_eur": saving} if saving > TIE_EUR else {"outcome": "same"}
+
+def origin_of(report: str) -> str:
+    """The place a trip leaves from, as its report's name gives it (trip_<from>_<to>_<day>_<time>)."""
+    return report.split("_")[1] if report.count("_") >= 4 else "?"
+
+def hypothesis_part(reports: list[dict[str, Any]]) -> list[str]:
+    """The claim the planner rests on, measured: how often the cheapest ticket a flight search shows is not the
+    cheapest trip door to door, because it cannot be connected at all or because another flight costs less once
+    the ways to and from the airports are added. Only the reports that keep every itinerary made count."""
+    found = [(report, cheapest_trip(report["funnel"])) for report in reports]
+    kept = [(report, outcome) for report, outcome in found if outcome]
+    if not kept:
+        return ["Cheapest ticket against cheapest trip: no report keeps its itineraries yet (only those made since 2026-11-10)."]
+    outcomes = Counter("same" if outcome["outcome"] == "same" else "dearer" if outcome["outcome"] == "dearer"
+                       else "proven" if outcome["outcome"] in PROVEN else "other" for _, outcome in kept)
+    others = Counter(outcome["outcome"] for _, outcome in kept if outcome["outcome"] not in ("same", "dearer", *PROVEN))
+    savings = [outcome["saving_eur"] for _, outcome in kept if outcome["outcome"] == "dearer"]
+    missed = len(kept) - outcomes["same"]
+    lines = [f"Cheapest ticket against cheapest trip door to door ({len(kept)} trips"
+             + (f", {len(reports) - len(kept)} older ones keep no itineraries" if len(reports) > len(kept) else "") + "): "
+             f"the cheapest ticket was not the cheapest trip in {missed} ({missed / len(kept):.0%}). "
+             f"It could not be connected in {outcomes['proven']}, made no trip for another reason in {outcomes['other']}"
+             + (" (" + ", ".join(f"{kind} {number}" for kind, number in sorted(others.items())) + ")" if others else "") + ", "
+             f"and another flight was cheaper door to door in {outcomes['dearer']}"
+             + (f" (median {statistics.median(savings):.0f} EUR less, at most {max(savings):.0f})" if savings else "") + "."]
+    by_origin: dict[str, Counter] = {}
+    for report, outcome in kept:
+        by_origin.setdefault(origin_of(report["report"]), Counter())[outcome["outcome"] != "same"] += 1
+    lines.append("  By origin: " + ", ".join(f"{origin} {counts[True]}/{sum(counts.values())}" for origin, counts in sorted(by_origin.items())) + ".")
+    return lines
+
 def confirmed_part(reports: list[dict[str, Any]]) -> list[str]:
     """How much of the recommended trip's price was confirmed for the travel date."""
     options = [report["option"] for report in reports if report["option"] and report["option"]["total_eur"]]
@@ -249,7 +301,7 @@ def verify_part() -> list[str]:
         for grade, counts in sorted(by_light.items())]
 
 def summary(reports: list[dict[str, Any]]) -> str:
-    return "\n".join([*funnel_part(reports), *confirmed_part(reports), "", *checks_part(reports), "", *map_part(reports), "", *verify_part()])
+    return "\n".join([*funnel_part(reports), "", *hypothesis_part(reports), *confirmed_part(reports), "",*checks_part(reports), "", *map_part(reports), "", *verify_part()])
 
 def main(folder: Path | None = None) -> int:
     """Every report kept, or those of another folder, such as reports/sample (app/sample.py)."""

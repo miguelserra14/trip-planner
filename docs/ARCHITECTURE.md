@@ -161,6 +161,8 @@ trip_planner/
 app/
 ├── __main__.py        python -m app: the app served, the browser opened
 ├── server.py          the pages served on 127.0.0.1 only, and what each may do (its security headers)
+├── remote.py          optional: friends through a Cloudflare Tunnel, their Access assertion checked, the email naming them
+├── friends.py         each friend's own app, in a process of its own, with their folders and daily limits
 ├── site.py            what is answered at each address, and the token every POST must carry
 ├── fields.py          the form of a trip: every setting of TripSettings, read back as the browser sends it
 ├── search.py          a search or a job in a process of its own, and the part of the page that follows it

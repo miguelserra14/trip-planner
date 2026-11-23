@@ -1,6 +1,7 @@
 """The report saved to reports/: everything behind the recommendation. The settings, what each step found and
 where it came from, what was discarded and why, how long each step took, and the final result."""
 import json
+import os
 import re
 import shutil
 from datetime import datetime
@@ -9,7 +10,7 @@ from typing import Any
 
 from trip_planner import current
 from trip_planner.trip import ground_choice
-from trip_planner.trip.trip_settings import LIGHTS, ROOT
+from trip_planner.trip.trip_settings import LIGHTS, REPORTS_KEY, ROOT
 from trip_planner.trip.places import airport_groups, too_far_notice
 from trip_planner.report import options
 from trip_planner.report.formatting import at_destination, grade_text, table
@@ -187,7 +188,8 @@ def render_full_report(response: dict[str, Any], recommendation: str) -> str:
     ]
     return "\n".join(lines)
 
-REPORTS = ROOT / "reports"           # every trip saves its reports here, and only the newest recent_reports (a setting) stay
+# Every trip saves its reports here, and only the newest recent_reports (a setting) stay; a friend's app has its own
+REPORTS = Path(os.environ[REPORTS_KEY]) if os.environ.get(REPORTS_KEY) else ROOT / "reports"
 SAVED_REPORTS = REPORTS / "saved"    # the trips the traveller chose to keep. Nothing here is ever deleted
 # Each trip is a folder of its own in one of the two above, named after its first report: the report (.md), the log
 # of the run (.log), the vehicles of its options (.json) and its options as data (options_*.json). A round trip is

@@ -13,9 +13,10 @@ from pathlib import Path
 from typing import Any, Callable, NamedTuple
 from urllib.parse import parse_qs, quote, unquote
 
-from app import fields, maps, reports, search
+from app import fields, friends, maps, reports, search
 from trip_planner.report.icons import icon
 from app.job import settings_for
+from app.remote import OWNER
 from app.report_page import page, STYLE, to_html
 from trip_planner import current
 from trip_planner.report.full import keep_report
@@ -30,6 +31,9 @@ SCRIPT = Path(__file__).with_name("page.js")   # the page's only script: the cal
 # What a demo (app/demo.py) still answers when posted: the look of the pages and closing the program. Anything else
 # would ask a service or change a file, and is answered with a note
 DEMO_ALLOWED = {"/language", "/theme", "/restore", "/quit"}
+# What only the owner, on this computer, may do: close the app, add or remove a language (a model writes a file of
+# code), ask every report's prices again, and the program's own check (they spend the models' quota)
+OWNER_ONLY = {"/quit", "/language/add", "/language/remove", "/prices", "/check"}
 
 class Reply(NamedTuple):
     status: int
@@ -41,9 +45,10 @@ class Reply(NamedTuple):
 
 class Site:
     def __init__(self, defaults: TripSettings, start: Callable[[dict[str, Any]], search.Job] = search.Job,
-                 stale: Callable[[], list] = stale_reports, demo: bool = False):
+                 stale: Callable[[], list] = stale_reports, demo: bool = False, friend: str = ""):
         self.defaults, self.start = defaults, start   # settings.py, and how a search or a job is started
         self.demo = demo                              # the reports and maps of demo/, shown with nothing searched (app/demo.py)
+        self.friend = friend                          # the email of the friend this app serves (friends.py), "" for the owner's
         self.token = secrets.token_urlsafe(24)
         self.job: search.Job | None = None
         self.title = ""                               # what the job is: the trip, or the job's name
@@ -197,7 +202,7 @@ class Site:
         text = html.escape(tr("app_not_found"))
         return Reply(404, self.page(tr("app_not_found"), f'<p>{text}</p><p><a href="/">{html.escape(tr("app_all_reports"))}</a></p>'))
 
-    def get(self, path: str) -> Reply:
+    def get(self, path: str, viewer: str = OWNER) -> Reply:
         self.languages_read()
         path, _, query = path.partition("?")
         asked = {name: values[0] for name, values in parse_qs(query).items()}
@@ -227,7 +232,7 @@ class Site:
         return Reply(200, reports.report_page(report, self.token, lambda title, body: self.page(title, body),
                                               view=asked.get("view", ""), sort=asked.get("sort", "")))
 
-    def post(self, path: str, body: bytes) -> Reply:
+    def post(self, path: str, body: bytes, viewer: str = OWNER) -> Reply:
         try:
             sent = parse_qs(body.decode("utf-8"), max_num_fields=200)
         except (UnicodeDecodeError, ValueError):
@@ -237,6 +242,8 @@ class Site:
             return Reply(403, page(tr("app_not_this_app"), f"<p>{html.escape(tr('app_not_this_app'))}</p>", current.SETTINGS.language))
         if self.demo and path not in DEMO_ALLOWED:
             return self.demo_refused(path)
+        if (viewer != OWNER or self.friend) and path in OWNER_ONLY:
+            return Reply(403, self.home(tr("app_owner_only")))
         answers = {"/search": self.post_search, "/stop": self.post_stop, "/place": self.post_place, "/airports": self.post_airports,
                    "/ask": self.post_question, "/keep": self.post_keep, "/language": self.post_language,
                    "/check": self.post_check, "/prices": self.post_prices, "/language/add": self.post_add_language,
@@ -264,7 +271,16 @@ class Site:
         if self.from_map and maps.same_trip(self.from_map, settings):   # the trip a map opened the form on: its estimate goes too
             first["from_map"] = self.from_map
         self.from_map = None
+        if not self.within_limit("search"):
+            return Reply(429, self.home(self.limit_text("search")))
         return self.begin(first, f"{settings.origin} → {settings.destination}")
+
+    def within_limit(self, kind: str) -> bool:
+        """Whether one more of a kind may start: always in the owner's app, up to friends.LIMITS a day in a friend's."""
+        return not self.friend or friends.allowed(kind)
+
+    def limit_text(self, kind: str) -> str:
+        return tr(f"app_limit_{kind}", count=friends.LIMITS[kind])
 
     def form_values(self, one: dict[str, str]) -> dict[str, Any]:
         """What the form showed when it was sent, to show it again with the reason it was refused."""
@@ -317,6 +333,9 @@ class Site:
     def post_question(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
         question = one.get("question", "").strip()[:500]
         if self.job is not None and self.job.waiting("ready") is not None and question:
+            if not self.within_limit("question"):
+                text = html.escape(self.limit_text("question"))
+                return Reply(429, self.page(text, f'<p class="refusal" role="alert">{text}</p><p><a href="/search">{html.escape(tr("app_last_search"))}</a></p>'))
             self.job.answer({"question": question})
         return Reply(303, location="/search#conversation")   # where the answer will be
 
@@ -407,6 +426,8 @@ class Site:
         refusal = maps.refusal_of(asked)
         if refusal:
             return Reply(400, self.discover_page(refusal))
+        if not self.within_limit("map"):
+            return Reply(429, self.discover_page(self.limit_text("map")))
         with self.maps_lock:
             self.map_next = {"task": "map", "language": current.SETTINGS.language, **asked}   # the form as it is now
         if self.map_job is not None and self.map_job.running:   # two maps would write the same caches (discover/cache)

@@ -9,6 +9,7 @@ import base64
 import hashlib
 import html
 import json
+import os
 import re
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -20,6 +21,7 @@ from discover import confirm
 from discover.view.page import page_texts, SCRIPT, STYLE
 from trip_planner.sources import flight_search
 from trip_planner.texts import tr
+from trip_planner.trip.trip_settings import MAPS_KEY
 
 SOURCES = ("light", "full", "fast", "ground")   # the ways to search the flights, as python -m discover has them (discover_win_source_...)
 COACH_CHANGES = (0, 1, 2)   # the changes of coach the form offers (TripSettings.max_coach_changes), each a chip
@@ -116,7 +118,7 @@ def form(token: str, values: dict[str, Any], refusal: str = "") -> str:
 SAVED = "/discover/saved/"
 # Where the maps are kept (discover/session.MAPS): not imported, since discover/session.py reads settings.py as it is
 # imported, which only a map's own process does (map_job.py)
-SAVED_MAPS = Path(confirm.__file__).with_name("maps")
+SAVED_MAPS = Path(os.environ[MAPS_KEY]) if os.environ.get(MAPS_KEY) else Path(confirm.__file__).with_name("maps")
 SAVED_LISTED = 30   # the newest maps listed under the form
 SAVED_INFO: dict[Path, tuple[float, dict[str, Any] | None]] = {}   # what each page says of itself, by its file and its time
 

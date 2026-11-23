@@ -53,10 +53,10 @@ def test_report_found_by_key():
         assert site.get(path).status == 404
 
 class Answers:
-    def get(self, path):
-        return Reply(200, "the page")
+    def get(self, path, viewer=""):
+        return Reply(200, f"the page for {viewer or 'the owner'}")
 
-    def post(self, path, body):
+    def post(self, path, body, viewer=""):
         return Reply(200, "posted")
 
 def ask(port: int, method: str, host: str, body: str | None = None, length: int | None = None) -> int:

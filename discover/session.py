@@ -12,6 +12,7 @@ Each step blocks, and runs in this process: the planner's own code reads the tri
 (current.SETTINGS, current.TRIP) that the lookups change, so a map has a process of its own, apart from a search."""
 import asyncio
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -27,12 +28,13 @@ from trip_planner import current, utils
 from trip_planner.report.full import remember_duration
 from trip_planner.texts import tr
 from trip_planner.trip.places import geocode, load_airports
-from trip_planner.trip.trip_settings import settings_file
+from trip_planner.trip.trip_settings import MAPS_KEY, settings_file
 from trip_planner.utils import plain, progress
 
 SETTINGS = settings_file().SETTINGS   # its language and its rules: the map has no dates of the planner's to refuse
 
-MAPS = Path(__file__).parent / "maps"   # the maps made, in this folder: nothing of the planner's is written to
+# The maps made, in this folder (nothing of the planner's is written to), or a friend's own (app/friends.py)
+MAPS = Path(os.environ[MAPS_KEY]) if os.environ.get(MAPS_KEY) else Path(__file__).parent / "maps"
 
 def snapshot(state: dict[str, Any]) -> dict[str, Any]:
     """What the page is told, apart from the map being worked on: the app is sent it from another thread while the

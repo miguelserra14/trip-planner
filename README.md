@@ -1,4 +1,5 @@
 # Trip Planner
+env\.venv\Scripts\python main.py
 
 [![tests](https://github.com/miguelserra14/trip-planner/actions/workflows/tests.yml/badge.svg)](https://github.com/miguelserra14/trip-planner/actions/workflows/tests.yml)
 
@@ -10,7 +11,10 @@ hours away, the last bus may leave before you land, the coach to it may cost mor
 at the whole journey: the bus or train to the departure airport, the flight, and the way from the arrival airport to
 where you are going, on the day you travel. It reads the timetables the operators publish and the prices their
 booking systems sell, drops the flights you could not catch, and ranks what is left by what it costs you in money
-and in hours.
+and in hours. Measured over 51 searches from six cities in November 2026, the cheapest ticket was not the cheapest
+trip door to door in 24 (47%); in 12 of them (24%) without any doubt, because a real timetable shows it cannot be
+connected or another flight costs less once every guessed euro is counted against it. The destinations came from
+Discover's cheapest, so they are not a random sample ([PRODUCT.md](docs/PRODUCT.md), "How it is measured").
 
 Every figure says where it comes from and how far to trust it: 🔵 confirmed for the travel date, 🟢 the typical
 timetable of the same weekday, 🟠 not verified (A, B and C in the settings and the code). Code searches, checks
@@ -229,6 +233,13 @@ New texts are written in `en.py`; `--add-language all` then brings the other lan
 - Wikidata gets a contact address only if you put one in `env/.env` as `WIKIMEDIA_CONTACT`.
 - Reports and maps stay on your computer, and none of them goes in the repository, not even the ones kept in
   `reports/saved/`.
+- Optional, off unless all four keys are in `env/.env`: a few friends can reach the app on your computer through a
+  Cloudflare Tunnel behind Cloudflare Access (a login by email). The app then listens on `REMOTE_PORT`, and answers a
+  request from outside only when its Host is exactly `REMOTE_HOST` and it carries an assertion that Cloudflare signed
+  for your Access application (`ACCESS_TEAM`, `ACCESS_AUD`), checked by the app, not only trusted. Each friend gets
+  an app of their own, in a process of its own, with their reports and maps under `reports/people/` (never yours or
+  another friend's), and at most 3 searches, 2 maps and 10 questions a day: they spend your quotas. Closing the app,
+  adding a language, asking every report's prices again and the check of the services stay yours.
 
 ## External services
 

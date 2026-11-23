@@ -5,6 +5,8 @@
 
 The package, part by part:
 - server.py: serves the pages on 127.0.0.1 only, and tells the browser what they may do.
+- remote.py and friends.py: optional, a few friends through a Cloudflare Tunnel behind Cloudflare Access, each with an
+  app of their own (a process, their folders under reports/people/, a daily limit), never the owner's.
 - site.py: what is answered at each path, and the token every POST must carry.
 - fields.py: the form of a trip, every setting of TripSettings, laid out by trip_planner/trip/form.py.
 - search.py and job.py: a search in a process of its own, and the conversation with it.

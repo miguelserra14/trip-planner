@@ -1,7 +1,8 @@
 """The app's pages, served on this computer only. Any web page the traveller has open could send a request to this
 computer, so:
 - it listens on 127.0.0.1 and answers only requests whose Host is that address (a name that points there, DNS
-  rebinding, is refused);
+  rebinding, is refused), or, when remote access is set (remote.py), the public hostname with Cloudflare Access's
+  signed assertion;
 - a POST, which starts or stops a search, must carry the token of the app's own forms (site.py), and is small;
 - what is served is looked up by its key among what exists, never a path built from the request;
 - the pages run no script but the app's own file (page.js), load nothing from elsewhere and send their forms and
@@ -13,6 +14,8 @@ import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from app.friends import Friends
+from app.remote import ASSERTION, OWNER, Remote, viewer_of
 from app.site import Reply, Site
 
 HOST = "127.0.0.1"
@@ -30,12 +33,14 @@ class Server(ThreadingHTTPServer):
         if not isinstance(sys.exc_info()[1], ConnectionError):
             super().handle_error(request, client_address)
 
-def start(site: Site) -> ThreadingHTTPServer:
-    """Serve the site in the background, until stop(). The address is address_of(server)."""
+def start(site: Site, remote: Remote | None = None, friends: Friends | None = None) -> ThreadingHTTPServer:
+    """Serve the site in the background, until stop(). The address is address_of(server). With remote access the
+    port is the one cloudflared sends to, otherwise any free one, and a friend's requests are answered by their own
+    app (friends.py)."""
 
     class Handler(BaseHTTPRequestHandler):
-        def local(self) -> bool:
-            return self.headers.get("Host") == f"{HOST}:{self.server.server_address[1]}"
+        def viewer(self) -> str | None:
+            return viewer_of(remote, f"{HOST}:{self.server.server_address[1]}", self.headers.get("Host"), self.headers.get(ASSERTION))
 
         def reply(self, reply: Reply) -> None:
             body = reply.html.encode("utf-8")
@@ -51,8 +56,28 @@ def start(site: Site) -> ThreadingHTTPServer:
             self.end_headers()
             self.wfile.write(body)
 
+        def passed_on(self, email: str, body: bytes = b"") -> None:
+            """A friend's request answered by their own app, as it answered."""
+            if friends is None:
+                return self.reply(Reply(404, "not found"))
+            try:
+                status, headers, answer = friends.forward(email, self.command, self.path, self.headers, body)
+            except OSError:
+                return self.reply(Reply(503, "The app is starting or busy: try again in a minute."))
+            self.send_response(status)
+            for name, value in headers:
+                self.send_header(name, value)
+            self.send_header("Content-Length", str(len(answer)))
+            self.end_headers()
+            self.wfile.write(answer)
+
         def do_GET(self) -> None:
-            self.reply(site.get(self.path) if self.local() else Reply(404, "not found"))
+            viewer = self.viewer()
+            if viewer is None:
+                return self.reply(Reply(404, "not found"))
+            if viewer != OWNER:
+                return self.passed_on(viewer)
+            self.reply(site.get(self.path, viewer))
 
         def do_POST(self) -> None:
             try:
@@ -64,12 +89,17 @@ def start(site: Site) -> ThreadingHTTPServer:
                 return self.reply(Reply(400, "not a form of this app"))
             # Read even when it is refused: Windows resets a connection closed with data unread, and the answer is lost
             body = self.rfile.read(length)
-            self.reply(site.post(self.path, body) if self.local() else Reply(404, "not found"))
+            viewer = self.viewer()
+            if viewer is None:
+                return self.reply(Reply(404, "not found"))
+            if viewer != OWNER:
+                return self.passed_on(viewer, body)
+            self.reply(site.post(self.path, body, viewer))
 
         def log_message(self, *arguments) -> None:
             pass   # the terminal is for the app's own lines
 
-    server = Server((HOST, 0), Handler)
+    server = Server((HOST, remote.port if remote else 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -80,11 +110,14 @@ def stop(server: ThreadingHTTPServer) -> None:
     server.shutdown()
     server.server_close()
 
-def serve(site: Site, browser: bool = True) -> None:
-    """Serve the site until the Quit button or Ctrl+C. A search or a map still running is stopped with it."""
-    server = start(site)
+def serve(site: Site, browser: bool = True, remote: Remote | None = None, friends: Friends | None = None) -> None:
+    """Serve the site until the Quit button or Ctrl+C. A search or a map still running is stopped with it, and so
+    is every friend's app."""
+    server = start(site, remote, friends)
     address = address_of(server)
     print(f"The trip planner is served at {address}. Ctrl+C to stop.", flush=True)
+    if remote:
+        print(f"Friends reach it at https://{remote.host}/ through the tunnel, behind Cloudflare Access.", flush=True)
     if browser:
         webbrowser.open(address)
     try:
@@ -95,4 +128,6 @@ def serve(site: Site, browser: bool = True) -> None:
         pass
     finally:
         stop(server)
+        if friends is not None:
+            friends.close()
         site.close()

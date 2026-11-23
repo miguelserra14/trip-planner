@@ -28,20 +28,21 @@ of the next tool on the list, round trips with lodging for groups (on standby).
 
 ## How it is measured
 
-The numbers come from `python main.py --funnel`, which adds up what every report keeps. The sample is 37 searches
-made in November 2026 for trips in early December, from Antwerp, Berlin, Coimbra, Lisbon, Ljubljana and Moimenta da
-Beira, to destinations taken from Discover maps (the cheapest 30 of each map, half looked up in the timetables and
-half estimated). It is not a random sample of trips people make: destinations a map shows as cheap are
-over-represented.
+The numbers come from `python main.py --funnel reports/sample`, which adds up what every report keeps. The sample
+is 54 searches made from 10 to 23 November 2026 for trips from 3 to 12 December, from Antwerp (14), Coimbra (12),
+Lisbon (11), Berlin (6), Ljubljana (6) and Moimenta da Beira (5), to destinations taken from Discover maps (the
+cheapest 30 of each map, half looked up in the timetables and half estimated). It is not a random sample of trips
+people make: destinations a map shows as cheap are over-represented. One search was left out because the network
+dropped while it ran (Lisbon to Bristol, 23 November): a timetable with no answer must not count as a proof.
 
 | Question | Measure | Now |
 | :-- | :-- | :-- |
-| Is the cheapest ticket the cheapest trip? (the claim the product rests on) | Share of trips where the cheapest flight found is not the cheapest trip door to door | 17 of 35 (49%). Proven by a real timetable or a cheaper flight door to door: 8 of 35 (23%); the rest rests on a model's data (6) or on the minimum reliability asked (3). Where another flight won, it saved a median 10 EUR (at most 19). *Batches from Coimbra, Antwerp and Lisbon still running.* |
-| Does it catch what a flight site cannot? | Flights looked up that a real timetable or operator proves impossible to connect | 73 of 326 (22%); the cheapest ticket itself in 5 of 37 trips |
-| Can the result be trusted? | Share of the recommended trip's price confirmed for the travel date (grade A) | Median 70% over 36 trips (the traveller's own six trips: 9%, mostly coach fares no system sells) |
-| Do the lights deserve their colour? | Vehicles shown that really ran, checked on the day (`main.py --verify`) | Not known yet: the trips are in December |
-| Is Discover's map honest? | Map price against the planner's for the same trip, door to door | 37 pairs: median +1%, 87% within 20% |
-| Do the models behave? | Calls, failures, plan B, links a model wrote that code removed | 278 calls, 21 failed (8%), 5 answered by plan B; 101 links removed |
+| Is the cheapest ticket the cheapest trip? (the claim the product rests on) | Share of trips where the cheapest flight found is not the cheapest trip door to door | 24 of 51 (47%). Shown beyond doubt in 12 of 51 (24%): the cheapest ticket cannot be connected, by a real timetable or operator (6), or another flight is cheaper door to door by more than every guessed euro of both trips (6, a median 13 EUR less, at most 19). The rest rests on a model's data (6), on the minimum reliability asked (3), or on a saving smaller than the euros guessed (3). |
+| Does it catch what a flight site cannot? | Flights looked up that a real timetable or operator proves impossible to connect | 112 of 481 (23%); the cheapest ticket itself in 7 of 54 trips |
+| Can the result be trusted? | Share of the recommended trip's price confirmed for the travel date (grade A) | Median 79% over 52 trips (the traveller's own six trips: 9%, mostly coach fares no system sells) |
+| Do the lights deserve their colour? | Vehicles shown that really ran, checked on the day (`main.py --verify`) | Not known yet: the trips are from 3 to 12 December, checked after them |
+| Is Discover's map honest? | Map price against the planner's for the same trip, door to door | 54 pairs: median +0%, 88% within 20% |
+| Do the models behave? | Calls, failures, plan B, links a model wrote that code removed | 414 calls, 27 failed (7%), 9 answered by plan B; 151 links removed |
 
 Two measures are still missing because they need other people: **whether the result changed a decision** (book a
 different flight, leave from another airport, not go) and **whether people come back for a second trip**. They are
@@ -95,8 +96,7 @@ The cost: it is hard to try, which is the next thing to change, for a few users 
 
 ## What comes next
 
-1. Finish the measure of the claim: batches from Coimbra, Antwerp and Lisbon (one a day, for the flight source's
-   daily limit).
+1. Check the lights: `--verify` once the sample's travel days are past (after 12 December 2026).
 2. A handful of real users: friends on Erasmus reach the app on its author's computer through a Cloudflare Tunnel,
    behind a login by email, with their reports kept apart and a daily limit each. Five short interviews: how they plan
    today, a trip that went wrong, whether the result changed a decision. One or two changes from what they say,

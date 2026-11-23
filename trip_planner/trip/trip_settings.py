@@ -16,6 +16,10 @@ from trip_planner.utils import plain, to_minutes, to_time
 
 ROOT = Path(__file__).resolve().parents[2]   # the project folder: resources/, reports/ and env/ are in it
 load_dotenv(ROOT / "env" / ".env")       # the API keys, before any client is created
+# Where a run keeps its reports and its Discover maps, when not the project's own folders: set for the app of a
+# friend reached through the tunnel (app/friends.py), and inherited by the searches and maps that app starts
+REPORTS_KEY = "TRIP_PLANNER_REPORTS"
+MAPS_KEY = "TRIP_PLANNER_MAPS"
 
 SCALES = ("near", "wide")   # how far around a city its airports are looked for, see TripSettings
 GRADES = "ABC"   # reliability grades, best first. See "Data integrity" in trip_planner/__init__.py.

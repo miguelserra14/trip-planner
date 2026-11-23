@@ -164,6 +164,11 @@ def made(left_out: list[dict], **totals: float) -> dict:
 def test_cheapest_trip_other_flight():
     assert tool.cheapest_trip(made([], CHEAP=120.0, DEAR=95.0)) == {"outcome": "dearer", "saving_eur": 25.0}
 
+def test_saving_within_guess():
+    funnel = made([], CHEAP=120.0, DEAR=42.0)
+    funnel["itineraries"]["DEAR"]["guessed_eur"] = 92.94
+    assert tool.cheapest_trip(funnel) == {"outcome": tool.GUESSED, "saving_eur": 78.0}
+
 def test_cheapest_trip_within_tie():
     assert tool.cheapest_trip(made([], CHEAP=95.5, DEAR=95.0)) == {"outcome": "same"}
 

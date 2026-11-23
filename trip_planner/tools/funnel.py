@@ -47,6 +47,8 @@ GUESS_EUR = TripSettings.small_estimate_eur
 TIE_EUR = 1.0
 # A trip left out only because it takes too long for what it saves is still a trip one can take: it counts in price
 SLOW_ONLY = "not_worth_it"
+# Another flight cheaper door to door, but by less than the euros its trip or the cheapest ticket's trip guessed
+GUESSED = "saving_within_guess"
 
 def pattern(key: str) -> re.Pattern:
     """A text of every language as a regular expression, each {value} matching anything."""
@@ -214,18 +216,23 @@ def funnel_part(reports: list[dict[str, Any]]) -> list[str]:
 def cheapest_trip(funnel: dict[str, Any]) -> dict[str, Any] | None:
     """Whether the cheapest ticket of a search was also its cheapest trip door to door, among the itineraries the
     planner made and did not leave out, or left out only as too slow (SLOW_ONLY): "same", "dearer" (another flight
-    was cheaper door to door, by saving_eur), or the kind of reason the cheapest ticket made no trip. None when the
-    report does not keep its itineraries (made before 2026-11-10) or the planner showed no flight at all."""
+    was cheaper door to door, by saving_eur), GUESSED (cheaper, but by less than the two trips' guessed euros), or
+    the kind of reason the cheapest ticket made no trip. None when the report does not keep its itineraries (made
+    before 2026-11-10) or the planner showed no flight at all."""
     left_out = {entry["flight"]: entry["why"] for entry in funnel["left_out"] if entry["why"] != SLOW_ONLY}
-    trips = {flight: itinerary["total_eur"] for flight, itinerary in (funnel.get("itineraries") or {}).items() if flight not in left_out}
+    trips = {flight: itinerary for flight, itinerary in (funnel.get("itineraries") or {}).items() if flight not in left_out}
     cheapest = funnel.get("cheapest_flight")
     if not trips or cheapest is None:
         return None
-    best = min(trips.values())
+    best = min(trips.values(), key=lambda itinerary: itinerary["total_eur"])
     if cheapest not in trips:
         return {"outcome": left_out.get(cheapest, "not looked up")}
-    saving = trips[cheapest] - best
-    return {"outcome": "dearer", "saving_eur": saving} if saving > TIE_EUR else {"outcome": "same"}
+    saving = trips[cheapest]["total_eur"] - best["total_eur"]
+    if saving <= TIE_EUR:
+        return {"outcome": "same"}
+    # The saving is a fact only if it outlives every guessed euro of both trips going the wrong way
+    guessed = (trips[cheapest].get("guessed_eur") or 0.0) + (best.get("guessed_eur") or 0.0)
+    return {"outcome": "dearer" if saving > guessed + TIE_EUR else GUESSED, "saving_eur": saving}
 
 def origin_of(report: str) -> str:
     """The place a trip leaves from, as its report's name gives it (trip_<from>_<to>_<day>_<time>)."""
@@ -239,9 +246,9 @@ def hypothesis_part(reports: list[dict[str, Any]]) -> list[str]:
     kept = [(report, outcome) for report, outcome in found if outcome]
     if not kept:
         return ["Cheapest ticket against cheapest trip: no report keeps its itineraries yet (only those made since 2026-11-10)."]
-    outcomes = Counter("same" if outcome["outcome"] == "same" else "dearer" if outcome["outcome"] == "dearer"
+    outcomes = Counter(outcome["outcome"] if outcome["outcome"] in ("same", "dearer", GUESSED)
                        else "proven" if outcome["outcome"] in PROVEN else "other" for _, outcome in kept)
-    others = Counter(outcome["outcome"] for _, outcome in kept if outcome["outcome"] not in ("same", "dearer", *PROVEN))
+    others = Counter(outcome["outcome"] for _, outcome in kept if outcome["outcome"] not in ("same", "dearer", GUESSED, *PROVEN))
     savings = [outcome["saving_eur"] for _, outcome in kept if outcome["outcome"] == "dearer"]
     missed = len(kept) - outcomes["same"]
     lines = [f"Cheapest ticket against cheapest trip door to door ({len(kept)} trips"
@@ -250,7 +257,8 @@ def hypothesis_part(reports: list[dict[str, Any]]) -> list[str]:
              f"It could not be connected in {outcomes['proven']}, made no trip for another reason in {outcomes['other']}"
              + (" (" + ", ".join(f"{kind} {number}" for kind, number in sorted(others.items())) + ")" if others else "") + ", "
              f"and another flight was cheaper door to door in {outcomes['dearer']}"
-             + (f" (median {statistics.median(savings):.0f} EUR less, at most {max(savings):.0f})" if savings else "") + "."]
+             + (f" (median {statistics.median(savings):.0f} EUR less, at most {max(savings):.0f})" if savings else "")
+             + (f"; in {outcomes[GUESSED]} more it was cheaper by less than the euros guessed" if outcomes[GUESSED] else "") + "."]
     by_origin: dict[str, Counter] = {}
     for report, outcome in kept:
         by_origin.setdefault(origin_of(report["report"]), Counter())[outcome["outcome"] != "same"] += 1

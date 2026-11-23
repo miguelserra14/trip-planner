@@ -79,8 +79,16 @@ def in_browser(demo: bool = False) -> int:
     elif SETTINGS.moved_weeks:
         print(text_in(SETTINGS.language, "settings_dates_moved", weeks=SETTINGS.moved_weeks, dates=", ".join(SETTINGS.dates)))
     current.SETTINGS = SETTINGS   # the pages are in the language of settings.py
-    # A demo's prices are old by nature: they are not offered to be asked again
-    server.serve(Site(SETTINGS, stale=list, demo=True) if demo else Site(SETTINGS))
+    if demo:   # a demo's prices are old by nature: they are not offered to be asked again
+        server.serve(Site(SETTINGS, stale=list, demo=True))
+        return 0
+    from app import friends, remote
+    try:
+        access = remote.configured()   # friends through a Cloudflare Tunnel, when env/.env asks for it (app/remote.py)
+    except ValueError as error:
+        print(error)
+        return 1
+    server.serve(Site(SETTINGS), remote=access, friends=friends.Friends() if access else None)
     return 0
 
 if __name__ == "__main__":

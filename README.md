@@ -249,7 +249,7 @@ The program depends on these services. None of them is under the project's contr
 | :-- | :-- | :-- |
 | Google Gemini | Coordinator and the two subagents; Discover's reading of airport transfer pages | `GOOGLE_API_KEY` |
 | Mistral | Optional plan B for the models: answers when the Gemini models fail or have no quota left | `MISTRAL_API_KEY` |
-| Cloudflare AI Gateway | Optional: Gemini and Mistral are asked through it, for a log of every call (tokens, time, errors), a limit of requests and, if turned on there, a cache of at most a day. Plan B stays in the program | `AI_GATEWAY_URL`, `AI_GATEWAY_TOKEN` |
+| Cloudflare AI Gateway | Optional: Gemini and Mistral are asked through it, for a log of every call (tokens, time, errors), a limit of requests and, if turned on there, a cache of at most a day. Plan B stays in the program. Tried on 2026-11-23: both providers reach it | `AI_GATEWAY_URL`, `AI_GATEWAY_TOKEN` |
 | Tavily | Web search of the subagents and of Discover. When it does not answer, the timetables and the operators' prices are used on their own | `TAVILY_API_KEY` |
 | Kiwi (MCP server) | Flights. Discover asks it at most 150 times a day | none |
 | Google Flights, through the `fast-flights` library | Flights when Kiwi does not answer. Not an official service: it reads the page a browser gets, so it can stop working or be refused without notice | none |

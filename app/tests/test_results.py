@@ -8,7 +8,7 @@ import re
 import pytest
 
 from app import fields
-from app.report_page import shares, timeline, VEHICLE_SHARE, WAIT_SHARE
+from app.report_page import LINE_PX, SHORTEST_PX, SHORTEST_RIDE_PX, SHORTEST_WAIT_PX, timeline, widths
 from app.results import ride_parts, vehicles_list
 from app.site import Site
 from app.tests.test_search import DAY, sent
@@ -129,10 +129,21 @@ def test_changes_drawn_as_dots():
 def test_short_vehicles_get_room():
     # Three rides of a few minutes after a flight of seven hours: to scale, each would be under 1% of the line
     parts = [("A", 420, "plane"), (None, 30), ("B", 5, "subway"), (None, 10), ("B", 9, "bus"), (None, 4), ("B", 6, "train")]
-    drawn = shares(parts)
-    assert sum(drawn) == pytest.approx(100)
-    assert all(drawn[number] >= VEHICLE_SHARE for number in (2, 4, 6)) and all(drawn[number] >= WAIT_SHARE for number in (3, 5))
-    assert timeline([("10:00", "BRU"), *[None] * 6, ("18:00", "Pavia")], parts).count('class="vehicle"') == 4
+    points = [("10:00", "BRU"), *[None] * 6, ("18:00", "Pavia")]
+    edges, room = widths(points, parts)
+    drawn = [(end - start) * room / 100 for start, end in zip(edges, edges[1:])]
+    assert edges[-1] == pytest.approx(100) and room == LINE_PX
+    assert all(drawn[number] >= SHORTEST_RIDE_PX for number in (0, 2, 4, 6)) and all(drawn[number] >= SHORTEST_WAIT_PX for number in (1, 3, 5))
+    assert timeline(points, parts).count('class="vehicle"') == 4
+
+def test_many_rides_widen_line():
+    """Six vehicles to an airport, each between two labelled places, need more than the usual width: the line
+    grows, and every vehicle keeps its icon."""
+    parts = [("B", 20, "bus")] * 6 + [(None, 60), ("A", 120, "plane")]
+    points = [(f"{8 + number}:00", f"Stop {number}") for number in range(len(parts) + 1)]
+    edges, room = widths(points, parts)
+    assert room == len(parts) * SHORTEST_PX > LINE_PX
+    assert timeline(points, parts).count('class="vehicle"') == 7 and f"min-width: {room}px" in timeline(points, parts)
 
 def test_misfit_leg_one_part():
     assert ride_parts("12:30", 60, "B", THREE_RIDES) == ([], [("B", 60, "bus")])

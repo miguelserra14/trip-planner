@@ -20,10 +20,10 @@ from urllib.parse import quote, urlencode
 
 from discover.airports.access import city_name
 from discover.finder import Found
-from discover.view.breakdown import source_health
+from discover.view.breakdown import breakdown, source_health
 from trip_planner import current, utils
 from trip_planner.report.icons import sprite
-from trip_planner.texts import TEXTS, REFERENCE, text_in, tr
+from trip_planner.texts import in_language, LANGUAGES, TEXTS, REFERENCE, text_in, tr
 from trip_planner.trip.trip_settings import LIGHT_COLOURS, TripSettings
 from trip_planner.trip.places import load_airports
 
@@ -31,6 +31,9 @@ ROOT = Path(__file__).parents[2]
 HERE = Path(__file__).parent
 STYLE, SCRIPT = HERE / "map.css", HERE / "map.js"   # the page's look and its script, served by the app or put in the file
 PAGE_TEXTS = "discover_page_"   # the texts the page's script writes, in the traveller's language (texts/languages)
+# The labels of a trip's links (links), also written by the script, as "link_book": so that they follow the language
+# the page is read in, which in the app may change after the map was made (app/maps.py, dressed)
+LINK_TEXTS = "discover_link_"
 
 def google_flights(flight: dict[str, Any]) -> str:
     """Google Flights, searching the same trip on the same days: to compare the price and see every airline."""
@@ -59,21 +62,27 @@ def links(flight: dict[str, Any], found: Found, airports: dict[str, Any]) -> lis
     how to get home."""
     name = lambda code: f"{(airports.get(code) or {}).get('name', code)} ({code})"
     found_links = []
+    link = lambda kind, url, key, **values: {"kind": kind, "label": tr(LINK_TEXTS + key, **values), "text": ["link_" + key, values], "url": url}
     if flight.get("url", "").startswith("https://"):
-        found_links.append({"kind": "book", "label": tr("discover_link_book", site="Ryanair" if flight["source"] == "Ryanair" else "Kiwi.com"),
-                            "url": flight["url"]})
-    found_links.append({"kind": "compare", "label": tr("discover_link_compare"), "url": google_flights(flight)})
-    found_links.append({"kind": "transit", "label": tr("discover_link_to_airport", place=found.place.label, airport=name(flight["from"])),
-                        "url": transit(found.place.label, airport_place(flight["from"], airports))})
+        found_links.append(link("book", flight["url"], "book", site="Ryanair" if flight["source"] == "Ryanair" else "Kiwi.com"))
+    found_links.append(link("compare", google_flights(flight), "compare"))
+    found_links.append(link("transit", transit(found.place.label, airport_place(flight["from"], airports)), "to_airport",
+                            place=found.place.label, airport=name(flight["from"])))
     if flight.get("back"):
-        found_links.append({"kind": "transit", "label": tr("discover_link_home", airport=name(flight["back"]["to"]), place=found.place.label),
-                            "url": transit(airport_place(flight["back"]["to"], airports), found.place.label)})
+        found_links.append(link("transit", transit(airport_place(flight["back"]["to"], airports), found.place.label), "home",
+                                airport=name(flight["back"]["to"]), place=found.place.label))
     return found_links
 
-def page_texts() -> dict[str, str]:
-    """Every text of the page's script, in the traveller's language, its {values} left for the script to fill."""
-    language = current.SETTINGS.language
-    return {key[len(PAGE_TEXTS):]: text_in(language, key) for key in TEXTS[REFERENCE] if key.startswith(PAGE_TEXTS)}
+def page_texts(language: str = "") -> dict[str, str]:
+    """Every text of the page's script, in the traveller's language or the one given, its {values} left for the
+    script to fill: the labels of the links as "link_book"."""
+    language = language or current.SETTINGS.language
+    return {**{key[len(PAGE_TEXTS):]: text_in(language, key) for key in TEXTS[REFERENCE] if key.startswith(PAGE_TEXTS)},
+            **{"link_" + key[len(LINK_TEXTS):]: text_in(language, key) for key in TEXTS[REFERENCE] if key.startswith(LINK_TEXTS)}}
+
+def languages() -> dict[str, str]:
+    """The languages the page may be read in, each by its own name, for its list."""
+    return {code: TEXTS[code].get("language_name", code) for code in LANGUAGES}
 
 def day(text: str) -> str:
     """yyyy-mm-dd as the planner reads it, dd/mm/yyyy."""
@@ -166,8 +175,18 @@ def map_state(found: Found, sections: list[dict[str, Any]], running: bool = Fals
     return {"version": version, "running": running, "points": points, "names": {code: airports[code]["name"] for code in codes if code in airports},
             "places": {code: [airports[code]["latitude"], airports[code]["longitude"]] for code in codes if code in airports},   # for the routes
             "discarded": found.discarded, "lookups": found.lookups, "confirm_stop": found.confirm_stop, "sections": sections,
+            "sections_in": sections_in(found),
             "coverage": found.coverage, "by_ground": found.by_ground, "fare_lookups": found.fare_lookups, "fare_stop": found.fare_stop, "phase": found.phase,
             "asked_prices": found.asked_prices, "sources": source_health(found, utils.REQUESTS)}
+
+def sections_in(found: Found) -> dict[str, list[dict[str, Any]]]:
+    """What was searched (breakdown.py) in every other language than the map's: in the app the page may be read in
+    another one, and the map's process that knows these is gone by then."""
+    made_in = current.SETTINGS.language
+    def written(language: str) -> list[dict[str, Any]]:
+        with in_language(language):
+            return breakdown(found)
+    return {language: written(language) for language in LANGUAGES if language != made_in}
 
 def map_page(found: Found, sources: str, sections: list[dict[str, Any]], airport_minutes: int = 120,
              running: bool = False, max_lookups: int = 0, landing_minutes: int = TripSettings.min_landing_minutes,

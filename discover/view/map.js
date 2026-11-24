@@ -9,6 +9,9 @@ const colours = ["#2e9e4f", "#8fbf3f", "#e6b422", "#e67e22", "#d0453a"];
 // A text of the page in the traveller's language (texts/languages, discover_page_...), its {values} filled in
 const t = (key, values) => (data.texts[key] === undefined ? key : data.texts[key]).replace(/\{(\w+)\}/g, (all, name) => (values && name in values ? values[name] : all));
 const modeName = mode => (data.texts["mode_" + mode] === undefined ? mode : data.texts["mode_" + mode]);
+// A link's label in the page's language, as page.links says it ("link_book" and its values); as it was written for a
+// map made before the labels were kept so
+const linkLabel = link => (link.text && data.texts[link.text[0]] !== undefined ? t(link.text[0], link.text[1]) : link.label);
 const eur = value => value.toFixed(0) + " €";
 // A tooltip's text, as text: Leaflet would read a string as markup, and the names come from Wikidata and OurAirports
 const tip = text => { const span = document.createElement("span"); span.textContent = text; return span; };
@@ -344,7 +347,7 @@ function describeBooking(panel, p) {
   add(panel, "h4", t("where_to_book"));
   const list = add(panel, "ul", undefined, "links");
   const link = (item, text, url) => { const anchor = add(item, "a", text); anchor.href = url; anchor.target = "_blank"; anchor.rel = "noopener noreferrer"; };
-  for (const booking of p.links.filter(link => link.kind === "book" && link.url.startsWith("https://"))) link(add(list, "li"), booking.label, booking.url);
+  for (const booking of p.links.filter(link => link.kind === "book" && link.url.startsWith("https://"))) link(add(list, "li"), linkLabel(booking), booking.url);
   for (const way of p.access || []) {
     const item = add(list, "li", (way.to_airport ? fromTo(way.place || t("the_city"), place(way.airport)) : fromTo(place(way.airport), way.place || t("the_city"))) + ": ");
     const urls = (way.urls || []).filter(url => url.startsWith("https://"));
@@ -669,7 +672,7 @@ function explain(p, scroll) {
   const list = add(panel, "ul", undefined, "links");
   for (const link of p.links) {
     if (!link.url.startsWith("https://") || link.kind === "book") continue;
-    const anchor = add(add(list, "li"), "a", link.label);
+    const anchor = add(add(list, "li"), "a", linkLabel(link));
     anchor.href = link.url; anchor.target = "_blank"; anchor.rel = "noopener noreferrer";
   }
   add(panel, "p", t("price_may_change"), "muted");
@@ -720,7 +723,7 @@ function describeStatus() {
   const ground = groundCount();
   status.replaceChildren();
   status.className = lost ? "lost" : running ? "running" : "done";
-  document.title = (running ? "⏳ " : "") + data.title;
+  document.title = (running ? "⏳ " : "") + t("tab_title", {origin: data.origin.short});
   if (data.kiwi_why)   // only Ryanair's flights: the first thing to know about this map
     add(status, "p", t("only_ryanair", {why: data.kiwi_why}), "kiwi");
   const line = add(status, "p", "", "summary");
@@ -1055,7 +1058,8 @@ function render() {
   }
   const sections = document.getElementById("sections");
   sections.replaceChildren();
-  for (const part of state.sections) {
+  // What was searched in the page's language: the map wrote it in each (page.sections_in), and in its own as sections
+  for (const part of (state.sections_in || {})[data.locale] || state.sections) {
     add(sections, "h3", part.title);
     if (part.note) add(sections, "p", part.note, "note");
     if (!part.header.length) continue;
@@ -1071,6 +1075,40 @@ function render() {
   else if (openGround) explainGround(openGround, false);
 }
 
+// Light or dark, and, in the app, the language: the app's own (app/site.py, post_theme and post_language), so that its
+// other pages follow and the page comes back in it (app/maps.py, dressed). A page opened as a file keeps light or
+// dark in the browser, and has only the language it was made in
+const THEME_KEY = "discover-theme";
+const toApp = (path, values) => fetch(path, {method: "POST", body: new URLSearchParams({token: data.app_token, ...values})});
+function describeControls() {
+  const root = document.documentElement;
+  if (!data.app_token) {
+    try { const kept = localStorage.getItem(THEME_KEY); if (kept === "light" || kept === "dark") root.dataset.theme = kept; } catch (error) { /* no storage */ }
+  }
+  const controls = document.createElement("div");
+  controls.className = "controls";
+  document.querySelector("header").prepend(controls);
+  const names = data.languages || {};
+  if (data.app_token && Object.keys(names).length > 1) {
+    const select = add(add(controls, "label"), "select");
+    select.setAttribute("aria-label", t("language"));
+    for (const [code, name] of Object.entries(names)) { const option = add(select, "option", name); option.value = code; option.selected = code === data.locale; }
+    select.addEventListener("change", () => {
+      select.disabled = true;
+      toApp("/language", {language: select.value, from: "map"}).then(() => location.reload(), () => { select.disabled = false; });
+    });
+  }
+  const button = add(controls, "button", undefined, "theme");
+  button.type = "button"; button.title = t("theme"); button.setAttribute("aria-label", t("theme"));
+  iconOf(button, "moon"); iconOf(button, "sun");
+  button.addEventListener("click", () => {
+    const next = root.dataset.theme === "light" ? "dark" : "light";   // dark unless chosen, as the app's pages start
+    root.dataset.theme = next;
+    if (data.app_token) toApp("/theme", {theme: next}).catch(() => null);
+    else try { localStorage.setItem(THEME_KEY, next); } catch (error) { /* no storage */ }
+  });
+}
+
 // While the timetables are looked up, or a price asked for is on its way, the page in the app asks for the
 // destinations again: one request at a time, more often for a price, which takes seconds
 let following = false;
@@ -1082,5 +1120,6 @@ function follow() {
     .then(next => { following = false; if (next.version !== state.version) { state = next; render(); } follow(); })
     .catch(() => { following = false; lost = true; describeStatus(); }), pricing() ? 1500 : 4000);
 }
+describeControls();
 render();
 follow();

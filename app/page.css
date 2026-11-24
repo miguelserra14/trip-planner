@@ -255,6 +255,8 @@ th, td { border-bottom: 1px solid var(--border); padding: 4px 10px; text-align: 
 th { background: var(--surface-2); }
 nav ul { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: .9em; }
 nav ul a { text-decoration: none; } nav ul a:hover { text-decoration: underline; }
+/* A line as wide as its parts need (report_page.widths): one with many vehicles scrolls sideways, on a phone too */
+.timeline-scroll { overflow-x: auto; }
 .timeline { position: relative; height: 64px; margin: 8px 12px; }
 .timeline .part { position: absolute; top: 27px; height: 7px; border-radius: 4px; }
 .timeline .wait { top: 29px; height: 3px; background: var(--border); }
@@ -371,7 +373,6 @@ a.sticky { display: none; }
   header .controls { margin-left: 0; }
   .option .body { padding: 4px 14px 14px; }
   .wait-body { grid-template-columns: minmax(0, 1fr); }
-  .option .body > .timeline { display: none; }   /* its times would overlap: the steps below say them */
   section.days li { grid-template-columns: 1fr auto; } section.days li span.muted { grid-column: 1 / -1; }
   a.sticky { display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 5; justify-content: space-between;
              align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; background: var(--accent); color: var(--on-accent);

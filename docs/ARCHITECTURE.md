@@ -111,7 +111,7 @@ trip_planner/
 ├── trip/              what defines a trip
 │   ├── trip_settings.py   TripSettings: every setting of a trip, its default and its check
 │   ├── dates.py           travel dates as travellers write them
-│   ├── ground_choice.py   by train, by bus or either, and how many changes, on each side of the flight
+│   ├── ground_choice.py   by train, by bus or either, how many changes, and at most 2 rides beyond a city, on each side of the flight
 │   ├── places.py          cities (OpenStreetMap) and airports (OurAirports), chosen by distance and by the hours by road
 │   └── form.py            how a form shows the settings: the main card, the tabs, the labels and hints
 ├── texts/             every text the traveller reads
@@ -198,7 +198,7 @@ discover/
 │   └── ground_fares.py    their prices for the days of the trip, with the planner's operators
 ├── view/              what the traveller sees
 │   ├── page.py            the map page (Leaflet and OpenStreetMap), and the trips of a map the planner can be opened on
-│   ├── map.js, map.css    the page's script and its look
+│   ├── map.js, map.css    the page's script and its look; in the app, its language and light or dark are the app's
 │   └── breakdown.py       what was searched and what may have been missed, under the map
 └── tests/             its own tests, run by plain pytest too
 ```

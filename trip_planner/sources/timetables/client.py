@@ -574,8 +574,8 @@ class Timetables:
             if not found:
                 return dict(NOT_COVERED)
         if not found:
-            # The timetables cover the route, but not the way the traveller chose to make it
-            return {**self.answer([], service, flight["date"]), "choice_excluded": ground_choice.restricted(True)}
+            # The timetables cover the route, but not the way the traveller chose to make it, or only with too many long rides
+            return {**self.answer([], service, flight["date"]), "choice_excluded": ground_choice.restricted(True) or ground_choice.rides_limited()}
         # Kept up to the shortest time at the airport ever offered: the ones that arrive after the time asked for
         # only serve the closest alternatives, when nothing respects every requirement
         last_call = to_minutes(flight["departure_time"]) - current.SETTINGS.airport_floor_minutes
@@ -626,8 +626,8 @@ class Timetables:
             if not found:
                 return dict(NOT_COVERED)
         if not found:
-            # The timetables cover the route, but not the way the traveller chose to make it
-            return {**self.answer([], service, landing_day(flight)), "choice_excluded": ground_choice.restricted(False)}
+            # The timetables cover the route, but not the way the traveller chose to make it, or only with too many long rides
+            return {**self.answer([], service, landing_day(flight)), "choice_excluded": ground_choice.restricted(False) or ground_choice.rides_limited()}
         return self.answer(found, service, landing_day(flight))
 
     async def close(self) -> None:

@@ -9,6 +9,8 @@ a language of the program, with nothing else to change:
 A text that a language does not have is shown in English."""
 import re
 import runpy
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,9 @@ from trip_planner.utils import plain
 
 FOLDER = Path(__file__).parent / "languages"
 REFERENCE = "en"   # the language every text exists in
+# The language tr speaks for a while instead of the trip's (in_language), in this thread only: the other threads of
+# a map's process go on writing its progress in the trip's language meanwhile
+SPOKEN = threading.local()
 
 def load_languages() -> dict[str, dict[str, str]]:
     """The texts of every language of the folder, the reference first: {language code: {key: text}}."""
@@ -50,7 +55,17 @@ def text_in(language: str, key: str, **values) -> str:
 
 def tr(key: str, **values) -> str:
     """A text in the language of the trip being planned."""
-    return text_in(current.SETTINGS.language, key, **values)
+    return text_in(getattr(SPOKEN, "language", None) or current.SETTINGS.language, key, **values)
+
+@contextmanager
+def in_language(language: str):
+    """While it lasts, tr speaks this language: a page written once in every language (Discover's map, whose
+    traveller may change it after the map was made), without touching the trip's settings."""
+    before, SPOKEN.language = getattr(SPOKEN, "language", None), language
+    try:
+        yield
+    finally:
+        SPOKEN.language = before
 
 class Said(str):
     """A text in the trip's language that remembers how it was made, so that a page can say it again in the language

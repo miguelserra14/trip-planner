@@ -349,16 +349,21 @@ class Site:
         return Reply(303, location=reports.REPORT_PATH + quote(f"{'saved' if keep else 'recent'}/{moved.stem}"))
 
     def post_theme(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
-        """Dark if the pages were light, light if they were dark. They start dark (the user's choice of 2026-11-07)."""
+        """Dark if the pages were light, light if they were dark. They start dark (the user's choice of 2026-11-07).
+        A map's page, which turns itself, says which it shows now (theme)."""
+        if one.get("theme") in ("light", "dark"):
+            self.theme = one["theme"]
+            return Reply(204)
         shown = self.theme or one.get("shown", "light")
         self.theme = "light" if shown == "dark" else "dark"
         return Reply(303, location=one.get("back", "/") if one.get("back", "").startswith("/") else "/")
 
     def post_language(self, one: dict[str, str], sent: dict[str, list[str]]) -> Reply:
+        """The language of the pages. A map's page, which asks for itself again once changed, is answered with nothing."""
         if one.get("language") in LANGUAGES:
             current.SETTINGS = dataclasses.replace(current.SETTINGS, language=one["language"])
             self.values["language"] = one["language"]
-        return Reply(303, location="/")
+        return Reply(204) if one.get("from") == "map" else Reply(303, location="/")
 
     # ---------------------------------------------------------------- Discover (maps.py)
     def discover_page(self, refusal: str = "") -> str:
@@ -393,7 +398,7 @@ class Site:
             saved = maps.saved_page(name, "" if self.demo else self.token, self.saved_turn(name))
             if saved is None:
                 return self.not_found()
-            return Reply(200, saved[0], policy=saved[1], referrer=maps.MAP_REFERRER)
+            return Reply(200, maps.dressed(saved[0], self.theme, "" if self.demo else self.token), policy=saved[1], referrer=maps.MAP_REFERRER)
         if self.map_job is None:
             return Reply(303, location="/discover")
         if path == "/discover/part":
@@ -405,7 +410,7 @@ class Site:
         if what == "":
             if not job.map_page:
                 return Reply(303, location="/discover")
-            return Reply(200, job.map_page, policy=maps.MAP_POLICY, referrer=maps.MAP_REFERRER)
+            return Reply(200, maps.dressed(job.map_page, self.theme, self.token), policy=maps.MAP_POLICY, referrer=maps.MAP_REFERRER)
         if what == "state":
             return Reply(200, json.dumps(job.map_state, ensure_ascii=False), kind="application/json; charset=utf-8")
         if what in maps.FILES:   # the page's script and style, as they were when its page came (search.Job.map_files)

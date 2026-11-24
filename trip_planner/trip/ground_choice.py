@@ -7,7 +7,10 @@ is checked again before it is used (accepts): what an answer contains is not tak
 checked, a model's estimate or a stretch estimated from the distance, is never taken when the traveller chose.
 
 Metro, tram, ferries and lifts are the city's own transport: they are accepted with either choice, as the way to
-the station or the bus station. A train is any railway; a bus is a city bus or a long-distance coach."""
+the station or the bus station. A train is any railway; a bus is a city bus or a long-distance coach.
+
+Whatever the choice, a connection takes at most max_long_rides vehicles that are more than a ride across a city
+(long_rides): the timetables join four regional buses into a way to an airport that nobody would take."""
 from typing import Any
 
 from trip_planner import current
@@ -15,6 +18,10 @@ from trip_planner.texts import tr
 
 CHOICES = ("any", "train", "bus")
 NO_CHANGE_LIMIT = 9   # max_changes_* at this value means no limit: nobody changes vehicle nine times to reach an airport
+# A vehicle that goes less than this in a straight line is a ride across a city (the metro to the station, the bus from
+# the airport into its town): it does not count among the long rides. The timetables' kind of vehicle is not enough:
+# Transitous calls the S32 from Antwerp to Roosendaal, 40 km, a metro
+CITY_RIDE_KM = 15
 
 # The kinds of vehicle as the timetables write them (Transitous): in a question, and on each leg of an answer
 RAIL_MODES = {"RAIL", "HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "REGIONAL_RAIL", "REGIONAL_FAST_RAIL", "SUBURBAN"}
@@ -66,14 +73,27 @@ def changes(connection: dict[str, Any]) -> int:
     """Changes of vehicle in a connection. Walking is not a vehicle."""
     return max(0, len(connection.get("steps") or []) - 1)
 
+def long_rides(connection: dict[str, Any]) -> int:
+    """The vehicles of a connection that are more than a ride across a city (CITY_RIDE_KM). A step whose distance is
+    not known is a city ride only when it is the city's own transport (CITY_MODES)."""
+    def long(step: dict[str, Any]) -> bool:
+        km = step.get("km")
+        return km >= CITY_RIDE_KM if isinstance(km, (int, float)) else step_mode(step) not in CITY_MODES
+    return sum(map(long, connection.get("steps") or []))
+
+def rides_limited() -> bool:
+    return current.SETTINGS.max_long_rides < NO_CHANGE_LIMIT
+
 def accepts(connection: dict[str, Any], to_airport: bool) -> bool:
-    """Whether a connection is one the traveller accepts on that side: every vehicle of an accepted kind, and no
-    more changes than allowed. A connection with no steps cannot be checked: it is accepted only without a choice."""
+    """Whether a connection is one the traveller accepts on that side: every vehicle of an accepted kind, no more
+    changes than allowed and no more long rides. A connection with no steps cannot be checked: it is accepted only
+    without a choice."""
     how, most = side(to_airport)
     steps = connection.get("steps") or []
     if not steps:
         return not restricted(to_airport)
-    return changes(connection) <= most and all(mode_allowed(step_mode(step), how) for step in steps)
+    return (changes(connection) <= most and long_rides(connection) <= current.SETTINGS.max_long_rides
+            and all(mode_allowed(step_mode(step), how) for step in steps))
 
 def road_allowed(to_airport: bool) -> bool:
     """Whether a stretch by road (a bus, a coach, or one estimated from the distance) is acceptable on that side."""
@@ -85,4 +105,6 @@ def describe(to_airport: bool) -> str:
     parts = [tr(f"ground_by_{how}")]
     if most < NO_CHANGE_LIMIT:
         parts.append(tr("ground_changes", count=most))
+    if rides_limited():
+        parts.append(tr("ground_long_rides", count=current.SETTINGS.max_long_rides))
     return ", ".join(parts)

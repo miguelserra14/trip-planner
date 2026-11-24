@@ -4,9 +4,9 @@ time for the flight."""
 import pytest
 
 from tests.cases import CASES
-from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
+from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded, too_many_rides
 from trip_planner import current
-from trip_planner.itineraries.legs import to_airport_leg
+from trip_planner.itineraries.legs import Rejected, to_airport_leg
 from trip_planner.trip.places import as_place, TripPlaces
 from trip_planner.sources import timetables
 from trip_planner.utils import to_minutes
@@ -43,6 +43,11 @@ def test_5_itinerary_leg(record):
         expect_gap(case, found)
     place = as_place(case.city, found["place_results"])
     current.TRIP = TripPlaces(place, place, [found["airport"]], [], [found["airport"]])
+    if too_many_rides(found):
+        with pytest.raises(Rejected) as refused:
+            to_airport_leg(found["flight"], {found["flight"]["id"]: {"to_airport": found["answer"]}}, None)
+        assert refused.value.kind == "ground_choice"
+        return
     leg = to_airport_leg(found["flight"], {found["flight"]["id"]: {"to_airport": found["answer"]}}, None)
     assert leg["kind"] == "timetable" and graded(leg)
     assert leg["steps"] and leg["price_eur"] >= 0

@@ -32,3 +32,16 @@ def test_no_duplicate_texts():
     for name in ("en", "pt-PT"):
         keys = re.findall(r'^    "([A-Za-z0-9_]+)":', (FOLDER / f"{name}.py").read_text(encoding="utf-8"), flags=re.M)
         assert sorted({key for key in keys if keys.count(key) > 1}) == [], name
+
+def test_language_changed_per_thread():
+    """A page written in every language (page.sections_in) changes the language of its own thread only: the
+    map's other threads go on writing its progress in the trip's."""
+    import threading
+    from trip_planner.texts import in_language, tr
+    english, heard = tr("discover_page_language"), []
+    with in_language("pt-PT"):
+        thread = threading.Thread(target=lambda: heard.append(tr("discover_page_language")))
+        thread.start()
+        thread.join()
+        assert tr("discover_page_language") == "Língua"
+    assert heard == [english] and tr("discover_page_language") == english

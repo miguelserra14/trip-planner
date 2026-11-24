@@ -24,12 +24,12 @@ DAY = (date.today() + timedelta(days=70)).isoformat()
 def choose(**chosen) -> None:
     current.SETTINGS = dataclasses.replace(current.SETTINGS, **chosen)
 
-def step(mode: str, time: str = "10:00", arrive: str = "11:00") -> dict:
+def step(mode: str, time: str = "10:00", arrive: str = "11:00", km: int = 30) -> dict:
     return {"time": time, "arrive": arrive, "line": mode, "agency": "", "from": "A", "to": "B", "rail": ground_choice.is_rail(mode),
-            "coach": mode == "COACH", "mode": mode, "km": 30, "from_id": "", "to_id": "", "from_at": [0, 0], "to_at": [0, 0]}
+            "coach": mode == "COACH", "mode": mode, "km": km, "from_id": "", "to_id": "", "from_at": [0, 0], "to_at": [0, 0]}
 
-def connection(leave: int, arrive: int, *modes: str) -> dict:
-    return {"leave": leave, "arrive": arrive, "steps": [step(mode) for mode in modes], "urls": [], "grade": "B",
+def connection(leave: int, arrive: int, *modes: str, km: int = 30) -> dict:
+    return {"leave": leave, "arrive": arrive, "steps": [step(mode, km=km) for mode in modes], "urls": [], "grade": "B",
             "source": "timetable", "service_day": DAY, "price_eur": None}
 
 # ---------------------------------------------------------------- the settings
@@ -54,8 +54,27 @@ def test_city_transport_always_counts():
 def test_changes_limited_per_side():
     choose(max_changes_to_airport=1)
     assert ground_choice.accepts(connection(600, 700, "RAIL", "BUS"), True)
-    assert not ground_choice.accepts(connection(600, 700, "RAIL", "RAIL", "BUS"), True)
-    assert ground_choice.accepts(connection(600, 700, "RAIL", "RAIL", "BUS"), False)   # the other side has no limit
+    assert not ground_choice.accepts(connection(600, 700, "RAIL", "RAIL", "BUS", km=5), True)
+    assert ground_choice.accepts(connection(600, 700, "RAIL", "RAIL", "BUS", km=5), False)   # the other side has no limit
+
+def test_third_long_ride_refused():
+    assert ground_choice.accepts(connection(600, 700, "RAIL", "COACH"), True)
+    assert not ground_choice.accepts(connection(600, 700, "BUS", "BUS", "BUS"), False)
+    choose(max_long_rides=ground_choice.NO_CHANGE_LIMIT)
+    assert ground_choice.accepts(connection(600, 700, "BUS", "BUS", "BUS"), False)
+
+def test_city_rides_not_counted():
+    """The metro to the station and the bus from the airport into its town are not long rides; a "metro" of 40 km,
+    as Transitous calls the S32 from Antwerp to Roosendaal, is one."""
+    trip = connection(600, 700, "RAIL", "RAIL")
+    trip["steps"] = [step("BUS", km=8), *trip["steps"], step("SUBWAY", km=40)]
+    assert ground_choice.long_rides(trip) == 3 and not ground_choice.accepts(trip, True)
+    trip["steps"][-1]["km"] = 6
+    assert ground_choice.long_rides(trip) == 2 and ground_choice.accepts(trip, True)
+    unknown = connection(600, 700, "TRAM", "RAIL")
+    for ride in unknown["steps"]:
+        ride.pop("km")
+    assert ground_choice.long_rides(unknown) == 1   # without a distance, by its kind
 
 def test_old_steps_kind_inferred():
     choose(to_airport_by="train")

@@ -8,6 +8,7 @@ import pytest
 
 from tests import recorder
 from trip_planner import current
+from trip_planner.trip import ground_choice
 from trip_planner.trip.trip_settings import TripSettings
 from trip_planner.trip.places import as_place, distance_km, SETTLEMENTS
 from trip_planner.sources import timetables
@@ -68,6 +69,12 @@ def gap(case, found: dict) -> str:
 def expect_gap(case, found: dict) -> None:
     if gap(case, found):
         pytest.xfail(gap(case, found))
+
+def too_many_rides(found: dict) -> bool:
+    """Every connection recorded takes more vehicles beyond a city than a trip accepts (ground_choice.long_rides):
+    a small town far from its airport, three trains away. The itinerary leg is then refused, saying why."""
+    options = found["answer"]["options"]
+    return bool(options) and all(ground_choice.long_rides(option) > current.SETTINGS.max_long_rides for option in options)
 
 # ---- the stages that are the same in both directions
 

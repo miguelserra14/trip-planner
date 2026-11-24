@@ -18,7 +18,8 @@ from urllib.parse import quote
 
 from app.fields import calendar_data
 from discover import confirm
-from discover.view.page import page_texts, SCRIPT, STYLE
+from discover.view.page import languages, page_texts, SCRIPT, STYLE
+from trip_planner import current
 from trip_planner.sources import flight_search
 from trip_planner.texts import tr
 from trip_planner.trip.trip_settings import MAPS_KEY
@@ -205,6 +206,20 @@ def saved_list() -> str:
                      f'<small>{html.escape(saved_days(path))} · {html.escape(tr("discover_win_made", when=made))}</small>{price}</a></li>')
     body = f'<ul class="trips">{"".join(cards)}</ul>' if cards else f'<p class="muted">{html.escape(tr("discover_win_no_earlier"))}</p>'
     return f'<h2>{html.escape(tr("discover_win_earlier"))}</h2>{body}'
+
+def dressed(page: str, theme: str, token: str) -> str:
+    """A map's page as the app serves it: its script's texts in the app's language, which the traveller may have
+    changed since the map was made (the page's own list changes it, site.post_language), with the languages to
+    choose from, and light or dark as the app's pages are (site.theme). The token is the app's, for the page to say
+    which it chose: "app_token", apart from the one that asks for prices, which a demo does not. The file of the map
+    keeps its own."""
+    data = page_data(page)
+    if data:
+        page = with_data(page, {**data, "texts": page_texts(), "locale": current.SETTINGS.language,
+                                "languages": languages(), "app_token": token})
+    if theme in ("light", "dark"):
+        page = page.replace('<html lang="en">', f'<html lang="en" data-theme="{theme}">', 1)
+    return page
 
 def saved_page(name: str, token: str = "", waiting: list[str] = ()) -> tuple[str, str] | None:
     """A map made before, by its name, with what it may do: (its page, its policy). None for a name that is not one

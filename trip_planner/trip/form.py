@@ -10,7 +10,8 @@ from typing import Any
 from trip_planner.texts import REFERENCE, TEXTS, tr
 
 MAIN_SETTINGS = ("origin", "destination", "departure_scale", "arrival_scale", "max_stopovers", "ground_only")
-CHANGES = ("max_changes_to_airport", "max_changes_from_airport")   # shown with how to travel on each side
+# Shown with how to travel on each side, as a number or no limit (ground_choice.NO_CHANGE_LIMIT)
+CHANGES = ("max_changes_to_airport", "max_changes_from_airport", "max_long_rides")
 # the two calendars and the list of languages hold these; Discover's form (app/maps.py) the changes of coach
 NOT_IN_TABS = ("dates", "return_dates", "language", "max_coach_changes")
 TABS = (
@@ -20,7 +21,7 @@ TABS = (
                          "arrival_radius_km", "max_departure_airports", "max_arrival_airports", "max_road_hours")),
     ("ui_tab_airport_lists", ("include_airports", "exclude_airports", "primary_airports", "fallback_airports", "arrival_airports")),
     ("ui_tab_ground", ("to_airport_by", "max_changes_to_airport", "from_airport_by", "max_changes_from_airport",
-                       "free_trains_at_origin", "free_trains_at_destination")),
+                       "max_long_rides", "free_trains_at_origin", "free_trains_at_destination")),
     ("ui_tab_estimates", ("allow_estimated_prices", "max_estimate_km", "small_estimate_eur", "unverified_price_factor",
                           "city_walk_minutes", "wide_city_walk_minutes", "airport_walk_minutes")),
     ("ui_tab_preferences", ("min_reliability", "tiebreak_eur_per_hour", "fallback_saving_eur_per_hour", "extra_hour_growth",
@@ -35,7 +36,8 @@ LABELS = {"earliest_leave": "ui_earliest_leave", "latest_leave": "ui_latest_leav
           "free_trains_at_destination": "ui_free_trains", "to_airport_by": "ui_to_airport_by", "from_airport_by": "ui_from_airport_by"}
 HINTS = {**dict.fromkeys(("earliest_leave", "latest_leave", "earliest_arrival", "latest_arrival"), "hint_times"),
          **dict.fromkeys(("include_airports", "exclude_airports", "primary_airports", "fallback_airports", "arrival_airports"), "hint_airport_list"),
-         **dict.fromkeys(("to_airport_by", "from_airport_by", *CHANGES), "hint_ground_choice"),
+         **dict.fromkeys(("to_airport_by", "from_airport_by", *CHANGES[:2]), "hint_ground_choice"),
+         "max_long_rides": "hint_max_long_rides",
          **{name: f"hint_{name}" for name in ("min_reliability", "tiebreak_eur_per_hour", "fallback_saving_eur_per_hour",
                                               "extra_hour_growth", "unverified_price_factor", "max_estimate_km", "extra_wishes",
                                               "min_stay_hours")}}

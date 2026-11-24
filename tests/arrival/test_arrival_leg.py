@@ -8,9 +8,9 @@ were recorded goes through today's code. With --live the services are asked agai
 import pytest
 
 from tests.cases import CASES
-from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded
+from tests.conftest import check_city, check_covered, graded, check_stops, check_terminal, expect_gap, needs, reasonable_minutes, recorded, too_many_rides
 from trip_planner import current
-from trip_planner.itineraries.legs import from_airport_leg
+from trip_planner.itineraries.legs import from_airport_leg, Rejected
 from trip_planner.sources import timetables
 from trip_planner.utils import to_minutes
 
@@ -43,6 +43,11 @@ def test_5_itinerary_leg(record):
     needs(found, "connections")
     if not found["answer"]["options"]:
         expect_gap(case, found)
+    if too_many_rides(found):
+        with pytest.raises(Rejected) as refused:
+            from_airport_leg(found["flight"], {found["flight"]["id"]: {"from_airport": found["answer"]}}, None)
+        assert refused.value.kind == "ground_choice"
+        return
     leg = from_airport_leg(found["flight"], {found["flight"]["id"]: {"from_airport": found["answer"]}}, None)
     assert leg["kind"] == "timetable" and graded(leg)
     assert leg["steps"] and leg["price_eur"] >= 0

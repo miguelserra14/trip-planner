@@ -32,7 +32,7 @@ RANGES = {
     "max_departure_airports": (1, 30), "max_arrival_airports": (1, 15), "max_road_hours": (1, 48),
     "min_airport_minutes": (30, 360), "ideal_airport_minutes": (30, 480), "min_landing_minutes": (0, 240),
     "max_stopovers": (0, 3), "max_changes_to_airport": (0, NO_CHANGE_LIMIT), "max_changes_from_airport": (0, NO_CHANGE_LIMIT),
-    "tiebreak_eur_per_hour": (0, 1000), "fallback_saving_eur_per_hour": (0, 1000), "extra_hour_growth": (1, 5),
+    "max_long_rides": (1, NO_CHANGE_LIMIT), "tiebreak_eur_per_hour": (0, 1000), "fallback_saving_eur_per_hour": (0, 1000), "extra_hour_growth": (1, 5),
     "options_shown": (1, 10),
     "max_estimate_km": (0, 300), "small_estimate_eur": (0, 50), "unverified_price_factor": (1, 10),
     "city_walk_minutes": (5, 120), "wide_city_walk_minutes": (5, 180), "airport_walk_minutes": (5, 60),
@@ -115,6 +115,9 @@ class TripSettings:
     from_airport_by: str = "any"          # from the arrival airport to the destination
     max_changes_to_airport: int = NO_CHANGE_LIMIT
     max_changes_from_airport: int = NO_CHANGE_LIMIT
+    # On both sides, the most vehicles that go further than across a city (ground_choice.long_rides): the metro to the
+    # station is not counted, the train and the coach after it are. 9 = no limit.
+    max_long_rides: int = 2
 
     # Data integrity
     min_reliability: str = "B"            # worst schedule grade accepted: "A", "B" or "C". See "Data integrity" above

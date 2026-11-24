@@ -39,44 +39,42 @@ def lights(text: str) -> str:
         text = text.replace(LIGHTS[grade], f'<span class="light-{grade}" title="{LIGHTS[grade]}">●</span>')
     return text
 
-ICON_SHARE = 4   # a part narrower than this share of the line (in %) has no room for its vehicle's icon
-# The least share of the line (in %) a vehicle and a wait are drawn with: three trains of twenty minutes in a trip of
-# ten hours would otherwise be one green line, with no room for their icons nor for the waits between them
-VEHICLE_SHARE = ICON_SHARE
-WAIT_SHARE = 1.5
+# The least width of a part of the line, in pixels, as Discover's map draws it (discover/view/map.js, drawLine): one
+# between two points with their time and place has room for both labels, a vehicle for its icon, a wait for a gap
+# that shows. A line whose parts need more than LINE_PX is that much wider and scrolls, instead of squeezing four
+# trains to an airport into one green stroke
+SHORTEST_PX, SHORTEST_RIDE_PX, SHORTEST_WAIT_PX = 78, 34, 12
+LINE_PX = 560          # the width a line is drawn for, at least: wider screens stretch it
+ICON_PX = SHORTEST_RIDE_PX - 4   # a part narrower than this has no room for its vehicle's icon
 
-def shares(parts: list[tuple]) -> list[float]:
-    """The share of the line of each part, in %: its share of the minutes, but no vehicle under VEHICLE_SHARE and no
-    wait under WAIT_SHARE, the longer parts made shorter in proportion to make room for them."""
-    least = [0.0 if part[1] <= 0 else VEHICLE_SHARE if len(part) > 2 and part[2] else WAIT_SHARE if part[0] is None else 0.0
-             for part in parts]
-    widened: set[int] = set()
-    while True:
-        free = [number for number in range(len(parts)) if number not in widened]
-        room = 100 - sum(least[number] for number in widened)
-        minutes = sum(max(0, parts[number][1]) for number in free) or 1
-        drawn = [least[number] if number in widened else room * max(0, parts[number][1]) / minutes for number in range(len(parts))]
-        short = {number for number in free if drawn[number] < least[number]}
-        if not short or room <= 0:
-            return drawn
-        widened |= short
+def widths(points: list[tuple | None], parts: list[tuple]) -> tuple[list[float], int]:
+    """Where each point of the line is, in % of its width, and the least width of the line in pixels: each part at
+    least its shortest width (SHORTEST_PX...), what is left shared by the minutes."""
+    labelled = lambda point: point is not None and len(point) < 3
+    least = [SHORTEST_PX if labelled(points[number]) and labelled(points[number + 1]) else
+             SHORTEST_RIDE_PX if len(part) > 2 and part[2] else SHORTEST_WAIT_PX for number, part in enumerate(parts)]
+    room = max(LINE_PX, sum(least))
+    total = sum(max(1, part[1]) for part in parts) or 1
+    free = room - sum(least)
+    edges = [0.0]
+    for width, part in zip(least, parts):
+        edges.append(edges[-1] + 100 * (width + free * max(1, part[1]) / total) / room)
+    return edges, room
 
 def timeline(points: list[tuple | None], parts: list[tuple]) -> str:
-    """The line of an option nearly to scale: each part as long as its share of the minutes (shares() widens the
-    short ones), in the colour of its grade, a wait as a thin grey line, and at each point its time above and its
+    """The line of an option nearly to scale: each part as long as its share of the minutes (widths() widens the
+    short ones, and the line when they need it), in the colour of its grade, a wait as a thin grey line, and at each point its time above and its
     place below. A part may name its vehicle's icon as a third item, drawn on the line when there is room. A point may
     be a change of vehicle, (time, place, "change"): a small dot whose time and place are said on hover, since the
     changes of a ground leg are too close together for their labels. A point that is None is a boundary with nothing drawn."""
-    edges = [0.0]
-    for share in shares(parts):
-        edges.append(edges[-1] + share)
+    edges, room = widths(points, parts)
     drawn = []
     for part, start, end in zip(parts, edges, edges[1:]):
         grade, mark = part[0], part[2] if len(part) > 2 else None
         place = f"left: {start:.2f}%; width: {end - start:.2f}%"
         drawn.append(f'<div class="part" style="background: var(--light-{grade}); {place}"></div>' if grade
                      else f'<div class="part wait" style="{place}"></div>')
-        if mark and end - start >= ICON_SHARE:
+        if mark and (end - start) * room / 100 >= ICON_PX:
             drawn.append(f'<div class="vehicle" style="left: {(start + end) / 2:.2f}%">{icon(mark)}</div>')
     for number, (point, x) in enumerate(zip(points, edges)):
         if point is None:
@@ -88,7 +86,7 @@ def timeline(points: list[tuple | None], parts: list[tuple]) -> str:
         time, place = point
         side = " first" if number == 0 else " last" if number == len(points) - 1 else ""
         drawn.append(f'<div class="point{side}" style="left: {x:.2f}%"><b>{inline(time)}</b><i></i><span>{inline(place)}</span></div>')
-    return f'<div class="timeline">{"".join(drawn)}</div>'
+    return f'<div class="timeline-scroll"><div class="timeline" style="min-width: {room}px">{"".join(drawn)}</div></div>'
 
 def table(rows: list[list[str]]) -> str:
     head, *body = rows

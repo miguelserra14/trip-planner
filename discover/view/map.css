@@ -2,6 +2,9 @@
    with nothing else. Dark, as the app's pages start (the user's choice of 2026-11-07). */
 :root { color-scheme: dark; --bg: #0f1115; --surface: #171a21; --fg: #e6e8eb; --muted: #9aa3af; --line: #2c323d; --panel: #1c2029;
         --link: #6b9bff; --pick: #1c2741; --warn: #f97066; --running: #3d3519; --done: #1e3325; --lost: #3d1f1f; }
+/* Light, when the traveller turns it with the button of the header (map.js, describeControls): the app's light colours */
+:root[data-theme=light] { color-scheme: light; --bg: #f5f6f8; --surface: #ffffff; --fg: #1f2328; --muted: #6b7280; --line: #d5d9e0;
+        --panel: #eceff3; --link: #2563eb; --pick: #e8efff; --warn: #b42318; --running: #fff4d6; --done: #e3f4e8; --lost: #fde8e8; }
 * { box-sizing: border-box; }
 /* The browser hides only HTML elements by their hidden attribute: the icons' sprite is an <svg>, and took 150px above the title */
 [hidden] { display: none !important; }
@@ -9,6 +12,13 @@ body { margin: 0; font: 14px/1.45 "Segoe UI", system-ui, sans-serif; background:
 a { color: var(--link); }
 header { padding: 14px 20px 6px; } h1 { font-size: 20px; margin: 0 0 4px; } header p { margin: 0; color: var(--muted); }
 header #back { display: inline-block; margin-bottom: 6px; text-decoration: none; }
+/* The language and light or dark, at the right of the title */
+header .controls { float: right; display: flex; gap: 8px; align-items: center; margin-left: 12px; }
+header .controls select, header .controls button { font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line);
+                                                   border-radius: 8px; padding: 3px 8px; cursor: pointer; }
+header .controls button { display: inline-flex; padding: 5px 7px; }
+header .controls .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:root:not([data-theme=light]) .theme .icon-moon, :root[data-theme=light] .theme .icon-sun { display: none; }
 h2 { font-size: 16px; margin: 28px 20px 4px; } h3 { font-size: 14px; margin: 20px 20px 4px; } p.note { margin: 4px 20px 8px; color: var(--muted); max-width: 70em; }
 .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 12px; }
 /* Whether the program is still searching, or has seen everything: the first thing to read on the page */

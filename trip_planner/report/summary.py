@@ -18,17 +18,49 @@ def total_text(itinerary: dict[str, Any]) -> str:
     lowest, highest = price_range(itinerary)
     return f"{itinerary['total_cost']:.0f} EUR ({lowest:.0f}-{highest:.0f})"
 
+def ride_parts(leg: dict[str, Any]) -> tuple[list[tuple[str, str]], list[tuple[str | None, int]]]:
+    """A ground leg on the line, one part per vehicle, as the app's cards draw it (app/results.py, ride_parts): the
+    points inside it, where the traveller gets off and where the next vehicle leaves, and its parts, each vehicle in
+    the colour of the leg's grade and the waits between them without. The walks to the first stop and from the last
+    one go with the first and the last vehicle. A leg of one vehicle, or whose vehicles' times do not fit in its own,
+    stays one part."""
+    whole = [], [(leg["grade"], leg["arrive"] - leg["leave"])]
+    steps = leg.get("steps") or []
+    if len(steps) < 2 or not all(step.get("time") and step.get("arrive") for step in steps):
+        return whole
+    later = lambda at, time: at + (to_minutes(time) - at) % (24 * 60)   # the first time on that clock from at on
+    points, parts, at = [], [], leg["leave"]
+    try:
+        for number, step in enumerate(steps):
+            starts = later(at, step["time"]) if number else at
+            if number:
+                points.append((steps[number - 1]["arrive"], steps[number - 1].get("to") or ""))
+                if starts > at:   # the wait for the next vehicle
+                    parts.append((None, starts - at))
+                    points.append((step["time"], ""))
+            at = later(starts, step["arrive"])
+            parts.append((leg["grade"], at - starts))
+    except ValueError:   # a time a timetable wrote some other way
+        return whole
+    if at > leg["arrive"]:
+        return whole
+    parts[-1] = (leg["grade"], parts[-1][1] + leg["arrive"] - at)   # the walk from the last stop
+    return points, parts
+
 def option_timeline(itinerary: dict[str, Any]) -> str:
-    """The option as a line from home to the destination: the times where something changes, and each part in the
-    colour of how sure its times are. The flight's times come from Kiwi for the day (A); waiting has no colour."""
+    """The option as a line from home to the destination: the times where something changes, each vehicle of a
+    ground leg apart, and each part in the colour of how sure its times are. The flight's times come from Kiwi for the
+    day (A); waiting has no colour."""
     flight, to_leg, from_leg = itinerary["flight"], itinerary["to"], itinerary["from"]
     town = lambda written: written.split(",")[0].strip()   # "Coimbra, Portugal" is Coimbra on the line
+    to_points, to_parts = ride_parts(to_leg)
+    from_points, from_parts = ride_parts(from_leg)
     return timeline(
-        [(leaving(itinerary), town(current.SETTINGS.origin)), (itinerary["at_airport_time"], flight["departure_airport"]),
+        [(leaving(itinerary), town(current.SETTINGS.origin)), *to_points, (itinerary["at_airport_time"], flight["departure_airport"]),
          (flight["departure_time"], "✈"), (at_destination(flight["arrival_time"], flight), flight["arrival_airport"]),
-         (to_time(from_leg["leave"]), ""), (arriving(itinerary), town(current.SETTINGS.destination))],
-        [(to_leg["grade"], to_leg["arrive"] - to_leg["leave"]), (None, itinerary["airport_wait"]), ("A", flight["duration_minutes"]),
-         (None, itinerary["wait_after_landing"]), (from_leg["grade"], from_leg["arrive"] - from_leg["leave"])])
+         (to_time(from_leg["leave"]), ""), *from_points, (arriving(itinerary), town(current.SETTINGS.destination))],
+        [*to_parts, (None, itinerary["airport_wait"]), ("A", flight["duration_minutes"]),
+         (None, itinerary["wait_after_landing"]), *from_parts])
 
 def part_grades(itinerary: dict[str, Any]) -> dict[str, str]:
     """The grade of each part of an option, by the text that names the part in its table: what the table shows,

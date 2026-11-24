@@ -276,6 +276,49 @@ def test_app_map_opens_form(tab, app, monkeypatch):
     assert tab.js("document.querySelector('input[name=destination]').value") == "Birmingham"
     assert len(app.started) == 1   # the form filled in, nothing searched
 
+def test_map_turns_language_theme(tab, app, monkeypatch):
+    """The map's own buttons: light or dark, and the language, which the page comes back in. Leaflet comes from
+    unpkg, as in the test above."""
+    from discover import finder
+    from discover.view import page
+    from discover.flights.sources import Days
+    from trip_planner import current
+    from trip_planner.trip.places import Place
+    monkeypatch.setattr(current, "SETTINGS", current.SETTINGS)   # put back after the language is changed
+    airports = {"BHX": {"city": "Birmingham", "name": "Birmingham Airport", "country": "GB", "latitude": 52.4, "longitude": -1.7}}
+    monkeypatch.setattr(page, "load_airports", lambda: airports)
+    leaving = date.today() + timedelta(days=30)
+    leg = {"from": "OPO", "to": "BHX", "date": leaving.isoformat(), "time": "07:00", "arrival_date": leaving.isoformat(),
+           "arrival_time": "09:45", "minutes": 165, "airline": "Ryanair", "stops": 0}
+    flight = {**leg, "segments": [dict(leg)], "price_eur": 10, "carrier": "FR", "source": "Ryanair", "back": None,
+              "ground_eur": 5.0, "total_eur": 15.0}
+    found = finder.Found(Place("Coimbra", "Coimbra", "Coimbra", "Portugal", 40.21, -8.43),
+                         Days(leaving.isoformat(), leaving.isoformat()), [], [flight], [], [])
+    app.post("/discover", f"token={app.token}&city=Coimbra&dates={written(leaving)}&source=light".encode())
+    made = app.started[-1]
+    made.read_event("map", page.map_page(found, "Ryanair", [], planner_link=made.map_link + "plan/"))
+    made.read_event("state", page.map_state(found, []))
+    tab.call("Network.enable")
+    tab.call("Network.setBlockedURLs", urls=["*tile.openstreetmap.org*"])
+    tab.open(app.address + "discover/map/1/")
+    try:
+        tab.wait("typeof L === 'object'", seconds=15)
+    except AssertionError:
+        pytest.skip("Leaflet could not be fetched from unpkg")
+    tab.wait("!!document.querySelector('header .controls select')")
+    assert tab.js("document.documentElement.dataset.theme") == "dark"
+    tab.js("document.querySelector('header .controls .theme').click()")
+    tab.wait("document.documentElement.dataset.theme === 'light'")
+    for _ in range(50):   # the app is told, in the background
+        if app.theme == "light":
+            break
+        time.sleep(0.1)
+    assert app.theme == "light"
+    tab.js("const s = document.querySelector('header .controls select'); s.value = 'pt-PT'; s.dispatchEvent(new Event('change'))")
+    tab.wait("document.documentElement.lang === 'pt-PT' && document.getElementById('searched-title').textContent !== ''")
+    assert tab.js("document.querySelector('header .controls select').value") == "pt-PT"
+    assert tab.js("document.documentElement.dataset.theme") == "light"
+
 def test_typed_limit_keeps_slider(tab, app, monkeypatch):
     """Leaflet comes from unpkg, as in the test above."""
     from discover import finder

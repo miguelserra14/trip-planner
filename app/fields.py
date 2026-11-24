@@ -92,7 +92,8 @@ def field(name: str, value: Any, defaults: TripSettings) -> str:
     if name in ("to_airport_by", "from_airport_by"):
         widget = choice(name, value, {option: tr(f"ui_choice_{option}") for option in CHOICES}, default)
     elif name in CHANGES:
-        widget = choice(name, str(value), {**{str(number): str(number) for number in range(NO_CHANGE_LIMIT)}, "any": tr("ui_changes_any")}, default)
+        widget = choice(name, str(value), {**{str(number): str(number) for number in range(RANGES[name][0], NO_CHANGE_LIMIT)},
+                                           "any": tr("ui_changes_any")}, default)
     elif name == "min_reliability":   # by its colour, as the reports show it, and its words for who does not see colours
         widget = choice(name, value, {grade: f"{LIGHTS[grade]} {tr('grade_' + grade.lower() + '_long')}" for grade in GRADES}, default)
     elif name in RANGES:

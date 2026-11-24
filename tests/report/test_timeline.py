@@ -28,6 +28,18 @@ def test_line_times_and_colours(settings):
     assert [place for _, place in points][1:4] == ["OPO", "✈", "TGD"]
     assert [grade for grade, _ in parts] == ["B", None, "A", None, "C"]   # the flight is confirmed, a wait has no colour
 
+def test_train_and_bus_apart(settings):
+    """Antwerp to Charleroi airport: a train to Charleroi-Central, ten minutes there, and the A1 bus. The line shows
+    both vehicles and the change, as the app's cards do."""
+    option = itinerary()
+    option["to"].update(leave=10 * 60 + 54, arrive=13 * 60 + 8, steps=[
+        {"time": "10:54", "arrive": "12:35", "mode": "RAIL", "from": "Anvers-Central", "to": "Charleroi-Central"},
+        {"time": "12:45", "arrive": "13:03", "mode": "BUS", "from": "Charleroi Gare Centrale", "to": "CHARLEROI Airport"}])
+    option["leave_time"], option["at_airport_time"] = "10:54", "13:08"
+    points, parts = read_timeline(option_timeline(option))
+    assert points[:4] == [("10:54", "Coimbra"), ("12:35", "Charleroi-Central"), ("12:45", ""), ("13:08", "OPO")]
+    assert [grade for grade, _ in parts[:4]] == ["B", None, "B", None]   # the train, the change, the bus, the wait at the airport
+
 def test_parts_drawn_to_scale():
     line = timeline([("06:00", "A"), ("06:05", ""), ("12:05", "B")], [("A", 5), ("C", 360)])
     points, parts = read_timeline(line)

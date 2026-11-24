@@ -24,7 +24,7 @@ CHANGED = dict(
     primary_radius_km=80, fallback_radius_km=250, arrival_radius_km=150, max_departure_airports=8, max_arrival_airports=4,
     max_road_hours=4.5, include_airports=["Porto"], exclude_airports=["BJZ", "SLM"], primary_airports=[], fallback_airports=["SCQ"],
     arrival_airports=["BRU"], to_airport_by="train", max_changes_to_airport=2, from_airport_by="bus", max_changes_from_airport=0,
-    free_trains_at_origin=True, free_trains_at_destination=True, allow_estimated_prices=False, max_estimate_km=30,
+    max_long_rides=3, free_trains_at_origin=True, free_trains_at_destination=True, allow_estimated_prices=False, max_estimate_km=30,
     small_estimate_eur=3.5, unverified_price_factor=2.5, city_walk_minutes=30, wide_city_walk_minutes=60, airport_walk_minutes=15,
     min_reliability="A", tiebreak_eur_per_hour=7.5, fallback_saving_eur_per_hour=12.0, extra_hour_growth=2.0, options_shown=7,
     extra_wishes="a window seat, and no night bus", airport_floor_minutes=40, night_minutes=200, min_trip_km=60,

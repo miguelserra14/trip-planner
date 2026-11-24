@@ -457,6 +457,25 @@ def test_old_map_file_unchanged(monkeypatch, tmp_path):
     assert maps.page_data(shown.html)["texts"] == page.page_texts() and shown.policy.count("'sha256-") == 2
     assert path.read_text(encoding="utf-8") == old
 
+def test_map_follows_app_choices(monkeypatch, tmp_path):
+    """A map made in English, read once the app was turned to Portuguese and light by the map's own buttons: its
+    script's texts, its links and what was searched in Portuguese, and the page light."""
+    from trip_planner import current
+    monkeypatch.setattr(current, "SETTINGS", current.SETTINGS)   # put back after the language is changed
+    monkeypatch.setattr(page, "load_airports", lambda: {"BCN": {"city": "Barcelona", "name": "Barcelona Airport", "country": "ES",
+                                                                "latitude": 41.3, "longitude": 2.1}})
+    monkeypatch.setattr(maps, "SAVED_MAPS", tmp_path)
+    a_saved_map(tmp_path)
+    site, _ = site_and_jobs()
+    assert site.post("/language", urlencode({"token": site.token, "language": "pt-PT", "from": "map"}).encode()).status == 204
+    assert site.post("/theme", urlencode({"token": site.token, "theme": "light"}).encode()).status == 204
+    shown = site.get("/discover/saved/coimbra_2026-11-12_2026-11-14")
+    data = maps.page_data(shown.html)
+    assert '<html lang="en" data-theme="light">' in shown.html and data["app_token"] == site.token
+    assert data["locale"] == "pt-PT" and data["texts"]["link_compare"] == "Comparar no Google Flights"
+    compare = next(link for link in data["state"]["points"][0]["links"] if link["kind"] == "compare")
+    assert compare["text"] == ["link_compare", {}] and data["state"]["sections_in"]["pt-PT"]
+
 def test_coach_changes_setting_offered():
     import pytest
     from trip_planner.trip.trip_settings import SettingError
